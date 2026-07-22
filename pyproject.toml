@@ -1,0 +1,23 @@
+[project]
+name = "productivity-app-backend"
+version = "0.1.0"
+description = "Backend for the unified AI work feed (GitHub tracer slice)."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "pydantic>=2.6",
+    "uvicorn>=0.29",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
