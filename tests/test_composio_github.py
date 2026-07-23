@@ -93,6 +93,20 @@ def test_subject_without_number_falls_back_to_thread_id():
     assert event.url == "https://github.com/dswh/glued_landing"
 
 
+def test_the_notification_keeps_githubs_own_timestamp():
+    """Without this the mapper leaves occurred_at empty, ingest falls back to
+    the clock, and every polled item claims to have happened just now: cards
+    read "now" for three-day-old review requests, and age pressure ranks them
+    as if they had only just arrived."""
+    event = notification_to_raw_event(SAMPLE)
+    assert event.occurred_at == datetime(2026, 7, 7, 12, 31, 50, tzinfo=timezone.utc)
+
+
+def test_a_missing_or_unparseable_timestamp_is_not_fatal():
+    assert notification_to_raw_event({**SAMPLE, "updated_at": None}).occurred_at is None
+    assert notification_to_raw_event({**SAMPLE, "updated_at": "nonsense"}).occurred_at is None
+
+
 def test_is_blocking_only_when_someone_waits_on_the_user():
     for reason in ("review_requested", "approval_requested", "assign"):
         assert notification_to_raw_event({**SAMPLE, "reason": reason}).is_blocking

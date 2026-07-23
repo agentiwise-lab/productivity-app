@@ -109,6 +109,10 @@ export function YouScreen({
                 value={!aiOptOut[connection.provider]}
                 onValueChange={(on) => onToggleAi(connection.provider, !on)}
                 trackColor={{ true: colors.accent, false: colors.line }}
+                // Left to the platform, the thumb comes out green and is the
+                // only colour on screen that belongs to no part of the palette.
+                thumbColor={colors.surface}
+                ios_backgroundColor={colors.line}
               />
             </View>
           ))}
@@ -133,7 +137,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  title: { ...type.h1, color: colors.fg, paddingHorizontal: space.lg, paddingBottom: space.sm },
+  title: {
+    ...type.h1,
+    color: colors.fg,
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
+  },
   body: { padding: space.lg, paddingBottom: space.xxl, gap: space.xl },
   email: { ...type.body, color: colors.dim },
   section: { gap: space.sm },

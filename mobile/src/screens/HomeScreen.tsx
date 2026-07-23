@@ -224,6 +224,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: space.lg,
+    // SafeAreaView contributes the notch inset on a device but nothing on
+    // web, where the title would otherwise sit against the very top edge.
+    paddingTop: space.sm,
     paddingBottom: space.sm,
   },
   headerTitle: { ...type.h1, color: colors.fg },

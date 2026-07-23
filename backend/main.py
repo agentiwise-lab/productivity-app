@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.auth import AuthMode, build_current_user
@@ -103,6 +104,7 @@ def create_app(
     connections: Any | None = None,
     classifier: DefaultClassificationService | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
+    cors_origins: list[str] | None = None,
 ) -> FastAPI:
     github = github or _UnconfiguredGitHubService()
     repo = repo or InMemoryFeedRepository()
@@ -120,6 +122,18 @@ def create_app(
     app = FastAPI(title="Work feed")
     app.state.feed_service = feed_service
     app.state.ingest_service = ingest_service
+
+    # Only the web build needs this: a native app issues no preflight. Origins
+    # are listed explicitly and never "*", because this API is authenticated
+    # and a wildcard would let any page a user visits read their feed.
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(cors_origins),
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        )
 
     @app.get("/health")
     def health() -> dict[str, str]:

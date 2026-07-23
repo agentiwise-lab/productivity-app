@@ -148,7 +148,14 @@ const styles = StyleSheet.create({
   stat: { flex: 1 },
   statValue: { ...type.h2, color: colors.fg },
   statLabel: { ...type.small, fontSize: 11, color: colors.dim },
-  divider: { width: 1, height: 22, backgroundColor: colors.line },
+  divider: {
+    width: 1,
+    height: 22,
+    backgroundColor: colors.line,
+    // Without this the rule sits flush against the next figure and reads as a
+    // stray mark on the digit rather than a separator.
+    marginRight: space.md,
+  },
   compact: {
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,

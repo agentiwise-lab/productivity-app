@@ -33,6 +33,21 @@ _BLOCKING_REASONS = {"review_requested", "approval_requested", "assign"}
 _SUBJECT_PATH = {"PullRequest": "pull", "Issue": "issues"}
 
 
+def _parse_time(value: str | None) -> datetime | None:
+    """GitHub's own timestamp for the thread.
+
+    Without it, ingest falls back to the clock and every polled item claims to
+    have happened just now: the card reads "now" for a three-day-old review
+    request, and age pressure ranks it as if it had only just arrived.
+    """
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def _extract_number(subject_url: str | None) -> int | None:
     """Pull the object number off an api.github.com subject URL."""
     if not subject_url:
@@ -66,6 +81,7 @@ def notification_to_raw_event(notification: dict[str, Any]) -> RawEvent:
 
     reason = notification.get("reason") or ""
     return RawEvent(
+        occurred_at=_parse_time(notification.get("updated_at")),
         source="github",
         source_ref=source_ref,
         reason=reason,

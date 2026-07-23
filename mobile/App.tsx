@@ -215,9 +215,11 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: colors.surface,
     borderTopColor: colors.line,
-    height: 62,
-    paddingTop: 6,
-    paddingBottom: 8,
+    // Tall enough for icon plus label plus the home indicator. At 62 the
+    // labels were clipped by the bar's own bottom edge.
+    height: 76,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
-  tabLabel: { ...type.small, fontSize: 10, fontWeight: '600' },
+  tabLabel: { ...type.small, fontSize: 10, fontWeight: '600', marginTop: 2 },
 });

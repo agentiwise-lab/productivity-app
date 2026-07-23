@@ -117,7 +117,13 @@ function dayLabel(iso: string | null): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  title: { ...type.h1, color: colors.fg, paddingHorizontal: space.lg, paddingBottom: space.sm },
+  title: {
+    ...type.h1,
+    color: colors.fg,
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
+  },
   tabs: {
     flexDirection: 'row',
     gap: space.sm,

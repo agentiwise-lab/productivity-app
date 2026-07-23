@@ -90,6 +90,11 @@ def build_app() -> FastAPI:
         jwt_secret=os.environ.get("SUPABASE_JWT_SECRET"),
         classifier=classifier,
         verify_webhook=verify_webhook,
+        cors_origins=[
+            origin.strip()
+            for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+            if origin.strip()
+        ],
     )
 
 
