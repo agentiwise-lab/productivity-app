@@ -377,6 +377,47 @@ The 2-minute test trigger was disabled immediately after the test for exactly th
 
 **Resulting policy:** push triggers where the provider supports them (Slack, Linear public teams), fetch-on-open for everything else, and background polling only for genuinely urgent sources at 15 minutes or slower.
 
+### Verified: the trigger name IS the event type
+
+Tested rather than assumed, using two Slack trigger instances and real messages:
+
+| Real event | `metadata.trigger_slug` | Instance it came from |
+|---|---|---|
+| A direct message | `SLACK_DIRECT_MESSAGE_RECEIVED` | `ti_4iQsbdv6yVUp` |
+| Four channel messages | `SLACK_CHANNEL_MESSAGE_RECEIVED` | `ti_VOD8-TEEHmuV` |
+
+A DM fired only the DM instance; channel messages fired only the channel instance. Never both, never crossed. So Composio has no hidden event-type field: **the trigger name is the event type**, and one instance listens to exactly one of them.
+
+### Full trigger scan (all 46 GitHub, all 9 Slack)
+
+Scanned every trigger's required config rather than reasoning from memory. The result changes the plan.
+
+**GitHub: 46 triggers, only 3 are account-wide.**
+
+| Account-wide (no config) | Useful? |
+|---|---|
+| `GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER` | **Yes**, exactly what we want |
+| `GITHUB_PULL_REQUEST_CREATED` | Partly, fires for every PR you can see, noisy |
+| `GITHUB_FOLLOWER_EVENT` | No, vanity |
+
+The other **43 require `owner` + `repo` at minimum**, and many additionally require `pull_number`, `issue_number`, `run_id` or `check_run_id`, meaning they watch **one specific pull request or job**. Those are unusable for general monitoring: you would have to create a trigger per PR.
+
+**Slack: all 9 are account-wide, zero scoped.** That is why Slack is clean and cheap.
+
+### The consequence: GitHub triggers cannot carry the Urgent tier
+
+The core Urgent items on GitHub are **review requested of me**, **mentioned**, and **CI failed on my PR**. Checking each:
+
+- Review requested: `PULL_REQUEST_REVIEWERS_CHANGED` needs `pull_number`. Unusable.
+- CI failure: `CHECK_RUN_STATUS_CHANGED` needs `check_run_id`. Unusable.
+- Mentioned: no account-wide trigger at all.
+
+The only trigger that covers all of these is `REPOSITORY_NOTIFICATION_RECEIVED`, which is **per-repo** and costs 720 calls/month each.
+
+**Therefore fetch-on-open is not an optimisation for GitHub, it is the primary mechanism.** The global `GITHUB_LIST_NOTIFICATIONS` call returns every notification across every repo with its `reason` field, in one call, and that single call is what actually populates the GitHub side of the feed.
+
+**Honest limitation to accept or pay to remove:** GitHub review requests, mentions and CI failures will surface **when the app is opened**, not as an instant push, unless the user opts a specific repo into real-time watching at 720 calls/month. Slack, by contrast, pushes instantly and free. This is a real difference in behaviour between the two integrations and the UI should not pretend otherwise.
+
 ### Trigger math: how many do we create, per app, per user
 
 **A trigger instance is one (user × connected account × event type × config).** There is no separate "event type" field in Composio; **the trigger name *is* the event type**. So four rows with the same account and user but different names means four different event types.
@@ -399,8 +440,11 @@ Plus **fetch-on-open**, roughly 5 to 10 calls per app launch, so about 600/month
 
 | Scenario | Triggers/user | Calls/month/user | Users on free 20k | Users on $29 (200k) |
 |---|---:|---:|---:|---:|
-| **MVP** (GitHub + Slack, 1 watched repo) | 4 | ~2,040 | ~10 | ~98 |
-| **Full** (all six, 2 watched repos) | ~11 | ~6,400 | ~3 | ~31 |
+| **MVP baseline** (GitHub account-wide + 2 Slack, **no watched repos**) | **3** | ~1,320 | ~15 | ~151 |
+| MVP + 1 opt-in watched repo | 4 | ~2,040 | ~10 | ~98 |
+| **Full** (all six, no watched repos) | ~9 | ~5,000 | ~4 | ~40 |
+
+**On "what repo?"**: you were right to challenge this. The **baseline needs zero watched repos**. `ISSUE_ASSIGNED_TO_ME` is account-wide, Slack is account-wide, and everything else on GitHub comes from the global fetch-on-open call. A watched repo is a paid upgrade a user opts into when they want a specific repo to push in real time, not a requirement. Default is **3 triggers per user**.
 
 **Two consequences for the roadmap:**
 1. **Watched repos are the expensive knob.** Each one costs another 720/month/user. Keep the default at zero and make it opt-in, leaning on fetch-on-open's global notification call instead.

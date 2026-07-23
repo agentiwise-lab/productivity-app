@@ -1,0 +1,385 @@
+<title>Work Feed · Sand &amp; Slate</title>
+
+<style>
+  .pg{--bg:#12100E;--fg:#F2EDE4;--dim:#9A9086;--ln:#2A2521;
+      background:var(--bg);color:var(--fg);margin:0;padding:44px 26px 90px;
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      /* Sand & Slate, chosen */
+      --c-bg:#F4F1EC;--c-sf:#FFFDFA;--c-fg:#20242B;--c-dim:#79808A;--c-ln:#E0DCD4;
+      --c-ac:#2F4858;--c-acsoft:#E0E7EC;--c-ac2:#6B5E4A;--c-urg:#B25B33;--c-urgsoft:#F7E7DC;
+      --c-band:#EDEAE4;--c-onac:#F4F8FA;}
+  @media (prefers-color-scheme:light){.pg{--bg:#EFECE6;--fg:#1C1815;--dim:#6E645A;--ln:#DDD5C9;}}
+  :root[data-theme="light"] .pg{--bg:#EFECE6;--fg:#1C1815;--dim:#6E645A;--ln:#DDD5C9;}
+  :root[data-theme="dark"] .pg{--bg:#12100E;--fg:#F2EDE4;--dim:#9A9086;--ln:#2A2521;}
+  *{box-sizing:border-box;}
+  .pg h1{font-size:32px;line-height:1.14;letter-spacing:-.024em;margin:0 0 12px;max-width:20ch;}
+  .pg .lede{font-size:15px;line-height:1.62;color:var(--dim);max-width:66ch;margin:0;}
+  .eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 14px;}
+  .secwrap{margin-top:56px;padding-top:24px;border-top:1px solid var(--ln);}
+  h2.sec{font-size:20px;letter-spacing:-.02em;margin:0 0 6px;}
+  .secwrap p.d{font-size:14px;line-height:1.6;color:var(--dim);max-width:68ch;margin:0;}
+  .rail{display:flex;gap:22px;overflow-x:auto;padding:26px 0 14px;}
+  .rail::-webkit-scrollbar{height:8px;}.rail::-webkit-scrollbar-thumb{background:var(--ln);border-radius:4px;}
+  .cell{flex:none;width:272px;}
+  .cell .nm{font-size:12.5px;color:var(--dim);margin:11px 0 0;line-height:1.45;}
+  .cell .nm b{color:var(--fg);font-weight:600;display:block;font-size:13px;margin-bottom:2px;}
+
+  .ph{width:272px;height:566px;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;
+      border:1px solid rgba(120,125,135,.3);box-shadow:0 16px 44px rgba(0,0,0,.3);
+      background:var(--c-bg);color:var(--c-fg);}
+  .sb{display:flex;justify-content:space-between;padding:10px 16px 2px;font-size:9.5px;color:var(--c-dim);
+      font-family:ui-monospace,Menlo,monospace;}
+  .hd{padding:5px 16px 11px;text-align:center;border-bottom:1px solid var(--c-ln);position:relative;}
+  .hd .nm2{font-size:12.5px;font-weight:600;}
+  .hd .dt{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--c-dim);margin-top:3px;}
+  .hd .lft,.hd .rgt{position:absolute;top:7px;font-size:14px;color:var(--c-dim);}
+  .hd .lft{left:14px;} .hd .rgt{right:14px;}
+  .bd{flex:1;overflow:hidden;}
+
+  .day{margin:11px 13px 0;background:var(--c-sf);border:1px solid var(--c-ln);border-radius:14px;padding:11px 12px;}
+  .day .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;}
+  .day .top b{font-size:11.5px;font-weight:600;}
+  .day .top span{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--c-dim);
+    letter-spacing:.06em;text-transform:uppercase;}
+  .tl{display:flex;gap:3px;margin-bottom:9px;}
+  .tl i{height:5px;border-radius:3px;flex:1;background:var(--c-ln);}
+  .tl i.done{background:var(--c-dim);opacity:.4;}
+  .tl i.now{background:var(--c-ac);}
+  .tl i.free{background:transparent;border:1px dashed var(--c-ln);}
+  .day .nx{display:flex;align-items:center;gap:8px;}
+  .day .nx .t{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--c-ac);}
+  .day .nx .l{font-size:11.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .day .meta{display:flex;gap:10px;margin-top:9px;padding-top:9px;border-top:1px solid var(--c-ln);}
+  .day .meta div{flex:1;min-width:0;font-size:9px;color:var(--c-dim);line-height:1.25;
+    letter-spacing:.03em;text-transform:uppercase;}
+  .day .meta b{display:block;color:var(--c-fg);font-size:14px;font-weight:600;letter-spacing:-.02em;
+    font-family:ui-monospace,Menlo,monospace;margin-bottom:2px;text-transform:none;}
+
+  .tier{display:flex;align-items:center;gap:7px;padding:14px 16px 6px;}
+  .tier .pip{width:6px;height:6px;border-radius:50%;background:var(--c-urg);}
+  .tier .pip.b{background:var(--c-ac);} .tier .pip.c{background:var(--c-ln);}
+  .tier .lb{font-size:11.5px;font-weight:600;}
+  .tier .sub{font-size:9.5px;color:var(--c-dim);}
+  .tier .ct{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--c-dim);}
+
+  .row{display:flex;gap:10px;padding:9px 16px 10px;border-top:1px solid var(--c-ln);}
+  .row:first-of-type{border-top:none;}
+  .ic{flex:none;width:27px;height:27px;border-radius:8px;display:grid;place-items:center;
+    font-family:ui-monospace,Menlo,monospace;font-size:9px;font-weight:600;letter-spacing:-.02em;}
+  .ic.gh{background:#252A31;color:#E6EAEE;}
+  .ic.sl{background:#E4DCCB;color:#7A5A2E;}
+  .ic.gd{background:#D8E2E8;color:#2E5A72;}
+  .ic.ln{background:#DFDCEA;color:#4C4278;}
+  .ic.cal{background:#E8D8D2;color:#8A3E30;}
+  .ic.gm{background:#E9DEDA;color:#8A4A38;}
+  .rc{flex:1;min-width:0;}
+  .rt{font-size:12.5px;line-height:1.36;margin:0 0 5px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .rt b{font-weight:600;}
+  .sm{font-size:11px;line-height:1.4;color:var(--c-dim);margin:0 0 6px;
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
+  .tags{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .tg{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.07em;
+    text-transform:uppercase;border-radius:4px;padding:2px 5px;border:1px solid var(--c-ln);color:var(--c-dim);}
+  .tg.rep{border-color:var(--c-ac);color:var(--c-ac);}
+  .tg.urg{border-color:var(--c-urg);color:var(--c-urg);background:var(--c-urgsoft);}
+  .who{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--c-dim);margin-left:auto;}
+
+  .tb{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--c-ln);background:var(--c-sf);}
+  .tb div{padding:8px 2px 12px;text-align:center;font-size:8.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--c-dim);}
+  .tb i{display:block;width:14px;height:14px;margin:0 auto 4px;border-radius:4px;border:1.5px solid currentColor;opacity:.55;}
+  .tb .on{color:var(--c-ac);} .tb .on i{opacity:1;background:var(--c-acsoft);}
+
+  .sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 13px 0;}
+  .st{background:var(--c-sf);border:1px solid var(--c-ln);border-radius:13px;padding:11px;}
+  .st .v{font-size:22px;letter-spacing:-.025em;font-family:ui-monospace,Menlo,monospace;line-height:1;}
+  .st .v.hot{color:var(--c-urg);}
+  .st .k{font-size:9.5px;color:var(--c-dim);margin-top:5px;}
+  .st.wide{grid-column:1/-1;}
+
+  .lr{display:flex;align-items:center;gap:9px;padding:8px 16px;border-top:1px solid var(--c-ln);}
+  .lr .nmm{font-family:ui-monospace,Menlo,monospace;font-size:11px;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lr .bars{display:flex;gap:2px;align-items:flex-end;height:16px;}
+  .lr .bars i{width:3px;background:var(--c-ac);border-radius:1px;opacity:.7;}
+  .lr .n{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--c-dim);width:34px;text-align:right;}
+
+  .scrim{position:relative;height:100%;background:var(--c-bg);}
+  .sheet{position:absolute;left:0;right:0;bottom:0;top:52px;background:var(--c-sf);
+    border-radius:20px 20px 0 0;border:1px solid var(--c-ln);border-bottom:none;overflow:hidden;
+    display:flex;flex-direction:column;}
+  .sheet .band{padding:12px 15px;background:var(--c-band);border-bottom:1px solid var(--c-ln);}
+  .grab{width:32px;height:3px;border-radius:2px;background:var(--c-ln);margin:0 auto 10px;}
+  .sheet .band .r1{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .sheet .band h3{margin:0;font-size:14.5px;line-height:1.32;}
+  .sheet .in{padding:12px 15px;flex:1;}
+  .blk{border-left:2px solid var(--c-ac);padding:1px 0 1px 10px;margin-bottom:12px;}
+  .blk .h{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--c-ac);margin:0 0 4px;}
+  .blk p{margin:0;font-size:11.5px;line-height:1.5;opacity:.88;}
+  .quote{background:var(--c-bg);border-radius:10px;padding:9px 11px;margin-bottom:12px;}
+  .quote p{margin:0;font-size:11.5px;line-height:1.45;font-style:italic;opacity:.9;}
+  .quote span{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--c-dim);
+    display:block;margin-top:5px;font-style:normal;}
+  .nums{display:flex;gap:14px;margin-bottom:13px;font-family:ui-monospace,Menlo,monospace;
+    font-size:10.5px;color:var(--c-dim);}
+  .nums b{color:var(--c-fg);}
+  .btns{display:flex;gap:7px;padding:0 15px 12px;}
+  .btns .b{flex:1;text-align:center;border-radius:11px;padding:11px 6px;font-size:12px;border:1px solid var(--c-ln);}
+  .btns .b.p{background:var(--c-ac);border-color:var(--c-ac);color:var(--c-onac);font-weight:600;}
+  .replybar{margin:0 15px 14px;display:flex;align-items:center;gap:8px;border:1px solid var(--c-ln);
+    border-radius:12px;padding:9px 11px;background:var(--c-bg);}
+  .replybar span{font-size:11.5px;color:var(--c-dim);flex:1;}
+  .replybar em{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--c-ac);font-style:normal;}
+
+  .setrow{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--c-ln);}
+  .setrow .lbl{flex:1;min-width:0;}
+  .setrow .lbl p{margin:0;font-size:12.5px;}
+  .setrow .lbl span{font-size:10.5px;color:var(--c-dim);}
+  .pillsel{display:flex;gap:0;border:1px solid var(--c-ln);border-radius:8px;overflow:hidden;}
+  .pillsel i{font-style:normal;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;
+    padding:5px 7px;letter-spacing:.05em;text-transform:uppercase;color:var(--c-dim);}
+  .pillsel i.on{background:var(--c-ac);color:var(--c-onac);}
+  .dotok{width:7px;height:7px;border-radius:50%;background:#4C8C5A;flex:none;}
+  .clr{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:26px 28px 70px;gap:9px;}
+  .clr .mk{width:38px;height:38px;border-radius:11px;border:1px solid var(--c-ac);display:grid;
+    place-items:center;color:var(--c-ac);font-size:15px;}
+  .clr h3{margin:0;font-size:15.5px;} .clr p{margin:0;font-size:11.5px;line-height:1.5;color:var(--c-dim);}
+</style>
+
+<div class="pg">
+  <p class="eyebrow">Sand &amp; Slate · chosen</p>
+  <h1>The app, screen by screen.</h1>
+  <p class="lede">Home first and complete, across two frames so you can see the whole scroll. Then
+    Sources, the two integration screens behind it, the detail sheet, Later, and You.</p>
+
+  <section class="secwrap">
+    <h2 class="sec">Home: everything lives here</h2>
+    <p class="d">All four tiers are on this one screen. Sources and Later are not separate feeds, they
+      are drill-downs. Home is the only place you need to look.</p>
+    <div class="rail">
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+          <div class="dt">Thu 23 Jul · 7 need you</div><span class="rgt">◎</span></div>
+        <div class="bd">
+          <div class="day">
+            <div class="top"><b>Your day</b><span>3 of 5 done</span></div>
+            <div class="tl"><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i class="free"></i><i class="free"></i><i></i></div>
+            <div class="nx"><span class="t">14:00</span><span class="l">Design review with Priya</span></div>
+            <div class="meta"><div><b>2</b>meetings left</div><div><b>1h 40m</b>free</div><div><b>3</b>due today</div></div>
+          </div>
+          <div class="tier"><span class="pip"></span><span class="lb">Urgent</span>
+            <span class="sub">someone is waiting</span><span class="ct">3</span></div>
+          <div class="row"><div class="ic sl">SL</div><div class="rc">
+            <p class="rt"><b>Priya</b> needs the staging deploy unblocked</p>
+            <p class="sm">Direct ask, no deadline given, blocked since 07:40</p>
+            <div class="tags"><span class="tg urg">Reply</span><span class="tg">#eng-releases</span><span class="who">18m</span></div>
+          </div></div>
+          <div class="row"><div class="ic gh">GH</div><div class="rc">
+            <p class="rt">Review requested: restore shopify.svg icon</p>
+            <p class="sm">3 files, low risk, release branch frozen until merged</p>
+            <div class="tags"><span class="tg urg">Review</span><span class="tg">glued_landing</span><span class="who">4h</span></div>
+          </div></div>
+          <div class="row"><div class="ic gd">GD</div><div class="rc">
+            <p class="rt">Abdul <b>@mentioned you</b> in LMS Migration Plan</p>
+            <p class="sm">Asks which database you want to keep</p>
+            <div class="tags"><span class="tg urg">Comment</span><span class="who">1h</span></div>
+          </div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+      </div><p class="nm"><b>Home, top</b>Your day, then Urgent</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+          <div class="dt">Thu 23 Jul · 7 need you</div><span class="rgt">◎</span></div>
+        <div class="bd">
+          <div class="tier"><span class="pip b"></span><span class="lb">Today</span>
+            <span class="sub">before you finish</span><span class="ct">3</span></div>
+          <div class="row"><div class="ic sl">SL</div><div class="rc">
+            <p class="rt"><b>Abdul</b> shared the LMS migration doc</p>
+            <p class="sm">Wants your call by tomorrow EOD, so not urgent yet</p>
+            <div class="tags"><span class="tg rep">Reply</span><span class="tg">DM</span><span class="who">3h</span></div>
+          </div></div>
+          <div class="row"><div class="ic ln">LN</div><div class="rc">
+            <p class="rt">AGE-214 Doorstead billing edge case</p>
+            <p class="sm">Assigned to you, due today, still in Todo</p>
+            <div class="tags"><span class="tg rep">Assigned</span><span class="who">Linear</span></div>
+          </div></div>
+          <div class="row"><div class="ic cal">CA</div><div class="rc">
+            <p class="rt">Invite: Q3 planning, Friday 11:00</p>
+            <p class="sm">Clashes with your existing 11:00</p>
+            <div class="tags"><span class="tg rep">RSVP</span><span class="who">Calendar</span></div>
+          </div></div>
+          <div class="tier"><span class="pip c"></span><span class="lb">Can wait</span>
+            <span class="sub">no time pressure</span><span class="ct">1</span></div>
+          <div class="row"><div class="ic gh">GH</div><div class="rc">
+            <p class="rt">Issue #88 assigned, no due date</p>
+            <div class="tags"><span class="tg">Assigned</span><span class="who">agentiwise-flow</span></div>
+          </div></div>
+          <div class="clr" style="padding:20px 28px 10px">
+            <div class="mk">✓</div>
+            <h3>That is everything</h3>
+            <p>38 more were kept out of your feed. They are in Later.</p>
+          </div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+      </div><p class="nm"><b>Home, scrolled</b>Today, Can wait, then the end of the list</p></div>
+
+    </div>
+  </section>
+
+  <section class="secwrap">
+    <h2 class="sec">Sources vs You</h2>
+    <p class="d"><b>Sources</b> is your content, per integration: tap GitHub to see GitHub's dashboard.
+      <b>You</b> is settings: which accounts are connected, how loudly to be notified, your account.
+      Different jobs, so they are different tabs.</p>
+    <div class="rail">
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">☰</span><div class="nm2">Sources</div>
+          <div class="dt">Tap one to go deeper</div><span class="rgt">+</span></div>
+        <div class="bd">
+          <div class="sg"><div class="st wide"><div class="v">7</div>
+            <div class="k">need you, across every source</div></div></div>
+          <div class="row"><div class="ic gh">GH</div><div class="rc">
+            <p class="rt">GitHub</p><p class="sm">14 commits · 5 PRs · 2 need you</p></div><span class="who">2</span></div>
+          <div class="row"><div class="ic sl">SL</div><div class="rc">
+            <p class="rt">Slack</p><p class="sm">2 awaiting reply · 11 mentions</p></div><span class="who">2</span></div>
+          <div class="row"><div class="ic cal">CA</div><div class="rc">
+            <p class="rt">Calendar</p><p class="sm">2 meetings left · 1 invite to answer</p></div><span class="who">1</span></div>
+          <div class="row"><div class="ic gd">GD</div><div class="rc">
+            <p class="rt">Google Drive</p><p class="sm">1 doc comment · 1 file shared</p></div><span class="who">1</span></div>
+          <div class="row"><div class="ic ln">LN</div><div class="rc">
+            <p class="rt">Linear</p><p class="sm">3 assigned · 1 due today</p></div><span class="who">1</span></div>
+          <div class="row"><div class="ic gm">GM</div><div class="rc">
+            <p class="rt">Gmail</p><p class="sm">Nothing needs you</p></div><span class="who">0</span></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+      </div><p class="nm"><b>Sources</b>content per integration, scales to twenty</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">☰</span><div class="nm2">You</div>
+          <div class="dt">Settings and connections</div><span class="rgt"> </span></div>
+        <div class="bd">
+          <div class="tier"><span class="pip b"></span><span class="lb">Notify me about</span><span class="ct">1 setting</span></div>
+          <div class="setrow"><div class="lbl"><p>Push notifications</p>
+            <span>Only when someone is waiting</span></div>
+            <div class="pillsel"><i class="on">Urgent</i><i>+Today</i><i>Off</i></div></div>
+          <div class="tier"><span class="pip b"></span><span class="lb">Connected accounts</span><span class="ct">6</span></div>
+          <div class="setrow"><span class="dotok"></span><div class="lbl"><p>GitHub</p>
+            <span>vicky81125 · connected 23 Jul</span></div><span class="who">⋯</span></div>
+          <div class="setrow"><span class="dotok"></span><div class="lbl"><p>Slack</p>
+            <span>agentiwise · connected 23 Jul</span></div><span class="who">⋯</span></div>
+          <div class="setrow"><span class="dotok"></span><div class="lbl"><p>Google Calendar</p>
+            <span>vicky@agentiwise.com</span></div><span class="who">⋯</span></div>
+          <div class="setrow"><span class="dotok"></span><div class="lbl"><p>Google Drive</p>
+            <span>vicky@agentiwise.com</span></div><span class="who">⋯</span></div>
+          <div class="setrow"><div class="lbl"><p>Add a source</p>
+            <span>Linear, Gmail, Notion, Jira</span></div><span class="who">+</span></div>
+          <div class="tier"><span class="pip c"></span><span class="lb">Account</span></div>
+          <div class="setrow"><div class="lbl"><p>Sign out</p></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div class="on"><i></i>You</div></div>
+      </div><p class="nm"><b>You</b>settings, connections, one notification choice</p></div>
+
+    </div>
+  </section>
+
+  <section class="secwrap">
+    <h2 class="sec">Behind Sources, and the rest</h2>
+    <p class="d">Later keeps everything you have not acted on, from every integration, for 30 days.
+      Nothing is silently dropped.</p>
+    <div class="rail">
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">‹</span><div class="nm2">GitHub</div>
+          <div class="dt">Last 24 hours</div><span class="rgt">⋯</span></div>
+        <div class="bd">
+          <div class="sg">
+            <div class="st"><div class="v hot">2</div><div class="k">Need your review</div></div>
+            <div class="st"><div class="v">3</div><div class="k">Issues assigned</div></div>
+            <div class="st"><div class="v">14</div><div class="k">Commits by you</div></div>
+            <div class="st"><div class="v hot">1</div><div class="k">Check failing</div></div>
+          </div>
+          <div class="tier"><span class="pip b"></span><span class="lb">By repository</span><span class="ct">tap to open</span></div>
+          <div class="lr"><span class="nmm">dswh/glued_landing</span>
+            <span class="bars"><i style="height:14px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:6px"></i></span>
+            <span class="n">9</span></div>
+          <div class="lr"><span class="nmm">dswh/agentiwise-flow</span>
+            <span class="bars"><i style="height:5px"></i><i style="height:11px"></i><i style="height:4px"></i><i style="height:7px"></i></span>
+            <span class="n">4</span></div>
+          <div class="lr"><span class="nmm">agentiwise-lab/productivity-app</span>
+            <span class="bars"><i style="height:3px"></i><i style="height:2px"></i><i style="height:6px"></i><i style="height:3px"></i></span>
+            <span class="n">1</span></div>
+          <div class="tier"><span class="pip"></span><span class="lb">Needs your review</span><span class="ct">2</span></div>
+          <div class="row"><div class="ic gh">GH</div><div class="rc">
+            <p class="rt">restore shopify.svg icon for landing grid</p>
+            <p class="sm">3 files, +48 −12, checks passing</p>
+            <div class="tags"><span class="tg urg">Review</span><span class="who">4h</span></div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+      </div><p class="nm"><b>GitHub</b>tap a repo for its commits</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="scrim">
+          <div class="sheet">
+            <div class="band"><div class="grab"></div>
+              <div class="r1"><div class="ic sl">SL</div>
+                <span class="tg urg">Urgent</span><span class="tg">Reply</span><span class="who">18m</span></div>
+              <h3>Priya needs the staging deploy unblocked</h3></div>
+            <div class="in">
+              <div class="blk"><p class="h">Why this is urgent</p>
+                <p>She asks you directly and gives no deadline, so she is waiting now. Blocked since 07:40.</p></div>
+              <div class="quote"><p>"hey, can you unblock the staging deploy before standup? blocked
+                since this morning"</p><span>Priya Sharma · #eng-releases · 09:23</span></div>
+              <div class="nums"><span><b>3</b> in thread</span><span><b>2</b> waiting</span><span><b>1h 40m</b> free</span></div>
+            </div>
+            <div class="replybar"><span>Reply to Priya…</span><em>SEND</em></div>
+            <div class="btns"><div class="b p">Reply</div><div class="b">Mark read</div><div class="b">Open Slack</div></div>
+          </div>
+        </div>
+      </div><p class="nm"><b>Detail sheet</b>opens over any row, from any screen</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><span class="lft">☰</span><div class="nm2">Later</div>
+          <div class="dt">Kept for 30 days</div><span class="rgt">⋯</span></div>
+        <div class="bd">
+          <div class="sg"><div class="st wide"><div class="v">38</div>
+            <div class="k">not acted on, nothing dropped</div></div></div>
+          <div class="tier"><span class="pip c"></span><span class="lb">Worth knowing</span><span class="ct">12</span></div>
+          <div class="row"><div class="ic gh">GH</div><div class="rc">
+            <p class="rt">Feature/gif showcase merged</p>
+            <div class="tags"><span class="tg">FYI</span><span class="who">2h</span></div></div></div>
+          <div class="row"><div class="ic cal">CA</div><div class="rc">
+            <p class="rt">Budget sync cancelled, 30m back</p>
+            <div class="tags"><span class="tg">FYI</span><span class="who">1h</span></div></div></div>
+          <div class="row"><div class="ic gd">GD</div><div class="rc">
+            <p class="rt">Nikhil shared Q3 Roadmap with you</p>
+            <div class="tags"><span class="tg">FYI</span><span class="who">5h</span></div></div></div>
+          <div class="tier"><span class="pip c"></span><span class="lb">Noise</span><span class="ct">26</span></div>
+          <div class="row"><div class="ic gm">GM</div><div class="rc">
+            <p class="rt">Promotions and newsletters</p>
+            <div class="tags"><span class="tg">Muted</span><span class="who">18</span></div></div></div>
+          <div class="row"><div class="ic sl">SL</div><div class="rc">
+            <p class="rt">Channel chatter you were not named in</p>
+            <div class="tags"><span class="tg">Muted</span><span class="who">8</span></div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>Sources</div><div class="on"><i></i>Later</div><div><i></i>You</div></div>
+      </div><p class="nm"><b>Later</b>every unactioned item, all sources, 30-day window</p></div>
+
+    </div>
+  </section>
+</div>
