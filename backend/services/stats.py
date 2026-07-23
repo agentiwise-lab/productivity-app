@@ -61,6 +61,17 @@ def _tier_of(item: FeedItem) -> Tier:
     return item.llm_tier or item.rule_tier
 
 
+def _github_row_label(repo: dict) -> str:
+    parts = []
+    if repo.get("commits"):
+        parts.append(f"{repo['commits']} commit" + ("s" if repo["commits"] != 1 else ""))
+    if repo.get("merged_prs"):
+        parts.append(f"{repo['merged_prs']} merged")
+    if repo.get("open_prs"):
+        parts.append(f"{repo['open_prs']} open")
+    return " · ".join(parts) if parts else "no recent activity"
+
+
 def _minutes_label(minutes: float) -> str:
     if minutes >= 60:
         hours = minutes / 60
@@ -141,19 +152,27 @@ class SourceStatsService:
             repos = self._github.repo_activity(_GITHUB_LOGINS)
             total_commits = sum(r["commits"] for r in repos)
             board.headline.insert(
-                1, StatLine(label="Commits", value=total_commits, detail="30 days, yours")
+                1, StatLine(label="Commits", value=total_commits, detail="yours")
             )
             board.headline.insert(
-                1, StatLine(label="Repositories", value=len(repos), detail="most active")
+                1, StatLine(label="Repos", value=len(repos), detail="active")
             )
+            # Each row is richer than any single headline number: commits, then
+            # PRs merged and open, so the list is not just the "Commits" tile
+            # spread across rows.
             board.breakdown = [
                 StatLine(
                     label=repo["full_name"].split("/")[-1],
                     value=repo["commits"],
-                    detail="your commits (30d)",
+                    value_label=_github_row_label(repo),
+                    detail=None,
                     url=repo["url"],
                 )
-                for repo in sorted(repos, key=lambda r: r["commits"], reverse=True)
+                for repo in sorted(
+                    repos,
+                    key=lambda r: (r["commits"], r["merged_prs"], r["open_prs"]),
+                    reverse=True,
+                )
             ]
         except Exception:
             log.warning("github repo activity failed", exc_info=True)
@@ -188,11 +207,11 @@ class SourceStatsService:
                     label=project.get("name") or "(unnamed)",
                     value=round((project.get("progress") or 0) * 100),
                     value_label=(
-                        f"{round((project.get('progress') or 0) * 100)}%"
+                        f"{round((project.get('progress') or 0) * 100)}% done"
                         if project.get("progress") is not None
-                        else "—"
+                        else "in progress"
                     ),
-                    detail="complete",
+                    detail=(project.get("state") or "active"),
                     url=project.get("url"),
                 )
                 for project in projects
@@ -248,28 +267,29 @@ class SourceStatsService:
     # --------------------------------------------------------------- Gmail
 
     def _gmail_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
-        board.breakdown_title = "Top senders"
+        board.breakdown_title = "Unread emails"
         noise = sum(1 for i in items if _tier_of(i) is Tier.NOISE)
+        senders = len({i.sender_handle for i in items if i.sender_handle})
         board.headline += [
             StatLine(label="Unread", value=len(items), detail="30 days"),
+            StatLine(label="Senders", value=senders, detail="distinct"),
             StatLine(label="Filtered", value=noise, detail="bulk and lists"),
         ]
-        senders = Counter(
-            (i.sender_name or i.sender_handle or "unknown", i.sender_handle or "")
-            for i in items
+        # The emails themselves, newest first, each opening that thread in
+        # Gmail. A sender count belongs in the headline, not as a row that
+        # jumps straight to one arbitrary email.
+        ordered = sorted(
+            items, key=lambda i: i.occurred_at or i.created_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
         )
         board.breakdown = [
             StatLine(
-                label=name,
-                value=count,
-                detail="unread",
-                url=(
-                    f"https://mail.google.com/mail/u/0/#search/from:{handle}+is:unread"
-                    if handle
-                    else None
-                ),
+                label=item.title or "(no subject)",
+                value=0,
+                value_label="",
+                detail=item.sender_name or item.sender_handle or "unknown sender",
+                url=item.url,
             )
-            for (name, handle), count in senders.most_common(12)
+            for item in ordered[:20]
         ]
 
     # --------------------------------------------------------------- Slack
@@ -293,7 +313,16 @@ class SourceStatsService:
             StatLine(label="Channels", value=summary["channels"], detail="active"),
             StatLine(label="DMs", value=summary["dms"], detail="one to one"),
         ]
+        # The channels the user is in, tappable to open. Per-channel message
+        # counts are deliberately not fetched: that is a history call each and
+        # Slack throttles it. The workspace total is in the headline instead.
         board.breakdown = [
-            StatLine(label=row["label"], value=row["count"], detail="messages", url=row.get("url"))
-            for row in sorted(summary["rows"], key=lambda r: r["count"], reverse=True)[:12]
+            StatLine(
+                label=row["label"],
+                value=0,
+                value_label="",
+                detail="channel",
+                url=row.get("url"),
+            )
+            for row in summary["rows"][:20]
         ]

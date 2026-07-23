@@ -233,14 +233,19 @@ class ComposioGitHubService:
                 commits = sum(
                     1
                     for cm in items
-                    if ((cm.get("author") or {}).get("login") or "") in logins
+                    if ((cm.get("author") or {}).get("login") or "").lower()
+                    in {a.lower() for a in logins}
                 )
             except Exception:
                 pass
+            merged = self._search_count(f"repo:{full} is:pr is:merged author:@me")
+            open_prs = self._search_count(f"repo:{full} is:pr is:open author:@me")
             return {
                 "full_name": full,
                 "url": repo.get("html_url") or f"https://github.com/{full}",
                 "commits": commits,
+                "merged_prs": merged,
+                "open_prs": open_prs,
                 "pushed_at": repo.get("pushed_at"),
             }
 

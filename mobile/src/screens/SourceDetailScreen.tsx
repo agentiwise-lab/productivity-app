@@ -38,7 +38,10 @@ export function SourceDetailScreen({
           {dashboard ? (
             <BrandMark source={dashboard.source} size={s(22)} radius={s(7)} />
           ) : null}
-          <Text style={styles.title}>{dashboard?.label ?? 'Source'}</Text>
+          <View>
+            <Text style={styles.title}>{dashboard?.label ?? 'Source'}</Text>
+            <Text style={styles.subtitle}>Last 30 days</Text>
+          </View>
         </View>
         <View style={styles.back} />
       </View>
@@ -102,7 +105,11 @@ function Row({ line, source }: { line: StatLine; source: SourceDashboard['source
         </Text>
         {line.detail ? <Text style={styles.rowSub}>{line.detail}</Text> : null}
       </View>
-      <Text style={styles.rowValue}>{line.value_label ?? line.value}</Text>
+      {line.value_label !== '' ? (
+        <Text style={styles.rowValue}>
+          {line.value_label ?? line.value}
+        </Text>
+      ) : null}
       {tappable ? <Text style={styles.chevron}>{'›'}</Text> : null}
     </>
   );
@@ -131,7 +138,8 @@ const styles = StyleSheet.create({
   back: { width: s(26), alignItems: 'center' },
   backText: { fontSize: s(22), color: colors.accent, lineHeight: s(24) },
   headerCentre: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: s(7) },
-  title: { fontSize: s(15), fontWeight: '700', color: colors.fg },
+  title: { fontSize: s(14), fontWeight: '700', color: colors.fg, lineHeight: s(15) },
+  subtitle: { fontFamily: 'Menlo', fontSize: s(8), letterSpacing: 0.5, color: colors.dim },
   body: { paddingBottom: s(30) },
   pad: { padding: s(13) },
   tiles: {
