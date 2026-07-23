@@ -52,3 +52,12 @@ class GitHubService(Protocol):
     def comment_on_pull_request(self, ref: PRRef, body: str) -> Comment:
         """Act from the feed: post a comment back to a PR."""
         ...
+
+    def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
+        """Submit an approving review.
+
+        Deliberately separate from commenting. A comment whose text says
+        "approved" does not approve anything, so collapsing these two would
+        leave the pull request blocked while telling the user it was unblocked.
+        """
+        ...

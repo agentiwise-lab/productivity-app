@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from backend.integrations.github import Comment, PRRef, PullRequest
+from backend.integrations.slack_service import SlackMessageRef
 from backend.models.events import RawEvent
 from backend.models.feed import Actor
 from backend.models.identity import Identity
@@ -20,6 +21,7 @@ class FakeGitHubService:
     def __init__(self, notifications: list[RawEvent] | None = None) -> None:
         self._notifications = notifications or []
         self.comments: list[tuple[PRRef, str]] = []
+        self.approvals: list[tuple[str, int]] = []
 
     def list_notifications(self, since: datetime | None = None) -> list[RawEvent]:
         return list(self._notifications)
@@ -35,6 +37,34 @@ class FakeGitHubService:
     def comment_on_pull_request(self, ref: PRRef, body: str) -> Comment:
         self.comments.append((ref, body))
         return Comment(id="c1", url="https://github.com/comment/1", body=body)
+
+    def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
+        self.approvals.append((ref.repo, ref.number))
+
+
+class FakeSlackService:
+    """Records sends and read-cursor moves. ``fail`` makes the next call raise,
+    which is how the tests exercise "the upstream said no"."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str, str | None]] = []
+        self.read: list[str] = []
+        self.fail = False
+
+    def reply(self, source_ref: str, text: str, thread_ts: str | None = None):
+        if self.fail:
+            raise RuntimeError("slack said no")
+        channel = source_ref.split(":")[1]
+        self.sent.append((channel, text, thread_ts))
+        return SlackMessageRef(channel=channel, ts="1.1")
+
+    def mark_read(self, source_ref: str) -> None:
+        if self.fail:
+            raise RuntimeError("slack said no")
+        self.read.append(source_ref)
+
+    def resolve_identity(self) -> Identity:
+        return Identity(slack_user_id="U_ME")
 
 
 class FakeConnectionRepository:

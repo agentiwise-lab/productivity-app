@@ -148,6 +148,22 @@ class SupabaseFeedRepository:
         )
         return _deserialize(rows[0]) if rows else None
 
+    def snooze(self, user_id: str, item_id: str, until: datetime) -> FeedItem | None:
+        rows = (
+            self._db.table(_TABLE)
+            .update(
+                {
+                    "status": FeedStatus.SNOOZED.value,
+                    "snoozed_until": until.isoformat(),
+                }
+            )
+            .eq("user_id", user_id)
+            .eq("id", item_id)
+            .execute()
+            .data
+        )
+        return _deserialize(rows[0]) if rows else None
+
     def apply_classification(
         self, user_id: str, item_id: str, *, tier: Tier, summary: str, reason: str
     ) -> FeedItem | None:

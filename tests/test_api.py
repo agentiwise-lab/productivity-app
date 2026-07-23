@@ -188,6 +188,92 @@ def test_an_unmapped_trigger_returns_200_so_it_is_not_redelivered_forever():
     assert response.json()["handled"] is False
 
 
+# --- acting ----------------------------------------------------------------
+
+
+def test_snooze_endpoint_hides_the_item_until_its_time():
+    app = dev_app()
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        f"/feed/{item.id}/snooze",
+        json={"until": "2030-01-01T00:00:00Z"},
+        headers={"X-User-Id": "me"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "snoozed"
+    # Snoozed is not dismissed: Later still has to show it.
+    assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1
+
+
+def test_dismiss_endpoint_removes_the_item_from_the_feed():
+    app = dev_app()
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    client = TestClient(app)
+
+    response = client.post(f"/feed/{item.id}/dismiss", headers={"X-User-Id": "me"})
+
+    assert response.status_code == 200
+    assert client.get("/feed", headers={"X-User-Id": "me"}).json() == []
+
+
+def test_acting_twice_returns_409_rather_than_sending_again():
+    """The app retries on a flaky network. The second attempt must be refused
+    by the server, not turned into a second comment on somebody's PR."""
+    github = FakeGitHubService()
+    app = create_app(github=github, auth_mode="dev")
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    client = TestClient(app)
+
+    first = client.post(
+        f"/feed/{item.id}/actions",
+        json={"action": "comment", "body": "LGTM"},
+        headers={"X-User-Id": "me"},
+    )
+    second = client.post(
+        f"/feed/{item.id}/actions",
+        json={"action": "comment", "body": "LGTM"},
+        headers={"X-User-Id": "me"},
+    )
+
+    assert (first.status_code, second.status_code) == (200, 409)
+    assert len(github.comments) == 1
+
+
+def test_an_unknown_action_is_a_400_not_a_silent_success():
+    app = dev_app()
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    response = TestClient(app).post(
+        f"/feed/{item.id}/actions",
+        json={"action": "teleport", "body": ""},
+        headers={"X-User-Id": "me"},
+    )
+    assert response.status_code == 400
+
+
+def test_acting_on_another_users_item_is_a_404():
+    app = dev_app()
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    response = TestClient(app).post(
+        f"/feed/{item.id}/actions",
+        json={"action": "comment", "body": "hi"},
+        headers={"X-User-Id": "intruder"},
+    )
+    assert response.status_code == 404
+
+
 # --- fetch on open ---------------------------------------------------------
 
 

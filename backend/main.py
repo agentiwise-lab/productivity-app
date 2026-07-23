@@ -12,6 +12,7 @@ contract, and translates an exception into a status code.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -22,6 +23,11 @@ from backend.integrations.github import Comment, GitHubService, PRRef, PullReque
 from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
+from backend.services.actions import (
+    ActionFailed,
+    DefaultActionService,
+    UnknownAction,
+)
 from backend.services.classifier import DefaultClassificationService
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.ingest import IngestResult, WebhookIngestService
@@ -43,6 +49,25 @@ class _UnconfiguredGitHubService:
     def comment_on_pull_request(self, ref: PRRef, body: str) -> Comment:
         raise NotImplementedError("GitHub client not configured")
 
+    def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
+        raise NotImplementedError("GitHub client not configured")
+
+
+class _UnconfiguredSlackService:
+    """Fails loudly. A Slack action that silently did nothing would tell the
+    user they had replied when nobody received anything."""
+
+    def reply(self, source_ref: str, text: str, thread_ts: str | None = None):
+        raise NotImplementedError("Slack client not configured")
+
+    def mark_read(self, source_ref: str) -> None:
+        raise NotImplementedError("Slack client not configured")
+
+    def resolve_identity(self):
+        from backend.models.identity import Identity
+
+        return Identity()
+
 
 class _NullConnectionRepository:
     def mark_status(self, user_id: str, provider: str, status: str) -> None:
@@ -54,8 +79,13 @@ class _NullConnectionRepository:
         return Identity()
 
 
-class CommentBody(BaseModel):
-    body: str
+class ActionBody(BaseModel):
+    body: str = ""
+    action: str = "comment"
+
+
+class SnoozeBody(BaseModel):
+    until: datetime
 
 
 class RefreshResult(BaseModel):
@@ -67,6 +97,7 @@ def create_app(
     github: GitHubService | None = None,
     repo: FeedRepository | None = None,
     *,
+    slack: Any | None = None,
     auth_mode: AuthMode = "dev",
     jwt_secret: str | None = None,
     connections: Any | None = None,
@@ -79,6 +110,9 @@ def create_app(
 
     feed_service = DefaultFeedService(
         repo=repo, rules=DefaultRuleClassifier(), github=github
+    )
+    action_service = DefaultActionService(
+        repo=repo, github=github, slack=slack or _UnconfiguredSlackService()
     )
     ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
     current_user = build_current_user(auth_mode, jwt_secret)
@@ -111,12 +145,40 @@ def create_app(
 
     @app.post("/feed/{item_id}/actions", response_model=FeedItem)
     def post_action(
-        item_id: str, payload: CommentBody, user_id: str = Depends(current_user)
+        item_id: str, payload: ActionBody, user_id: str = Depends(current_user)
     ) -> FeedItem:
         try:
-            return feed_service.comment(user_id, item_id, payload.body)
+            return action_service.perform(
+                user_id, item_id, payload.action, body=payload.body
+            )
         except ItemNotFound:
             raise HTTPException(status_code=404, detail="feed item not found")
+        except UnknownAction as error:
+            raise HTTPException(status_code=400, detail=str(error))
+        except ActionFailed as error:
+            # 409, not 500: the request was well formed and we simply could not
+            # complete it. The app shows the item again rather than retrying.
+            raise HTTPException(status_code=409, detail=str(error))
+
+    @app.post("/feed/{item_id}/snooze", response_model=FeedItem)
+    def post_snooze(
+        item_id: str, payload: SnoozeBody, user_id: str = Depends(current_user)
+    ) -> FeedItem:
+        try:
+            return action_service.snooze(user_id, item_id, payload.until)
+        except ItemNotFound:
+            raise HTTPException(status_code=404, detail="feed item not found")
+
+    @app.post("/feed/{item_id}/dismiss", response_model=FeedItem)
+    def post_dismiss(
+        item_id: str, user_id: str = Depends(current_user)
+    ) -> FeedItem:
+        try:
+            return action_service.perform(user_id, item_id, "dismiss")
+        except ItemNotFound:
+            raise HTTPException(status_code=404, detail="feed item not found")
+        except ActionFailed as error:
+            raise HTTPException(status_code=409, detail=str(error))
 
     @app.post("/webhooks/composio", response_model=IngestResult)
     async def composio_webhook(request: Request) -> IngestResult:

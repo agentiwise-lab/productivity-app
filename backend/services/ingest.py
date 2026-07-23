@@ -24,6 +24,10 @@ from typing import Any, Callable, Protocol
 from pydantic import BaseModel
 
 from backend.integrations.composio_github import notification_to_raw_event
+from backend.integrations.slack import (
+    channel_message_to_raw_event,
+    direct_message_to_raw_event,
+)
 from backend.models.events import RawEvent
 from backend.models.feed import Actor, UserPreferences
 from backend.models.identity import Identity
@@ -101,10 +105,30 @@ def _notification_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
 
 # Trigger slug -> payload mapper. Verified against the live trigger instances.
 # An unlisted slug is ignored rather than guessed at.
-_MAPPERS: dict[str, Callable[[dict], RawEvent | None]] = {
-    "GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER": _notification_to_raw_event,
-    "GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER": _issue_to_raw_event,
+#
+# The GitHub mappers ignore identity; the Slack ones cannot, because Slack has
+# no mention trigger and "was this person addressed" is decided in our code.
+_MAPPERS: dict[str, Callable[..., RawEvent | None]] = {
+    "GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER": (
+        lambda data, identity, threads: _notification_to_raw_event(data)
+    ),
+    "GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER": (
+        lambda data, identity, threads: _issue_to_raw_event(data)
+    ),
+    "SLACK_DIRECT_MESSAGE_RECEIVED": (
+        lambda data, identity, threads: direct_message_to_raw_event(
+            data, identity=identity
+        )
+    ),
+    "SLACK_CHANNEL_MESSAGE_RECEIVED": (
+        lambda data, identity, threads: channel_message_to_raw_event(
+            data, identity=identity, my_threads=threads
+        )
+    ),
 }
+
+# Trigger slug prefix -> the provider whose identity the mapper needs.
+_SLUG_PROVIDER = {"GITHUB": "github", "SLACK": "slack"}
 
 # Trigger slug prefix -> the provider whose connection it belongs to.
 _PROVIDERS = {"GITHUB": "github", "SLACK": "slack"}
@@ -116,10 +140,15 @@ class WebhookIngestService:
         feed: FeedService,
         connections: ConnectionRepository,
         prefs_for: Callable[[str], UserPreferences] | None = None,
+        threads_for: Callable[[str], set[str]] | None = None,
     ) -> None:
         self._feed = feed
         self._connections = connections
         self._prefs_for = prefs_for or (lambda user_id: UserPreferences(user_id=user_id))
+        # Threads the user has posted in. Plan 3.10 accepts the limitation:
+        # threads joined before installing are invisible until someone mentions
+        # you, because Slack gives us no way to learn about them.
+        self._threads_for = threads_for or (lambda user_id: set())
 
     def handle(self, envelope: dict[str, Any]) -> IngestResult:
         event_type = envelope.get("type", "")
@@ -143,22 +172,24 @@ class WebhookIngestService:
             log.info("no mapper for trigger %r", slug)
             return IngestResult(handled=False, reason="unmapped_trigger")
 
+        provider = _SLUG_PROVIDER.get(slug.split("_", 1)[0], "")
+        identity = self._connections.identity_for(user_id, provider)
+        threads = self._threads_for(user_id)
+
         try:
-            event = mapper(envelope.get("data") or {})
+            event = mapper(envelope.get("data") or {}, identity, threads)
         except Exception:
             log.warning("failed to map trigger %r", slug, exc_info=True)
             return IngestResult(handled=False, reason="malformed_payload")
 
         if event is None:
-            log.warning("trigger %r carried an unusable payload", slug)
-            return IngestResult(handled=False, reason="malformed_payload")
+            # Not a failure. Most Slack traffic lands here by design: it was
+            # somebody else's conversation, and dropping it before storage is
+            # what keeps the feed and the model bill about this user.
+            log.debug("trigger %r produced no item", slug)
+            return IngestResult(handled=False, reason="not_for_this_user")
 
-        item = self._feed.ingest(
-            user_id,
-            event,
-            self._prefs_for(user_id),
-            self._connections.identity_for(user_id, event.source),
-        )
+        item = self._feed.ingest(user_id, event, self._prefs_for(user_id), identity)
         return IngestResult(handled=True, reason="ingested", item_id=item.id)
 
     def _handle_expired(self, envelope: dict[str, Any]) -> IngestResult:

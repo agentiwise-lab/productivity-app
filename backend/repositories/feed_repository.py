@@ -41,6 +41,11 @@ class FeedRepository(Protocol):
         this user's."""
         ...
 
+    def snooze(self, user_id: str, item_id: str, until: datetime) -> FeedItem | None:
+        """Hide an item until a time. Distinct from ``mark_handled``: nothing
+        was done about it, so it has to come back."""
+        ...
+
     def get(self, user_id: str, item_id: str) -> FeedItem | None:
         ...
 
@@ -112,6 +117,16 @@ class InMemoryFeedRepository:
         if item is None:
             return None
         updated = item.model_copy(update={"status": status, "handled_at": at})
+        self._by_key[(item.user_id, item.source_ref)] = updated
+        return updated
+
+    def snooze(self, user_id: str, item_id: str, until: datetime) -> FeedItem | None:
+        item = self.get(user_id, item_id)
+        if item is None:
+            return None
+        updated = item.model_copy(
+            update={"status": FeedStatus.SNOOZED, "snoozed_until": until}
+        )
         self._by_key[(item.user_id, item.source_ref)] = updated
         return updated
 

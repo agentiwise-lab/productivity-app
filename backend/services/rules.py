@@ -59,6 +59,7 @@ _TERMINAL: dict[str, tuple[Tier, TypeTag]] = {
     "subscribed": (Tier.NOISE, TypeTag.FYI),
     "author": (Tier.NOISE, TypeTag.FYI),
     "manual": (Tier.NOISE, TypeTag.FYI),
+    "slack_bot_noise": (Tier.NOISE, TypeTag.FYI),
 }
 
 # Reasons whose urgency lives in human language. The tag and the floor are
@@ -69,6 +70,15 @@ _DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
     "team_mention": (Tier.CAN_WAIT, TypeTag.REPLY),
     "comment": (Tier.CAN_WAIT, TypeTag.COMMENT),
     "review_request_removed": (Tier.NOISE, TypeTag.FYI),
+    # Slack (3.2). A message has no type, only text, so the tier is always a
+    # judgement. The rules' job on Slack is the filtering that happens in the
+    # mapper, before anything reaches here.
+    "slack_dm": (Tier.TODAY, TypeTag.REPLY),
+    "slack_mention": (Tier.TODAY, TypeTag.REPLY),
+    "slack_thread_reply": (Tier.CAN_WAIT, TypeTag.REPLY),
+    # Automation reporting that the user's own work broke is the one bot case
+    # that can matter, so it is judged rather than dropped.
+    "slack_bot_failure": (Tier.TODAY, TypeTag.ALERT),
 }
 
 

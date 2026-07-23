@@ -1,0 +1,64 @@
+/**
+ * The wire contract, mirroring backend/models/feed.py FeedRow.
+ *
+ * `tier` and `priorityScore` exist only here and on the wire. They are computed
+ * per request against the current clock and are deliberately absent from the
+ * database, so nothing in the app should ever try to cache or persist them.
+ */
+
+export type Tier = 'urgent' | 'today' | 'can_wait' | 'noise';
+
+export type TypeTag =
+  | 'review'
+  | 'approve'
+  | 'reply'
+  | 'assigned'
+  | 'comment'
+  | 'decide'
+  | 'rsvp'
+  | 'alert'
+  | 'fyi';
+
+export type Source = 'github' | 'slack' | 'google_docs' | 'linear' | 'calendar' | 'gmail';
+
+export type FeedStatus = 'unread' | 'acted' | 'dismissed' | 'snoozed';
+
+export interface FeedRow {
+  id: string;
+  user_id: string;
+  source: Source;
+  source_ref: string;
+
+  tier: Tier;
+  priority_score: number;
+  rule_tier: Tier;
+  llm_tier: Tier | null;
+  tier_source: 'rule' | 'llm';
+  type_tag: TypeTag;
+  needs_llm: boolean;
+
+  title: string;
+  /** The AI one-liner. Null while classification is still pending. */
+  summary: string | null;
+  /** Why this tier, shown in the detail sheet. */
+  reason: string | null;
+  url: string;
+  repo: string;
+  context_chip: string | null;
+  sender_name: string | null;
+  sender_handle: string | null;
+
+  deadline: string | null;
+  occurred_at: string | null;
+  created_at: string | null;
+  snoozed_until: string | null;
+  handled_at: string | null;
+
+  is_blocking: boolean;
+  status: FeedStatus;
+}
+
+export interface RefreshResult {
+  ingested: number;
+  classified: number;
+}

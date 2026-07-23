@@ -146,3 +146,16 @@ class ComposioGitHubService:
         return Comment(
             id=str(data.get("id", "")), url=data.get("html_url") or "", body=body
         )
+
+    def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
+        owner, _, name = ref.repo.partition("/")
+        self._execute(
+            "GITHUB_CREATE_A_REVIEW_FOR_A_PULL_REQUEST",
+            {
+                "owner": owner,
+                "repo": name,
+                "pull_number": ref.number,
+                "event": "APPROVE",
+                "body": body,
+            },
+        )

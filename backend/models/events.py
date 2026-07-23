@@ -43,6 +43,8 @@ class RawEvent(BaseModel):
     deadline: datetime | None = None
     # Free text the LLM reads. Never used by rules.
     body: str | None = None
+    # The chip on the card: "#eng-releases", "DM", a repo name.
+    context_chip: str | None = None
     # The source's own timestamp, not our ingest time. Ranking uses this.
     occurred_at: datetime | None = None
     is_blocking: bool = False

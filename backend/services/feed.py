@@ -93,6 +93,7 @@ class DefaultFeedService:
             title=event.title,
             url=event.url,
             repo=event.repo,
+            context_chip=event.context_chip or event.repo or None,
             actors=[event.actor] if event.actor else [],
             sender_handle=event.actor.login if event.actor else None,
             sender_name=(

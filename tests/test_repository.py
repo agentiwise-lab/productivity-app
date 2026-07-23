@@ -160,6 +160,24 @@ def test_mark_handled_is_scoped_to_the_user(repo):
     assert repo.get("me", item.id).status is FeedStatus.UNREAD
 
 
+def test_snooze_hides_an_item_without_marking_it_done(repo):
+    """Snooze and dismiss must not collapse into each other: a snoozed item has
+    to come back, and Later has to keep showing it meanwhile."""
+    item = repo.upsert(make_item())
+    later = NOW + timedelta(hours=3)
+
+    snoozed = repo.snooze("me", item.id, later)
+
+    assert snoozed.status is FeedStatus.SNOOZED
+    assert snoozed.handled_at is None
+    assert [row.id for row in repo.list_by_user("me", now=NOW)] == [item.id]
+
+
+def test_snooze_is_scoped_to_the_user(repo):
+    item = repo.upsert(make_item(user_id="me"))
+    assert repo.snooze("intruder", item.id, NOW + timedelta(hours=1)) is None
+
+
 def test_get_is_scoped_to_the_user(repo):
     item = repo.upsert(make_item(user_id="me"))
     assert repo.get("me", item.id) is not None
