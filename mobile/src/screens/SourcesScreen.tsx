@@ -31,7 +31,7 @@ function describe(info: SourceInfo, loading: boolean): string {
   if (info.status === 'disconnected') return 'Not connected yet';
   if (info.status === 'expired') return 'Access expired, tap to reconnect';
   if (info.status === 'error') return "Couldn't check this connection";
-  if (info.count === 0) return 'Nothing needs you';
+  if (info.count === 0) return 'No urgent tasks';
   const parts = [`${info.count} need${info.count === 1 ? 's' : ''} you`];
   if (info.urgent > 0) parts.push(`${info.urgent} urgent`);
   return parts.join(' · ');
@@ -46,7 +46,7 @@ export function SourcesScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Header title="Sources" subtitle="Tap one to go deeper" rightGlyph="+" />
+      <Header title="Sources" subtitle="Last 30 days" rightGlyph="+" />
       <ScrollView contentContainerStyle={styles.body}>
         {sources.map((info) => {
           const broken = info.status === 'expired' || info.status === 'error';

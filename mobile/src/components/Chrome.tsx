@@ -131,8 +131,16 @@ const styles = StyleSheet.create({
   headerLeft: { width: s(20) },
   headerRight: { width: s(20), alignItems: 'flex-end' },
   headerCentre: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline' },
-  headerTitle: { fontSize: s(15), fontWeight: '700', letterSpacing: -0.3, color: colors.fg },
-  headerDate: { ...type.headerDate, marginTop: s(1) },
+  // Title and subtitle share the header without growing it: the title comes
+  // down a point and the date line sits tight beneath on its own baseline.
+  headerTitle: {
+    fontSize: s(14),
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: colors.fg,
+    lineHeight: s(16),
+  },
+  headerDate: { ...type.headerDate, fontSize: s(8), lineHeight: s(9) },
   glyph: { fontSize: s(13), color: colors.dim },
 
   sticky: {
