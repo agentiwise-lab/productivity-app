@@ -1,0 +1,535 @@
+<title>Work Feed · Mobile Screens</title>
+
+<style>
+  :root {
+    --paper:#F6F7F9; --surface:#FFFFFF; --sunken:#EEF0F4;
+    --ink:#14171C; --ink-2:#454B57; --ink-3:#79808E;
+    --hairline:#E2E5EA; --hairline-2:#D3D8DF;
+    --accent:#0E5C4B; --accent-soft:#E1EFEA;
+    --signal:#B4530F; --signal-soft:#F9E8D9;
+    --shadow:0 1px 2px rgba(20,23,28,.05), 0 10px 30px rgba(20,23,28,.07);
+    --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0B0E12; --surface:#151920; --sunken:#10141A;
+      --ink:#E7EAEF; --ink-2:#A7AEBB; --ink-3:#727A88;
+      --hairline:#222831; --hairline-2:#2C333E;
+      --accent:#3FA98F; --accent-soft:#12241F;
+      --signal:#E0913F; --signal-soft:#2A1C11;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0B0E12; --surface:#151920; --sunken:#10141A;
+    --ink:#E7EAEF; --ink-2:#A7AEBB; --ink-3:#727A88;
+    --hairline:#222831; --hairline-2:#2C333E;
+    --accent:#3FA98F; --accent-soft:#12241F;
+    --signal:#E0913F; --signal-soft:#2A1C11;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.45);
+  }
+  :root[data-theme="light"]{
+    --paper:#F6F7F9; --surface:#FFFFFF; --sunken:#EEF0F4;
+    --ink:#14171C; --ink-2:#454B57; --ink-3:#79808E;
+    --hairline:#E2E5EA; --hairline-2:#D3D8DF;
+    --accent:#0E5C4B; --accent-soft:#E1EFEA;
+    --signal:#B4530F; --signal-soft:#F9E8D9;
+    --shadow:0 1px 2px rgba(20,23,28,.05), 0 10px 30px rgba(20,23,28,.07);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);
+       -webkit-font-smoothing:antialiased;}
+
+  .sheet{max-width:1440px;margin:0 auto;padding:48px 24px 80px;}
+  .sheet-head{max-width:660px;margin-bottom:8px;}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+          color:var(--accent);margin:0 0 12px;}
+  h1{font-size:34px;line-height:1.12;letter-spacing:-.022em;margin:0 0 12px;text-wrap:balance;}
+  .lede{font-size:16px;line-height:1.55;color:var(--ink-2);margin:0;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 44px;}
+  .legend span{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    border:1px solid var(--hairline-2);border-radius:6px;padding:5px 9px;color:var(--ink-2);}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:48px 32px;}
+  figure{margin:0;display:flex;flex-direction:column;gap:14px;}
+  figcaption{order:2;}
+  .cap-t{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px;}
+  .cap-d{font-size:13.5px;line-height:1.5;color:var(--ink-3);margin:0;}
+
+  /* phone */
+  .phone{order:1;width:100%;max-width:340px;aspect-ratio:340/700;background:var(--surface);
+    border:1px solid var(--hairline-2);border-radius:26px;box-shadow:var(--shadow);
+    overflow:hidden;display:flex;flex-direction:column;}
+  .status{display:flex;justify-content:space-between;align-items:center;padding:11px 18px 4px;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.02em;}
+  .appbar{padding:6px 18px 12px;border-bottom:1px solid var(--hairline);
+    display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+  .appbar h2{font-size:20px;letter-spacing:-.02em;margin:0;line-height:1.15;}
+  .appbar .sub{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin:3px 0 0;
+    letter-spacing:.04em;text-transform:uppercase;}
+  .barbtn{font-family:var(--mono);font-size:10.5px;color:var(--accent);border:1px solid var(--hairline-2);
+    border-radius:6px;padding:4px 7px;letter-spacing:.04em;white-space:nowrap;}
+
+  .body{flex:1;overflow:hidden;padding:0 0 4px;}
+  .scroll{height:100%;overflow:hidden;}
+
+  .sect{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    padding:15px 18px 7px;}
+  .sect .l{font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-2);}
+  .sect .l.urgent{color:var(--signal);}
+  .sect .n{font-family:var(--mono);font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums;}
+
+  /* feed row */
+  .row{display:flex;gap:11px;padding:11px 18px;border-top:1px solid var(--hairline);}
+  .row:first-of-type{border-top:none;}
+  .glyph{flex:none;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+    font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.02em;
+    background:var(--sunken);color:var(--ink-2);border:1px solid var(--hairline);}
+  .rc{min-width:0;flex:1;}
+  .rt{font-size:13.5px;line-height:1.38;letter-spacing:-.006em;margin:0 0 4px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .rt.strong{font-weight:600;}
+  .meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.02em;}
+  .chip{border:1px solid var(--hairline-2);border-radius:5px;padding:2px 5px;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);}
+  .chip.now{border-color:var(--signal);color:var(--signal);background:var(--signal-soft);}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--signal);flex:none;}
+  .sep{color:var(--hairline-2);}
+
+  /* dashboard */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--hairline);
+    border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);}
+  .tile{background:var(--surface);padding:12px 10px 13px;text-align:left;}
+  .tile .v{font-family:var(--mono);font-size:21px;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;line-height:1;margin:0 0 5px;}
+  .tile .k{font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);margin:0;line-height:1.3;}
+  .tile .v.hot{color:var(--signal);}
+
+  .brk{padding:5px 18px 11px;}
+  .brkrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--hairline);}
+  .brkrow:first-child{border-top:none;}
+  .brkname{font-family:var(--mono);font-size:11px;color:var(--ink-2);flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar{flex:none;width:64px;height:4px;border-radius:2px;background:var(--sunken);overflow:hidden;}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:2px;}
+  .brkval{font-family:var(--mono);font-size:11px;color:var(--ink-3);width:26px;text-align:right;
+    font-variant-numeric:tabular-nums;}
+
+  /* detail */
+  .detail{padding:16px 18px;}
+  .dtitle{font-size:17px;line-height:1.32;letter-spacing:-.016em;margin:0 0 10px;text-wrap:balance;}
+  .dmeta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .why{border:1px solid var(--hairline-2);border-radius:10px;padding:11px 12px;background:var(--sunken);}
+  .why h3{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);margin:0 0 6px;}
+  .why p{font-size:12.5px;line-height:1.5;color:var(--ink-2);margin:0;}
+  .diffs{display:flex;gap:12px;margin:13px 0 0;font-family:var(--mono);font-size:11px;
+    color:var(--ink-3);font-variant-numeric:tabular-nums;}
+  .add{color:var(--accent);}
+  .del{color:var(--signal);}
+  .acts{display:flex;flex-direction:column;gap:7px;padding:14px 18px 0;}
+  .btn{border-radius:9px;padding:11px 12px;font-size:13.5px;font-weight:600;text-align:center;
+    border:1px solid var(--hairline-2);color:var(--ink);letter-spacing:-.005em;}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;}
+  :root[data-theme="dark"] .btn.pri{color:#07120F;}
+  @media (prefers-color-scheme:dark){.btn.pri{color:#07120F;}}
+  .btnrow{display:flex;gap:7px;}
+  .btnrow .btn{flex:1;}
+
+  /* rules */
+  .rule{display:flex;align-items:center;gap:11px;padding:11px 18px;border-top:1px solid var(--hairline);}
+  .rule:first-of-type{border-top:none;}
+  .rl{flex:1;min-width:0;}
+  .rl p{margin:0;}
+  .rn{font-size:13px;letter-spacing:-.005em;margin:0 0 2px;}
+  .rd{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.02em;}
+  .lvl{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+    border-radius:6px;padding:4px 7px;border:1px solid var(--hairline-2);color:var(--ink-3);
+    white-space:nowrap;}
+  .lvl.push{border-color:var(--signal);color:var(--signal);background:var(--signal-soft);}
+  .lvl.brief{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+
+  /* cleared state */
+  .cleared{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:30px 30px 60px;gap:12px;}
+  .mark{width:40px;height:40px;border-radius:11px;border:1px solid var(--accent);
+    display:grid;place-items:center;font-family:var(--mono);font-size:15px;color:var(--accent);}
+  .cleared h3{font-size:17px;letter-spacing:-.015em;margin:0;}
+  .cleared p{font-size:13px;line-height:1.55;color:var(--ink-3);margin:0;}
+  .nextup{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);
+    border-top:1px solid var(--hairline);padding-top:11px;margin-top:4px;width:100%;}
+
+  /* tabbar */
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--hairline);
+    background:var(--surface);}
+  .tab{padding:9px 4px 13px;text-align:center;font-family:var(--mono);font-size:9px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);}
+  .tab i{display:block;width:15px;height:15px;margin:0 auto 5px;border-radius:4px;
+    border:1.5px solid var(--ink-3);}
+  .tab.on{color:var(--accent);}
+  .tab.on i{border-color:var(--accent);background:var(--accent-soft);}
+
+  .foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--hairline);
+    font-size:13.5px;line-height:1.6;color:var(--ink-3);max-width:680px;}
+  .foot strong{color:var(--ink-2);font-weight:600;}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="sheet">
+  <header class="sheet-head">
+    <p class="kicker">Mockups · v1 · for review</p>
+    <h1>One feed for everything that needs you.</h1>
+    <p class="lede">Six screens covering the unified home feed, per-integration summaries, acting
+      without leaving the app, and the notification rules that keep it calm. Content is real: your
+      repos, your open pull requests.</p>
+  </header>
+
+  <div class="legend">
+    <span>SF Pro + SF Mono for data</span>
+    <span>Colour reserved for urgency only</span>
+    <span>Action type = mono chip, not a hue</span>
+    <span>Light + dark tokenised</span>
+  </div>
+
+  <section class="grid">
+
+    <!-- 1. HOME -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>LTE · 82%</span></div>
+        <div class="appbar">
+          <div><h2>Today</h2><p class="sub">Thu 23 Jul · 7 need you</p></div>
+          <span class="barbtn">BRIEF</span>
+        </div>
+        <div class="body"><div class="scroll">
+          <div class="sect"><span class="l urgent">Needs you now</span><span class="n">3</span></div>
+
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc">
+              <p class="rt strong">Review requested: restore shopify.svg icon for landing grid</p>
+              <div class="meta"><span class="dot"></span><span class="chip now">Review</span>
+                <span>dswh/glued_landing#11</span></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="glyph">SL</div>
+            <div class="rc">
+              <p class="rt strong">Priya: can you unblock the staging deploy before standup?</p>
+              <div class="meta"><span class="dot"></span><span class="chip now">Reply</span>
+                <span>#eng-releases</span><span class="sep">·</span><span>18m</span></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc">
+              <p class="rt strong">CI failed on your PR: docs(mcp) document brand-kit</p>
+              <div class="meta"><span class="dot"></span><span class="chip now">Decide</span>
+                <span>dswh/glued_landing#17</span></div>
+            </div>
+          </div>
+
+          <div class="sect"><span class="l">Waiting on others</span><span class="n">2</span></div>
+
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc">
+              <p class="rt">Feature/gif showcase approved, ready to merge</p>
+              <div class="meta"><span class="chip">FYI</span><span>dswh/glued_landing#23</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="glyph">LN</div>
+            <div class="rc">
+              <p class="rt">AGE-214 moved to In Review by Abdul</p>
+              <div class="meta"><span class="chip">FYI</span><span>Linear</span>
+                <span class="sep">·</span><span>2h</span></div>
+            </div>
+          </div>
+
+          <div class="sect"><span class="l">Later today</span><span class="n">2</span></div>
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc">
+              <p class="rt">Mcp add hourly, 4 threads with no reply</p>
+              <div class="meta"><span class="chip">Reply</span><span>agentiwise-flow</span></div>
+            </div>
+          </div>
+        </div></div>
+        <nav class="tabs">
+          <div class="tab on"><i></i>Home</div><div class="tab"><i></i>GitHub</div>
+          <div class="tab"><i></i>Slack</div><div class="tab"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">Home: the unified feed</p>
+        <p class="cap-d">Everything across GitHub, Slack and Linear in one place, grouped by whether
+          it actually needs you. Only the top group is allowed to interrupt.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 2. CLEARED -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>18:20</span><span>LTE · 61%</span></div>
+        <div class="appbar">
+          <div><h2>Today</h2><p class="sub">Thu 23 Jul · all clear</p></div>
+          <span class="barbtn">BRIEF</span>
+        </div>
+        <div class="body">
+          <div class="cleared">
+            <div class="mark">✓</div>
+            <h3>You're clear for today</h3>
+            <p>7 handled, 12 low-signal updates rolled into your evening brief instead of pinging you.</p>
+            <p class="nextup">NEXT BRIEF · 08:30 TOMORROW</p>
+          </div>
+        </div>
+        <nav class="tabs">
+          <div class="tab on"><i></i>Home</div><div class="tab"><i></i>GitHub</div>
+          <div class="tab"><i></i>Slack</div><div class="tab"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">The finish line</p>
+        <p class="cap-d">The single most important anti-anxiety screen. The list is finite and it
+          ends. No infinite scroll, no permanent red badge, and it tells you what it chose not to
+          interrupt you with.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 3. GITHUB -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>LTE · 82%</span></div>
+        <div class="appbar">
+          <div><h2>GitHub</h2><p class="sub">Last 24 hours</p></div>
+          <span class="barbtn">7D</span>
+        </div>
+        <div class="body"><div class="scroll">
+          <div class="tiles">
+            <div class="tile"><p class="v">14</p><p class="k">Commits</p></div>
+            <div class="tile"><p class="v">5</p><p class="k">PRs open</p></div>
+            <div class="tile"><p class="v hot">2</p><p class="k">Need review</p></div>
+          </div>
+          <div class="tiles">
+            <div class="tile"><p class="v">3</p><p class="k">Merged</p></div>
+            <div class="tile"><p class="v">6</p><p class="k">Reviewed</p></div>
+            <div class="tile"><p class="v hot">1</p><p class="k">CI failing</p></div>
+          </div>
+
+          <div class="sect"><span class="l">By repository</span><span class="n">commits</span></div>
+          <div class="brk">
+            <div class="brkrow"><span class="brkname">dswh/glued_landing</span>
+              <span class="bar"><i style="width:100%"></i></span><span class="brkval">9</span></div>
+            <div class="brkrow"><span class="brkname">dswh/agentiwise-flow</span>
+              <span class="bar"><i style="width:44%"></i></span><span class="brkval">4</span></div>
+            <div class="brkrow"><span class="brkname">agentiwise-lab/productivity-app</span>
+              <span class="bar"><i style="width:11%"></i></span><span class="brkval">1</span></div>
+          </div>
+
+          <div class="sect"><span class="l">Activity</span><span class="n">today</span></div>
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc"><p class="rt">Opened “Feature/gif showcase”</p>
+              <div class="meta"><span>#23</span><span class="sep">·</span><span>08:12</span></div></div>
+          </div>
+          <div class="row">
+            <div class="glyph">GH</div>
+            <div class="rc"><p class="rt">Merged “Mcp add hourly”</p>
+              <div class="meta"><span>#21</span><span class="sep">·</span><span>07:48</span></div></div>
+          </div>
+        </div></div>
+        <nav class="tabs">
+          <div class="tab"><i></i>Home</div><div class="tab on"><i></i>GitHub</div>
+          <div class="tab"><i></i>Slack</div><div class="tab"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">GitHub tab: summary first</p>
+        <p class="cap-d">What happened, repo by repo, before any list of items. Ochre marks only the
+          two numbers that imply work for you. Everything else stays neutral.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 4. SLACK -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>LTE · 82%</span></div>
+        <div class="appbar">
+          <div><h2>Slack</h2><p class="sub">Last 24 hours</p></div>
+          <span class="barbtn">7D</span>
+        </div>
+        <div class="body"><div class="scroll">
+          <div class="tiles">
+            <div class="tile"><p class="v hot">4</p><p class="k">Await reply</p></div>
+            <div class="tile"><p class="v">11</p><p class="k">Mentions</p></div>
+            <div class="tile"><p class="v">126</p><p class="k">Unread</p></div>
+          </div>
+
+          <div class="sect"><span class="l">Where it piled up</span><span class="n">messages</span></div>
+          <div class="brk">
+            <div class="brkrow"><span class="brkname">#eng-releases</span>
+              <span class="bar"><i style="width:100%"></i></span><span class="brkval">48</span></div>
+            <div class="brkrow"><span class="brkname">#glued-dev-updates</span>
+              <span class="bar"><i style="width:60%"></i></span><span class="brkval">29</span></div>
+            <div class="brkrow"><span class="brkname">DMs</span>
+              <span class="bar"><i style="width:25%"></i></span><span class="brkval">12</span></div>
+          </div>
+
+          <div class="sect"><span class="l urgent">Awaiting your reply</span><span class="n">4</span></div>
+          <div class="row">
+            <div class="glyph">SL</div>
+            <div class="rc"><p class="rt strong">Priya: can you unblock the staging deploy?</p>
+              <div class="meta"><span class="dot"></span><span class="chip now">Reply</span>
+                <span>#eng-releases</span><span class="sep">·</span><span>18m</span></div></div>
+          </div>
+          <div class="row">
+            <div class="glyph">SL</div>
+            <div class="rc"><p class="rt">Abdul: shared the LMS migration doc for your call</p>
+              <div class="meta"><span class="chip">Decide</span><span>DM</span>
+                <span class="sep">·</span><span>3h</span></div></div>
+          </div>
+          <div class="row">
+            <div class="glyph">SL</div>
+            <div class="rc"><p class="rt">Harshit: newsletter draft ready for review</p>
+              <div class="meta"><span class="chip">Review</span><span>DM</span>
+                <span class="sep">·</span><span>5h</span></div></div>
+          </div>
+        </div></div>
+        <nav class="tabs">
+          <div class="tab"><i></i>Home</div><div class="tab"><i></i>GitHub</div>
+          <div class="tab on"><i></i>Slack</div><div class="tab"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">Slack tab: the same shape</p>
+        <p class="cap-d">Every integration tab reuses one layout: counters, where it piled up, then
+          the items that need a reply. Learn it once, it works everywhere.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 5. DETAIL -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>9:42</span><span>LTE · 82%</span></div>
+        <div class="appbar">
+          <div><h2>Review</h2><p class="sub">dswh/glued_landing #11</p></div>
+          <span class="barbtn">OPEN</span>
+        </div>
+        <div class="body"><div class="scroll">
+          <div class="detail">
+            <p class="dtitle">restore shopify.svg icon for the landing integrations grid</p>
+            <div class="dmeta">
+              <span class="chip now">Review</span><span class="chip">Blocking 2 people</span>
+              <span class="chip">Waiting 4h</span>
+            </div>
+            <div class="why">
+              <h3>Why this is top of your feed</h3>
+              <p>Priya requested your review 4 hours ago and the release branch is frozen until it
+                lands. Two other pull requests are stacked behind it.</p>
+            </div>
+            <div class="diffs">
+              <span>3 files</span><span class="add">+48</span><span class="del">−12</span>
+              <span>CI passing</span>
+            </div>
+          </div>
+          <div class="acts">
+            <div class="btn pri">Approve</div>
+            <div class="btnrow">
+              <div class="btn">Comment</div><div class="btn">Request changes</div>
+            </div>
+            <div class="btn">Snooze until 14:00</div>
+          </div>
+        </div></div>
+        <nav class="tabs">
+          <div class="tab on"><i></i>Home</div><div class="tab"><i></i>GitHub</div>
+          <div class="tab"><i></i>Slack</div><div class="tab"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">Act without leaving</p>
+        <p class="cap-d">Approve, comment or request changes writes straight back to GitHub. The
+          "why this is top" box is where the AI explains its ranking, so the order never feels
+          arbitrary.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 6. RULES -->
+    <figure>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>LTE · 82%</span></div>
+        <div class="appbar">
+          <div><h2>Rules</h2><p class="sub">What may interrupt you</p></div>
+          <span class="barbtn">+ NEW</span>
+        </div>
+        <div class="body"><div class="scroll">
+          <div class="sect"><span class="l urgent">Push immediately</span><span class="n">2</span></div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Someone is blocked on me</p>
+              <p class="rd">REVIEW · APPROVE · BLOCKING REPLY</p></div>
+            <span class="lvl push">Push</span>
+          </div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Direct message from a VIP</p>
+              <p class="rd">PRIYA · HARSHIT · ABDUL</p></div>
+            <span class="lvl push">Push</span>
+          </div>
+
+          <div class="sect"><span class="l">Save for the brief</span><span class="n">3</span></div>
+          <div class="rule">
+            <div class="rl"><p class="rn">CI results and status changes</p>
+              <p class="rd">08:30 AND 16:30 DIGEST</p></div>
+            <span class="lvl brief">Brief</span>
+          </div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Channel mentions, not directed at me</p>
+              <p class="rd">08:30 AND 16:30 DIGEST</p></div>
+            <span class="lvl brief">Brief</span>
+          </div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Merged, closed and released</p>
+              <p class="rd">08:30 AND 16:30 DIGEST</p></div>
+            <span class="lvl brief">Brief</span>
+          </div>
+
+          <div class="sect"><span class="l">Never notify</span><span class="n">2</span></div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Repositories I only watch</p>
+              <p class="rd">3 MUTED</p></div>
+            <span class="lvl">Off</span>
+          </div>
+          <div class="rule">
+            <div class="rl"><p class="rn">Quiet hours</p>
+              <p class="rd">21:00 – 08:00 · WEEKENDS</p></div>
+            <span class="lvl">Off</span>
+          </div>
+        </div></div>
+        <nav class="tabs">
+          <div class="tab"><i></i>Home</div><div class="tab"><i></i>GitHub</div>
+          <div class="tab"><i></i>Slack</div><div class="tab on"><i></i>Rules</div>
+        </nav>
+      </div>
+      <figcaption>
+        <p class="cap-t">Three levels, not on/off</p>
+        <p class="cap-d">Every category lands in Push, Brief or Off, and the default for anything new
+          is Brief. You add rules like "always ping me when Priya DMs" without touching the rest.</p>
+      </figcaption>
+    </figure>
+
+  </section>
+
+  <div class="foot">
+    <p><strong>How this stays calm.</strong> Only "someone is blocked on you" earns a push. Everything
+      else batches into two briefs a day. New categories default to Brief, never Push, so the app gets
+      quieter as it learns rather than louder. The day has an end state, and the app tells you what it
+      held back so silence never feels like something was missed.</p>
+  </div>
+</div>
