@@ -193,6 +193,144 @@ This is your "fourth tab for things that do not matter much", and it solves the 
 
 ---
 
+## 9b. How the poll loop is enabled, and how multi-user works
+
+### What "the poll loop" actually is
+
+It is not something we run or host. It is a **trigger instance** stored inside Composio. We create one with a single API call, and Composio persists it and runs it on their infrastructure forever after.
+
+```python
+composio.triggers.create(
+    slug="GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER",
+    user_id="<our user id>",
+    trigger_config={"owner": "dswh", "repo": "glued_landing", "interval": 2},
+)
+# -> ti_bPn-OyqzRkrm
+```
+
+`interval` is the poll frequency in minutes. That one call **is** enabling the poll loop. Verified live: the instance came back carrying `last_synced_at` and a list of `seen_ids`, which is Composio's own sync state.
+
+**One trigger instance exists per (user, trigger type, config).** Ten users watching two event types means twenty trigger instances, all living in Composio.
+
+### The identity chain
+
+Composio's unit of identity is `user_id`, and **it is a string we choose**. That is the whole trick: we pass our own Supabase user UUID as the Composio `user_id`. Then no mapping table is needed, because the id in the webhook payload already *is* our user id.
+
+```
+Supabase user UUID  ==  Composio user_id  ==  user_id in every webhook payload
+```
+
+(The current test connection reads `pg-test-86b8d0d9…` only because that account was linked through the dashboard playground, which generates its own id. In the real onboarding flow we pass our UUID.)
+
+### Onboarding: connecting a user
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant App as Mobile app
+    participant BE as Our backend
+    participant CO as Composio
+    participant GH as GitHub
+
+    U->>App: Sign up
+    App->>BE: create account
+    BE->>BE: Supabase user created (uuid)
+    U->>App: Tap "Connect GitHub"
+    App->>BE: POST /connections/github
+    BE->>CO: link(user_id=uuid, auth_config_id)
+    CO-->>BE: redirect_url
+    BE-->>App: redirect_url
+    App->>U: Open authorize page
+    U->>GH: Approve access
+    GH-->>CO: OAuth callback
+    CO->>CO: Store connected account for uuid
+    BE->>CO: triggers.create(slug, user_id=uuid, interval)
+    CO-->>BE: trigger instance id
+    Note over CO: Poll loop now runs inside Composio for this user
+```
+
+### Runtime: an event arrives, for the right user
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GH as GitHub / Slack
+    participant CO as Composio
+    participant BE as Our backend
+    participant DB as Supabase
+    participant EX as Expo push
+    participant App as User's phone
+
+    loop every interval, inside Composio
+        CO->>GH: poll for new events
+        GH-->>CO: new notification
+    end
+    CO->>BE: POST /webhooks/composio (signed)<br/>payload carries user_id
+    BE->>BE: verify signature
+    BE->>BE: classify by rules, then LLM for Slack text
+    BE->>DB: upsert feed_item (user_id, dedupe on source_ref)
+    alt tier == Urgent
+        BE->>EX: push to that user's device token
+        EX->>App: notification
+    else Today / Can wait / Noise
+        BE-->>BE: no push, appears in app
+    end
+```
+
+### How the app gets only its own data
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Mobile app
+    participant BE as Our backend
+    participant DB as Supabase
+
+    App->>BE: GET /feed  (Supabase JWT)
+    BE->>BE: decode JWT -> user uuid
+    BE->>DB: select feed_items where user_id = uuid
+    Note over DB: Row Level Security also enforces<br/>user_id = auth.uid() at the database
+    DB-->>BE: only that user's rows
+    BE-->>App: ranked feed
+```
+
+Two independent guards: the backend filters by the id in the verified JWT, and Postgres RLS refuses cross-user reads even if the backend had a bug. One user can never see another's items.
+
+### Components
+
+```mermaid
+flowchart LR
+    subgraph Phone
+        A[React Native app]
+    end
+    subgraph Cloud
+        B[FastAPI backend<br/>webhook receiver + API]
+        C[(Supabase<br/>Postgres + Auth + RLS)]
+    end
+    subgraph External
+        D[Composio<br/>holds connections<br/>runs poll loops]
+        E[OpenRouter<br/>gemini-2.5-flash]
+        F[Expo push]
+    end
+    G[GitHub / Slack / Calendar / Drive]
+
+    A -->|HTTPS, JWT| B
+    B --> C
+    D -->|webhook, signed| B
+    B -->|tool calls| D
+    D <-->|poll + act| G
+    B -->|classify + summarise| E
+    B -->|urgent only| F
+    F --> A
+```
+
+Note that **we never talk to GitHub or Slack directly.** Composio holds every connection and runs every poll. Our backend only receives webhooks, classifies, stores, and serves.
+
+### Scaling note
+
+Trigger instances multiply as users times event types. At 100 users watching 4 event types that is 400 instances inside Composio, and each poll is a tool call against the quota. This is the number to model before opening the doors, and it is an argument for preferring genuinely push-based triggers (Slack) over polled ones (Gmail, Calendar) wherever both exist.
+
 ## 10. Home screen composition
 
 Home answers two questions in that order: **how is my day shaped**, then **what needs me now**.
