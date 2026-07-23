@@ -1,311 +1,290 @@
-# MVP Plan (v2): Unified AI Work Feed
+# MVP Plan v3: implementation-ready
 
 **Date:** 2026-07-23
-**Status:** For review. Once approved this is detailed enough to run AFK implementation against.
-**Companions:** [product-brief.md](product-brief.md) · [product-research.md](product-research.md) · [design-system.md](design-system.md) · [mockups/screens.html](mockups/screens.html)
-
-## 0. What changed since v1
-
-- **Composio replaces per-provider OAuth apps.** No GitHub App, no Slack app, no Google Cloud project to register. One integration layer for all four tools.
-- **Verified working already:** 38 tests green, and real GitHub notifications pulled through the pipeline with zero OAuth apps created.
-- **Consequence:** the "create a GitHub App" step from v1 is deleted. Integration cost drops enough that Slack and Linear move earlier.
-- **Added:** per-integration summary tabs (your ask), the notification/anxiety model, and the AI role split.
+**Status:** decisions closed. This is the document to implement from.
+**Companions:** [architecture.md](architecture.md) (why the backend exists, trigger behaviour, verified tests) · [capabilities.md](capabilities.md) (what each platform can do) · [design-system.md](design-system.md) · mockups: [home](mockups/home.html), [app](mockups/app.html), [your day](mockups/yourday.html)
 
 ---
 
-## 1. The product in one screen
+## 1. Decisions closed
 
-- **Home** is everything combined: one ranked feed of what needs you across GitHub, Slack, Calendar, Drive, Linear and (later) Gmail, clustered by what is being asked of you rather than by which app it came from.
-- **Home also knows your time.** Calendar supplies how much free time is actually left today, which turns the feed from a list into a plan: "seven things need you, and you have 90 free minutes before your 14:00".
-- **Per-integration tabs** (GitHub, Slack, ...) each show a summary dashboard first (counts, repo-wise or channel-wise breakdown), then that tool's items.
-- **You act in the app**: approve a PR, reply to a thread, comment, snooze. No app-hopping.
-- **It stays quiet by default.** Only "someone is blocked on you" earns a push. Everything else batches into two briefs a day.
-
-See the six screens: [mockups/screens.html](mockups/screens.html).
-
----
-
-## 2. Decisions locked
-
-| Layer | Choice | Why |
-|---|---|---|
-| Mobile | **React Native + Expo** (TypeScript) | One codebase for iOS **and** Android. Not two implementations. Expo wraps APNs/FCM push and gives over-the-air updates. |
-| Backend | **Python + FastAPI** | AI pipeline plus data-heavy work. Matches the "Python for AI/automation backends" rule. |
-| Scheduler | **Prefect** | Polling GitHub on a schedule is an external-data job. Managed cron is disallowed by rule; logic stays in the codebase. |
-| Database + auth | **Supabase (Postgres)** | Postgres, auth and row-level security out of the box. Fastest path, and RLS gives per-user isolation for free. |
-| Integrations | **Composio** (managed auth) | No OAuth apps to register. One webhook for all providers. |
-| LLM | **Anthropic SDK (Claude)** | Used narrowly (section 7), not on the hot path. |
-
-**Repo layout (Pattern A, each folder is a deployment boundary):**
-
-```
-productivity-app/
-  backend/        FastAPI: API, services, contracts, integrations
-  mobile/         React Native + Expo app
-  prefect/        scheduled GitHub pollers
-  supabase/       migrations
-  docs/           this plan, research, design system, mockups
-  tests/          backend tests at the contract boundary (repo root)
-```
-
----
-
-## 3. What I need from you (access checklist)
-
-Nothing here is blocking review. These unblock implementation.
-
-- [x] **Composio API key**: done, in `.env` as `COMPOSIO_API_KEY`, validated.
-- [ ] **Composio: connect GitHub under this API key's project.** The key currently reports **0 connected accounts**; the CLI's GitHub link sits in a different project. Fix is either `composio link github` against this project or connecting from the Composio dashboard.
-- [ ] **Supabase project.** Create one, then add to `.env`:
-  - `SUPABASE_URL`
-  - `SUPABASE_ANON_KEY` (mobile client)
-  - `SUPABASE_SERVICE_ROLE_KEY` (backend only, never in the mobile app)
-- [ ] **Anthropic API key** (Phase 4, not needed before): `ANTHROPIC_API_KEY`.
-- [ ] **Expo account** (Phase 6, for device builds and push credentials).
-
-Add each with the same safe pattern (never paste into chat):
-
-```bash
-cd /Users/vickypandey/Desktop/agentiwise/productivity-app && read -rs "?Paste value: " v && echo "SUPABASE_URL=$v" >> .env && unset v
-```
-
-`.env` is already gitignored.
-
----
-
-## 4. Architecture and data flow
-
-- **Ingest (two paths, one shape):**
-  - **Poll:** Prefect calls `GITHUB_LIST_NOTIFICATIONS` through Composio on a schedule. GitHub's notification inbox is poll-only, there is no webhook for it.
-  - **Push:** Composio triggers deliver provider events (Slack messages, Linear updates) to **one** signed webhook, `POST /webhooks/composio`.
-- **Normalize:** every inbound signal becomes a `RawEvent`, so nothing downstream knows which provider or channel it came from.
-- **Enrich:** notifications are thin (a `reason` plus a URL, not content), so we fetch the PR/issue/message to learn what it is and how urgent.
-- **Classify:** `RawEvent` to an action type (rules first, LLM only for the residue).
-- **Score:** composite priority.
-- **Store:** upsert into `feed_items`, deduped by `(user_id, source_ref)`.
-- **Serve:** `GET /feed` ranked; per-tab summary endpoints.
-- **Notify:** rules decide push now, hold for brief, or stay silent.
-
-**Cost note:** tool calls are Composio's meter and polling scales per user. Roughly 2,880 calls/user/month at a 15 minute interval, 8,640 at 5 minutes, against 20,000/month on the free tier. So: prefer triggers (push) wherever a provider supports them, and reserve polling for GitHub's inbox where there is no alternative.
-
----
-
-## 5. Database (Supabase / Postgres)
-
-Every table is keyed by `user_id` and protected by row-level security, so a user can only ever read their own rows. Multi-tenancy is built in from the first migration, not retrofitted.
-
-| Table | Columns (essential) |
+| Area | Decision |
 |---|---|
-| `users` | `id` uuid PK, `email`, `github_login`, `timezone`, `expo_push_token`, `created_at` |
-| `connections` | `id`, `user_id` FK, `provider` (github/slack/linear/gmail), `composio_connected_account_id`, `status`, `connected_at` |
-| `feed_items` | `id` uuid, `user_id` FK, `source`, `source_ref`, `action_type`, `title`, `url`, `repo`, `actors` jsonb, `deadline` timestamptz, `is_blocking` bool, `priority_score` numeric, `status`, `raw` jsonb, `created_at`, `updated_at` · **UNIQUE (user_id, source_ref)** |
-| `user_preferences` | `user_id` PK, `priority_repos` text[], `vip_actors` text[], `muted_repos` text[], `quiet_hours` jsonb, `brief_times` time[] |
-| `notification_rules` | `id`, `user_id`, `name`, `level` (push/brief/off), `match` jsonb, `created_at` |
-| `actions` | `id`, `user_id`, `feed_item_id` FK, `type`, `payload` jsonb, `result` jsonb, `performed_at` |
-| `digests` | `id`, `user_id`, `window_start`, `window_end`, `item_ids` uuid[], `summary` text, `sent_at` |
-
-- **RLS policy on every table:** `user_id = auth.uid()`.
-- **The dedupe key is `(user_id, source_ref)`.** A poll and a webhook describing the same PR collapse into one row.
-- Per-integration dashboard counts are computed from `feed_items` plus `actions` for the selected window. No separate stats table until it is measurably slow.
+| Colour | **Sand & Slate** (`--c-ac:#2F4858`, urgency `#B25B33`) |
+| Home layout | Time ruler → category counts (as filters) → swipeable card feed → grouped list. Ruler collapses to a sticky line on scroll. |
+| Categories | **Urgent / Today / Can wait**, plus **Noise** which never reaches Home |
+| Tabs | Home · Sources · Later · You (compact, icon-led) |
+| Mobile | React Native + Expo |
+| Backend | Python + FastAPI, webhook receiver plus API. **No scheduler.** |
+| Database | Supabase (Postgres + Auth + RLS) |
+| Integrations | Composio managed auth |
+| LLM | **OpenRouter**, `google/gemini-2.5-flash` (verified working) |
+| Notifications | Urgent pushes. Nothing else does. One setting, three options. |
+| Demo | localhost + ngrok, Expo Go on a real phone. Deploy to EC2 later. |
 
 ---
 
-## 6. Categories
+## 2. Architecture in one paragraph
 
-### 6.1 Action type (what you are being asked to do)
+The Expo app talks to a FastAPI backend over HTTPS. The backend holds all secrets, receives Composio webhooks on one endpoint, classifies and ranks items, stores them in Supabase, and sends push notifications through Expo. **Composio runs all polling on its own infrastructure**, so we run no scheduler (proven: trigger instances carry `last_synced_at`, and a real Slack DM was delivered to a localhost listener). Full reasoning and test evidence in [architecture.md](architecture.md).
 
-Framed as *what is being asked of you*, so it holds for a developer and a non-developer alike. Clusters are assigned by **deterministic rules**, not the LLM, so the same input always lands in the same place. Full per-platform mapping in [capabilities.md](capabilities.md) section 11.
+---
 
-| Cluster | Meaning | Sources across platforms |
+## 3. Category mapping
+
+**Principle:** a rule assigns the tier whenever the source states both the type *and* an unambiguous urgency. The LLM is used only where urgency lives in human language. **The LLM may promote or demote**, it does not classify from scratch when a rule already knows.
+
+Tier definitions:
+- **Urgent**: a specific person is actively waiting on this user now, or a hard deadline has passed or is within hours.
+- **Today**: needs handling before end of day, nobody is stopped right now.
+- **Can wait**: genuinely needs the user eventually, no time pressure.
+- **Noise**: no action required. Never reaches Home; lives in Later.
+
+### 3.1 GitHub
+
+| Signal (notification `reason` or trigger) | Tier | Method |
 |---|---|---|
-| **Needs your decision** | A call only you can make | GitHub: CI failed on your PR, changes requested, repo invitation, security alert · Calendar: **invite awaiting RSVP**, moved or conflicting meeting · Drive: access request · Linear/Jira: issue assigned needing triage |
-| **Needs your review** | Someone's work is waiting on your eyes | GitHub: review requested, ready for review · Drive: **doc shared for review**, pending suggestion · Calendar: agenda needing prep |
-| **Needs your reply** | Someone is waiting on your words | Slack: **DM, mention, thread awaiting** · Drive: **comment or @mention on a doc** · Gmail: reply-needed thread · GitHub: comment on your PR · Notion/Linear: comment mentioning you |
-| **Blocked on others** | Yours, but the ball is not in your court | Your PR awaiting review, you asked with no answer, awaiting others' RSVP |
-| **Worth knowing** | Context only, digest only, never pings | Merged, closed, CI passed, release, file updated, **event cancelled (time back)**, status changed |
+| `review_requested` | **Urgent** | Rule. Someone explicitly asked for your review. |
+| `approval_requested` | **Urgent** | Rule. A gate is waiting on you. |
+| `ci_activity`, conclusion = failure, on **your** PR | **Urgent** | Rule. Blocks your own work. |
+| `ci_activity`, conclusion = success | Noise | Rule. |
+| `security_alert` | **Urgent** | Rule. |
+| `assign` (issue or PR assigned to you) | **LLM decides** | Rule sets Today as the floor; LLM reads **title + body + labels + milestone** and promotes to Urgent or demotes to Can wait. |
+| `mention` / `team_mention` | **LLM decides** | Is it a question aimed at you, or were you named in passing? |
+| `comment` on your PR or issue | **LLM decides** | Does it ask something, or is it "lgtm"? |
+| `invitation` (repo invite) | Today | Rule. A decision, but nobody is blocked. |
+| `state_change` (merged, closed) | Noise | Rule. |
+| `subscribed` (thread you follow updated) | Noise | Rule. |
 
-### 6.2 Urgency grouping (how Home is sectioned)
+**On issues specifically** (the correction that drove this section): an assigned issue is **never** auto-filed as Can wait. Its urgency comes from what the raiser expressed. Signals the LLM reads, in priority order:
+1. **Labels**: `P0`, `p0`, `blocker`, `critical`, `urgent`, `sev1`, `production` → strong promote to Urgent.
+2. **Milestone or due date**: past due → Urgent. Due today → Today.
+3. **Body language**: "production is down", "blocking the release", "customers affected" → Urgent. "nice to have", "someday", "low priority" → Can wait.
+4. **Absence of all three** → Today, not Can wait. Defaulting an assigned issue to Can wait buries real work.
 
-- **Needs you now**: someone is blocked on you, or a deadline is close. This is the only group allowed to push.
-- **Waiting on others**: yours, but the ball is not in your court.
-- **Later today**: real but not urgent.
-- **Cleared**: done, with an explicit end state.
+### 3.2 Slack
 
-### 6.3 Notification level (what may interrupt)
+| Signal | Tier | Method |
+|---|---|---|
+| Direct message | **LLM decides** | Always. A Slack message has no type, only text. |
+| Channel message that **@mentions you** | **LLM decides** | Always. |
+| Reply in a thread you participated in | **LLM decides** | Always. |
+| Channel message with no mention of you | Noise | Rule. Filtered before the LLM, so we do not pay to classify chatter. |
+| Reaction added or removed | Noise | Rule. |
+| Message from a bot or app | Noise | Rule, **unless** it reports a failure in the user's own work. |
 
-- **Push**: immediate notification.
-- **Brief**: held for the next digest (default 08:30 and 16:30).
-- **Off**: visible in the app, never notified.
+**The judgement the LLM must make** (this is the core value of the product):
+- *"can you unblock the staging deploy?"* → **Urgent**. Direct ask, no deadline, someone stopped.
+- *"can you look at this when you get a chance, need it by tomorrow EOD"* → **Today**. It asks, but it states its own deadline.
+- *"shipped the fix, thanks all"* → **Noise**. No ask.
 
-**Default mapping:**
+### 3.3 Google Calendar
 
-| Category | Default level |
+| Signal | Tier | Method |
+|---|---|---|
+| Event starting within 15 minutes | **Urgent** | Rule. |
+| Invite received, awaiting your RSVP | Today | Rule. |
+| Event time changed | Today | Rule. |
+| Event cancelled | Noise (Worth knowing) | Rule. Surfaces in Later as "30m back". |
+| Attendee RSVP changed | Noise | Rule. |
+
+Calendar also feeds **Your day** (meetings left, free time), which is separate from the tiers.
+
+### 3.4 Google Drive and Docs
+
+| Signal | Tier | Method |
+|---|---|---|
+| Comment that **@mentions you** | **LLM decides** | Is it a question or an acknowledgement? |
+| Comment on your file, no mention | **LLM decides** | Same, lower prior. |
+| File shared with you | Today | Rule. LLM may demote to Can wait if the doc is clearly FYI. |
+| File edited | Noise | Rule. |
+
+### 3.5 Linear
+
+| Signal | Tier | Method |
+|---|---|---|
+| Assigned, **priority = Urgent (1)** | **Urgent** | Rule. Linear has a native priority field, so no LLM needed. |
+| Assigned, due date **past** | **Urgent** | Rule. |
+| Assigned, due **today** | Today | Rule. |
+| Assigned, priority High (2), no due date | Today | Rule. |
+| Assigned, no priority, no due date | **LLM decides** | Reads title + description. |
+| Comment mentioning you | **LLM decides** | |
+| Status changed by someone else | Noise | Rule. |
+
+### 3.6 Gmail (last phase)
+
+All inbound mail goes to the **LLM**, because an email has no type. Promotions and list mail are filtered to Noise by Gmail's own category labels **before** the LLM, so we do not pay to classify newsletters.
+
+### 3.7 Lifecycle
+
+- An item is visible while **unread and unhandled**.
+- Replying, reacting, approving, or reading it at the source **removes it immediately**.
+- Read state syncs both ways (`SLACK_SET_READ_CURSOR_IN_A_CONVERSATION`, GitHub mark-read).
+- Items not acted on stay in **Later for 30 days**, then are deleted.
+
+---
+
+## 4. LLM design
+
+### 4.1 What reaches the model
+
+Only items whose row above says **LLM decides**. Everything else is free. Concretely, per refresh we expect a handful of items, not hundreds, because Noise is filtered by rules first.
+
+### 4.2 Batching
+
+- **One request per refresh**, carrying up to **20 items**. Never one request per item.
+- If more than 20 new items, chunk into batches of 20 and issue them concurrently.
+- Each item contributes roughly 150 to 250 tokens of context, so a 20-item batch is about 4,000 input tokens and 1,000 output tokens.
+- **Cache by item id forever.** An item is classified once. Re-opening the app never re-classifies.
+- Confirm current per-token pricing on OpenRouter at implementation time; the durable figure is the token count above, not the price.
+
+### 4.3 The prompt
+
+System prompt:
+
+```
+You triage work notifications for a busy professional. For each item, assign a
+tier and write one short line explaining what it is.
+
+TIERS
+- urgent:   a specific person is actively waiting on this user right now, OR a
+            hard deadline has passed or falls within a few hours.
+- today:    needs handling before end of day, but nobody is stopped right now.
+            Includes anything with a stated deadline of today or tomorrow.
+- can_wait: genuinely needs the user eventually, no time pressure stated.
+- noise:    no action required of this user. Status updates, automated messages,
+            conversation they were not addressed in.
+
+RULES
+- Be conservative. If torn between urgent and today, choose today.
+- A stated future deadline ("by tomorrow EOD") means today, never urgent.
+- A direct question addressed to this user with no deadline means urgent.
+- Labels such as P0, blocker, critical, sev1 or production mean urgent.
+- An item assigned to this user is never can_wait unless it explicitly signals
+  low priority. When there is no signal at all, choose today.
+- Bot and automated messages are noise unless they report a failure in this
+  user's own work.
+- Recency alone never makes something urgent.
+
+OUTPUT
+A JSON array with one object per input id, no prose:
+{"id": "...", "tier": "urgent|today|can_wait|noise",
+ "summary": "<=90 chars: what it is and why it matters",
+ "reason":  "<=60 chars: why this tier"}
+```
+
+User message: a JSON array of items, each carrying `id`, `source`, `type`, `sender`, `title`, `text` (truncated to ~400 chars), `labels`, `deadline`, `age_minutes`, and `is_direct` (was the user addressed directly).
+
+The `summary` field is what the UI shows as the one-liner under each row. The `reason` is what the detail sheet shows under "Why this is urgent".
+
+### 4.4 Guardrails
+
+- Validate the response against the schema; on a malformed reply, retry once, then fall back to the rule-assigned tier rather than dropping the item.
+- If the model returns `urgent` for more than 40% of a batch, log it. A model that marks everything urgent has defeated the product.
+- The LLM never sends anything. It only classifies and summarises.
+
+---
+
+## 5. Data model (Supabase)
+
+Every table is keyed by `user_id` with RLS `user_id = auth.uid()`.
+
+| Table | Key columns |
 |---|---|
-| Someone blocked on you (Review, Approve, blocking Reply) | Push |
-| DM from a VIP | Push |
-| Non-blocking Reply, Decide | Brief |
-| CI results, status changes, merged/closed/released (FYI) | Brief |
-| Muted repos/channels, anything you turned off | Off |
-| **Anything new we have not seen before** | **Brief** (never Push) |
+| `users` | id (uuid), email, timezone, expo_push_token, working_hours_start, working_hours_end |
+| `connections` | id, user_id, provider, composio_connected_account_id, composio_user_id, status |
+| `feed_items` | id, user_id, source, source_ref, tier, type_tag, title, summary, reason, url, actors (jsonb), deadline, age_minutes, priority_score, status, raw (jsonb), created_at · **UNIQUE (user_id, source_ref)** |
+| `user_preferences` | user_id, notify_level (`urgent`/`urgent_today`/`off`), muted_repos, muted_channels, vip_actors |
+| `actions` | id, user_id, feed_item_id, type, payload, result, performed_at |
+| `llm_cache` | source_ref, tier, summary, reason, model, created_at |
 
-### 6.4 Custom rules
-
-- Shape: `WHEN <source> <event/reason> [from <actor>] [in <repo/channel>] [matching <keyword>] THEN <push|brief|off>`.
-- Examples: "always ping me when Priya DMs", "never notify me from `archived-repo`", "push anything mentioning `production`".
-- Authored either from the rules screen, or in plain English and converted to a structured rule by the LLM (section 7).
+`llm_cache` is keyed on `source_ref` so a re-ingested item is never re-classified.
 
 ---
 
-## 7. Role of AI (deliberately narrow)
+## 6. UI specification
 
-**Principle: rules first, LLM only where rules genuinely cannot decide.** GitHub's `reason` field already classifies most events for free. Sending every event to an LLM would add cost and latency for no accuracy gain.
+Follow [design-system.md](design-system.md) tokens and the mockups.
 
-**No LLM at all in Phase 1.** The tracer is fully deterministic.
+**Home** ([mockups/home.html](mockups/home.html)): compact icon-led header → time ruler (`Your day`) → three category counts acting as filters → horizontal swipeable card feed (cards ~1/3 screen height, next card peeking) → `All items` grouped list. On scroll the ruler collapses to a sticky one-line strip.
 
-From Phase 4, Claude does exactly four jobs:
+**Your day** numbers, defined precisely and not interchangeable:
+- **meetings left** = calendar events remaining today
+- **free** = unscheduled minutes between now and working-hours end
+- **due today** = the user's own tasks with a deadline of today (Linear, GitHub milestones)
 
-1. **Ambiguity resolution.** Only for events rules cannot settle: Decide vs FYI, and "is this Slack message actually asking me something?" Reply-needed detection is genuinely linguistic and rules fail at it.
-2. **Summarization.** The twice-daily brief and the per-integration daily summary in natural language ("3 PRs merged, 1 CI failure on glued_landing").
-3. **Reply drafting.** A suggested response to a Slack thread or PR comment. **Always user-edited before sending, never auto-sent.**
-4. **Rule authoring.** Turn "ping me when Priya DMs" into a structured `notification_rules` row.
+**Sources**: list of connected integrations with per-source counts; tap to drill into that integration's dashboard.
+**Later**: everything unactioned, all sources, 30-day window.
+**You**: notification level (one three-way choice), connected accounts, sign out.
 
-**Ranking design (Phase 4 upgrade):**
-- Score on **two separate axes**, confidence (does this genuinely need you) and severity/impact, combined into a composite. A single urgency number lets loud-but-trivial items dominate.
-- **Actionability gate:** if you cannot act on it, log it, do not interrupt.
-- **Personalize from behaviour:** learn from what you open, reply to, snooze and dismiss. Research shows a personalized profile beats a static classifier substantially on urgency accuracy.
-
----
-
-## 8. Anxiety strategy (how this app stays calm)
-
-The failure mode for this product is becoming another anxiety source. Explicit countermeasures:
-
-- **Quiet by default.** New categories default to Brief, never Push, so the app gets **quieter** as it learns, not louder.
-- **Only blocking work pushes.** If nobody is waiting on you, nothing buzzes.
-- **The day ends.** A finite list with a real "You're clear for today" state. No infinite scroll.
-- **Explain the silence.** The cleared screen says what was held back ("12 low-signal updates rolled into your evening brief"), so quiet never feels like something was missed.
-- **Explain the ranking.** Every item can show "why this is top of your feed". Ranking that feels arbitrary destroys trust fast.
-- **Batching over streaming.** Two briefs a day, not a live drip.
-- **Quiet hours and weekends**, on by default.
-- **No permanent red badge.** Badge counts only true blockers, never total unread.
-- **Snooze is specific** ("until 14:00"), never a vague "later".
+Header and footer are deliberately short and icon-led.
 
 ---
 
-## 9. Phases
+## 7. Phases
 
-**Phase 0: backend spine (DONE)**
-- Contracts, classification, scoring, feed service, FastAPI, in-memory repo, 38 tests green.
-- Composio GitHub integration, real notifications flowing.
+**Phase 1: GitHub end to end, on localhost**
+- Supabase migrations, RLS, `SupabaseFeedRepository` behind the existing contract.
+- Composio SDK wired with the working API key; connections keyed by our Supabase uuid.
+- `POST /webhooks/composio` receiving and verifying signed events.
+- Fetch-on-open via global `GITHUB_LIST_NOTIFICATIONS`.
+- Rule classifier for all deterministic GitHub rows in 3.1.
+- LLM classifier via OpenRouter for the `LLM decides` rows, batched and cached.
+- `GET /feed` returning tiered, ranked items.
+- **Done when:** your real GitHub notifications appear tiered and summarised, from a real database.
 
-**Phase 1: persistence and live GitHub (backend only)**
-- Supabase migrations for all tables plus RLS.
-- `SupabaseFeedRepository` implementing the existing `FeedRepository` contract.
-- Wire the Composio SDK path (needs GitHub connected under the API key's project).
-- Prefect flow polling notifications on a schedule, respecting `X-Poll-Interval`.
-- Enrichment (fetch PR details) for ranking.
-- **Done when:** your real notifications persist to Supabase and `GET /feed` returns them ranked.
-
-**Phase 2: the app you can see (Mac)**
-- Expo app: Home feed and GitHub tab per the mockups, against the local backend.
-- Design tokens from `design-system.md`.
-- **Done when:** the feed renders on the iOS simulator on your Mac.
+**Phase 2: the app**
+- Expo app, Home exactly as the mockup, against the local backend over ngrok.
+- Sources, Later, You.
+- **Done when:** it runs on your phone through Expo Go and shows your real feed.
 
 **Phase 3: acting and pushing**
-- Approve, comment, snooze writing back to GitHub through Composio.
-- Expo push (APNs/FCM) for Push-level items only.
-- Rules screen plus `notification_rules` enforcement, briefs at 08:30 and 16:30.
-- **Done when:** you approve a PR from your phone and it lands on GitHub.
+- Approve, comment, reply, mark read, snooze, all writing back through Composio.
+- Expo push for Urgent only.
+- Read-state sync both directions.
 
-**Phase 4: the AI layer**
-- Claude for the four jobs in section 7.
-- Two-axis scoring, actionability gate, behavioural personalization.
-
-**Phase 5: Slack**
-- Composio Slack triggers (real-time push, avoids the read rate limit).
-- Slack tab with its summary dashboard.
-- Reply in thread, react, and mark read from the app.
-
-**Phase 6: Calendar, then Drive**
-- **Calendar** (45 tools, 7 triggers): today's events, invites awaiting RSVP, cancellations. This is the phase that turns Home from a list into a plan, because it adds "and here is when you could actually do it".
-- **Drive** (77 tools, 7 triggers): **document comments and @mentions**, and files shared with you. Note that Docs comments arrive via Drive's `COMMENT_ADDED`, not via the Docs toolkit. Reply to a doc comment in-app with `GOOGLEDRIVE_CREATE_REPLY`.
-
-**Phase 7: Linear, then Gmail**
-- Linear (46 tools, 12 triggers), low compliance cost, and the only source of **native due dates**.
-- **Gmail last**, because restricted scopes bring a recurring annual CASA security assessment once you move off Composio's managed auth to your own branding.
-- Notion and Jira on demand (Notion carries `COMMENT_CREATED`; Jira can **transition issue status** from the app).
-
-**Why this order changed from v1:** the full capability sweep ([capabilities.md](capabilities.md)) showed Calendar and Drive deliver more feed value per unit of integration cost than Gmail, and neither carries Gmail's recurring audit. Gmail moved later.
+**Phase 4: Slack**, using the two account-wide push triggers already proven working.
+**Phase 5: Calendar and Drive** (Your day becomes real; doc comments arrive).
+**Phase 6: Linear, then Gmail last.**
 
 ---
 
-## 10. How to run it
+## 8. Local development and the demo
 
-### 10.1 On your Mac first
+No deployment needed for the demo.
 
 ```bash
+# backend
 cd /Users/vickypandey/Desktop/agentiwise/productivity-app
-uv run pytest -q                                  # backend tests
 uv run uvicorn backend.main:app --reload --port 8000
+
+# public URL for Composio webhooks
+ngrok http 8000        # then register the https URL as the webhook subscription
+
+# app
+cd mobile && npx expo start
 ```
 
-```bash
-cd mobile && npm install && npx expo start
-```
-
-- Press `i` in the Expo terminal for the iOS simulator, `w` for browser.
-- The app points at `http://localhost:8000`.
-
-### 10.2 On your own iPhone (no Apple Developer account needed)
-
-- Install **Expo Go** from the App Store.
-- Run `npx expo start`, scan the QR code with the Camera app.
-- Mac and iPhone must be on the same wifi, and the app's API base URL must be your Mac's LAN IP (for example `http://192.168.1.x:8000`), not `localhost`.
-
-### 10.3 On an Android phone (someone else's)
-
-- Install **Expo Go** from the Play Store, scan the QR code. Same wifi requirement.
-- To hand someone an installable app instead, build an APK:
-
-```bash
-npm install -g eas-cli && eas build -p android --profile preview
-```
-
-- That produces a downloadable `.apk` you can send over any link. No Play Store listing required.
-
-### 10.4 Giving it to other people properly
-
-- **Android:** `eas build -p android --profile preview` gives an APK anyone can sideload. Play Store internal testing when you want it cleaner.
-- **iOS:** requires an **Apple Developer account ($99/year)**. Then `eas build -p ios` plus **TestFlight**, which lets up to 10,000 external testers install it. There is no way to distribute an iOS app to other people's phones without this. Expo Go covers your own testing for free in the meantime.
-- **Backend:** needs to be reachable, so deploy it (a small VM or container) before anyone outside your wifi can use the app.
+- Install **Expo Go** on your phone, scan the QR code. **No Xcode, no Android Studio needed.**
+- The app's API base URL must be your Mac's LAN IP, not `localhost`.
+- ngrok URLs change on restart, so re-register the webhook subscription each session.
+- Later: EC2 for a stable URL. Not Vercel, whose serverless timeout would cut batched LLM calls.
 
 ---
 
-## 11. Testing
+## 9. Testing
 
-- Backend is **test-first** (Red-Green-Refactor). Every new or modified function gets a test, in the root `tests/`.
-- Tests run **through contracts** using `Fake*` implementations, never against live GitHub, Slack or Supabase.
-- Mobile is implemented directly, no TDD, verified against the running backend.
-- Current state: **38 passing**.
-
----
-
-## 12. Risks and open items
-
-1. **Composio branding.** Managed auth shows "Composio wants to access your account" on the consent screen. Fine for you and early testers, not fine for public launch. Switching to your own OAuth credentials is a Composio config change, not a rewrite, but it must happen before public launch.
-2. **Composio shared quota.** Managed auth shares quota across all Composio users, and enforces a 15 minute minimum polling interval. Both argue for your own credentials once there is real usage.
-3. **Gmail CASA.** Composio defers this cost, it does not delete it. Own credentials plus restricted scopes equals a recurring annual security assessment. Keep Gmail last.
-4. **Slack read limits.** Non-Marketplace apps are throttled to 1 request/minute on message history. Design around Events API push. Research **refuted** the assumption that Marketplace approval lifts this, so do not plan around it.
-5. **Polling cost scales per user.** See section 4. Model it before onboarding beyond a handful of people.
-6. **Deadlines are not native to GitHub.** They live in Projects v2 (GraphQL) or milestones. Phase 1 ranks without them; add in Phase 4.
-7. **Connected-account plumbing.** The Composio API key currently reports 0 connected accounts. Resolve before Phase 1.
+- Backend is test-first (Red-Green-Refactor); every new or modified function gets a test in the root `tests/`.
+- Tests run through contracts with `Fake*` implementations, never against live GitHub, Slack, Supabase or OpenRouter.
+- The classifier needs a **fixture suite**: real payloads for each row of section 3, asserting the expected tier. This is the highest-value test set in the project, because a wrong tier is the product failing.
+- Current state: 38 passing.
 
 ---
 
-## 13. What I want reviewed
+## 10. Open items
 
-- **The screens.** Do the six mockups match what you pictured? Especially Home and the per-integration tab shape.
-- **The category taxonomy** (section 6). Are Review/Approve/Reply/Decide/FYI the right five?
-- **Notification defaults** (6.3). Is "only blocking work pushes" too conservative?
-- **The AI split** (section 7). Comfortable with rules-first and LLM only on the residue?
-- **Phase order** (section 9). Slack before Linear, Gmail last.
+1. **App name.** The header currently reads "Today".
+2. **Rotate the Supabase service role key.** It was pasted into a chat transcript.
+3. Confirm OpenRouter per-token pricing at implementation time.
+4. Calendar RSVP is a patch on the attendee response, with no dedicated tool. Verify before Phase 5.
+5. GitHub urgent items surface on app open rather than as instant push, unless a repo is opted into real-time watching at 720 calls/month. Accepted for now.

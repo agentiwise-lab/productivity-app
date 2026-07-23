@@ -26,12 +26,13 @@
       background:var(--c-bg);color:var(--c-fg);}
   .sb{display:flex;justify-content:space-between;padding:10px 16px 2px;font-size:9.5px;color:var(--c-dim);
       font-family:ui-monospace,Menlo,monospace;}
-  .hd{padding:5px 16px 10px;text-align:center;border-bottom:1px solid var(--c-ln);position:relative;}
-  .hd .nm2{font-size:12.5px;font-weight:600;}
-  .hd .dt{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--c-dim);margin-top:3px;}
-  .hd .lft,.hd .rgt{position:absolute;top:7px;font-size:14px;color:var(--c-dim);}
-  .hd .lft{left:14px;} .hd .rgt{right:14px;}
+  /* compact header: one line, icon-led */
+  .hd{padding:1px 14px 6px;text-align:center;border-bottom:1px solid var(--c-ln);position:relative;}
+  .hd .nm2{font-size:12px;font-weight:600;letter-spacing:-.01em;}
+  .hd .dt{display:inline;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--c-dim);margin-left:5px;}
+  .hd .lft,.hd .rgt{position:absolute;top:1px;font-size:13px;color:var(--c-dim);}
+  .hd .lft{left:13px;} .hd .rgt{right:13px;}
   .bd{flex:1;overflow:hidden;}
 
   /* B: ruler */
@@ -104,11 +105,13 @@
   .sticky .tm{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--c-ac);font-weight:600;}
   .sticky .lb{font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sticky .fr{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--c-dim);}
+  /* compact footer: icon-led, label demoted */
   .tb{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--c-ln);background:var(--c-sf);}
-  .tb div{padding:7px 2px 11px;text-align:center;font-size:8.5px;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--c-dim);}
-  .tb i{display:block;width:13px;height:13px;margin:0 auto 4px;border-radius:4px;border:1.5px solid currentColor;opacity:.55;}
-  .tb .on{color:var(--c-ac);} .tb .on i{opacity:1;background:var(--c-acsoft);}
+  .tb div{padding:5px 2px 7px;text-align:center;font-size:7.5px;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--c-dim);opacity:.75;}
+  .tb i{display:block;width:15px;height:15px;margin:0 auto 2px;border-radius:5px;
+    border:1.5px solid currentColor;opacity:.5;}
+  .tb .on{color:var(--c-ac);opacity:1;} .tb .on i{opacity:1;background:var(--c-acsoft);}
 </style>
 
 <div class="pg">
