@@ -377,6 +377,50 @@ The 2-minute test trigger was disabled immediately after the test for exactly th
 
 **Resulting policy:** push triggers where the provider supports them (Slack, Linear public teams), fetch-on-open for everything else, and background polling only for genuinely urgent sources at 15 minutes or slower.
 
+### Trigger math: how many do we create, per app, per user
+
+**A trigger instance is one (user × connected account × event type × config).** There is no separate "event type" field in Composio; **the trigger name *is* the event type**. So four rows with the same account and user but different names means four different event types.
+
+Per user, at a 60 minute interval:
+
+| App | Triggers per user | Delivery | Calls/month |
+|---|---:|---|---:|
+| GitHub, account-wide (`ISSUE_ASSIGNED_TO_ME`) | 1 | poll | 720 |
+| GitHub, per watched repo (`REPOSITORY_NOTIFICATION_RECEIVED`) | N | poll | 720 × N |
+| Slack (`DIRECT_MESSAGE_RECEIVED`, `CHANNEL_MESSAGE_RECEIVED`) | 2 | **push** | ~0 |
+| Calendar (`EVENT_SYNC`) | 1 | poll | 720 |
+| Drive (`COMMENT_ADDED`, `FILE_SHARED_PERMISSIONS_ADDED`) | 2 | poll | 1,440 |
+| Linear (issue + comment) | 2 | push (public) / poll (private) | 0 to 1,440 |
+| Gmail (`NEW_GMAIL_MESSAGE`) | 1 | poll | 720 |
+
+Plus **fetch-on-open**, roughly 5 to 10 calls per app launch, so about 600/month for a user who opens it three times a day.
+
+**Totals:**
+
+| Scenario | Triggers/user | Calls/month/user | Users on free 20k | Users on $29 (200k) |
+|---|---:|---:|---:|---:|
+| **MVP** (GitHub + Slack, 1 watched repo) | 4 | ~2,040 | ~10 | ~98 |
+| **Full** (all six, 2 watched repos) | ~11 | ~6,400 | ~3 | ~31 |
+
+**Two consequences for the roadmap:**
+1. **Watched repos are the expensive knob.** Each one costs another 720/month/user. Keep the default at zero and make it opt-in, leaning on fetch-on-open's global notification call instead.
+2. **Prefer push.** Slack is free because Slack pushes to Composio. Every polled integration we add is a fixed monthly cost per user.
+
+### On building our own poller later (tested, and it does not do what you would hope)
+
+The idea was: skip Composio's scheduling, run our own endpoint every 30 to 60 minutes. Worth testing, so I did.
+
+**Composio does not hand out the provider access token.** Querying the connected account returns the literal string `REDACTED` where the token would be. Scopes and token type are visible; the credential is not.
+
+That matters, because it means:
+
+- **Our own scheduler would not reduce Composio cost.** Every read still goes through Composio's tool API and still counts against quota. We would be paying the same and running a scheduler as well.
+- **The only way to escape per-call cost is to hold the tokens ourselves,** which means registering our own GitHub App, Slack app and Google Cloud project, and taking on Gmail's CASA assessment. That is precisely the cost Composio is saving us.
+
+**What our own poller genuinely would buy:** control over frequency, adaptive polling (only poll users who opened the app recently), and independence from Composio's trigger semantics. Those are real efficiency wins, but they are optimisations of *how often we call*, not an escape from *paying per call*.
+
+**Recommendation:** stay on Composio triggers through the demo and early users. Revisit at the point where per-user cost genuinely bites, and when revisiting, compare against owning the OAuth apps rather than against "same thing but self-scheduled", because that is the actual alternative.
+
 ### Scaling note
 
 Trigger instances multiply as users times event types. At 100 users watching 4 event types that is 400 instances inside Composio, and each poll is a tool call against the quota. This is the number to model before opening the doors, and it is an argument for preferring genuinely push-based triggers (Slack) over polled ones (Gmail, Calendar) wherever both exist.
