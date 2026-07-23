@@ -1,18 +1,23 @@
 """Per-source dashboards.
 
-Each source gets a page answering "what has been going on here", which is a
-different question from the feed's "what needs me now". The feed is deliberately
-short; this is where the volume lives.
+Each source answers "what has been going on here", which is a different question
+from the feed's "what needs me now". The feed is deliberately short; this is
+where the volume and the history live.
 
-Everything is computed live and returned, never stored. These are counts about
-the last 30 days, and persisting them would mean keeping a copy of the user's
-mail and messages to produce numbers that a single call already gives us.
+Everything is computed live from the provider and returned, never stored. These
+are counts over the last 30 days, and persisting them would mean keeping a copy
+of the user's mail and messages to produce numbers a single call already gives.
+
+Rows carry an optional ``url`` so a breakdown line can open the thing itself,
+and a ``value_label`` for figures that are not plain counts. What is and is not
+tappable is deliberate: a repository opens on GitHub and a sender opens that
+Gmail search, but a Calendar frequency line is a summary and opens nothing.
 """
 
 from __future__ import annotations
 
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -26,38 +31,41 @@ log = logging.getLogger(__name__)
 
 WINDOW = timedelta(days=30)
 
+# Commits are authored under either of the user's GitHub identities.
+_GITHUB_LOGINS = {"vicky81125", "vicky99105"}
+
 
 class StatLine(BaseModel):
-    """One row of the breakdown: a label, a number, and optional context."""
-
     label: str
     value: int
     detail: str | None = None
+    value_label: str | None = None
+    url: str | None = None
 
 
 class SourceDashboard(BaseModel):
     source: Source
     label: str
-    #: The two or three figures that headline the page.
     headline: list[StatLine] = []
-    #: The breakdown underneath, whatever that means for this source.
     breakdown: list[StatLine] = []
-    #: Named so the page can say what it could not load, rather than showing a
-    #: confident zero.
+    breakdown_title: str = "Breakdown"
     unavailable: list[str] = []
 
 
 def _recent(items: list[FeedItem], now: datetime) -> list[FeedItem]:
     cutoff = now - WINDOW
-    return [
-        item
-        for item in items
-        if (item.occurred_at or item.created_at or now) >= cutoff
-    ]
+    return [i for i in items if (i.occurred_at or i.created_at or now) >= cutoff]
 
 
 def _tier_of(item: FeedItem) -> Tier:
     return item.llm_tier or item.rule_tier
+
+
+def _minutes_label(minutes: float) -> str:
+    if minutes >= 60:
+        hours = minutes / 60
+        return f"{hours:.0f}h" if hours == int(hours) else f"{hours:.1f}h"
+    return f"{round(minutes)}m"
 
 
 class SourceStatsService:
@@ -82,16 +90,20 @@ class SourceStatsService:
         mine = _recent([i for i in items if i.source == source.value], now)
         board = SourceDashboard(source=source, label=LABELS[source])
 
-        if source is Source.GITHUB:
-            self._github_board(board, mine, now)
-        elif source is Source.LINEAR:
-            self._linear_board(board, mine)
-        elif source is Source.CALENDAR:
-            self._calendar_board(board, now)
-        elif source is Source.GMAIL:
-            self._gmail_board(board, mine)
-        elif source is Source.SLACK:
-            self._slack_board(board, mine)
+        try:
+            if source is Source.GITHUB:
+                self._github_board(board, mine)
+            elif source is Source.LINEAR:
+                self._linear_board(board, mine)
+            elif source is Source.CALENDAR:
+                self._calendar_board(board, now)
+            elif source is Source.GMAIL:
+                self._gmail_board(board, mine)
+            elif source is Source.SLACK:
+                self._slack_board(board, mine, now)
+        except Exception:
+            log.warning("dashboard build failed for %s", source.value, exc_info=True)
+            board.unavailable.append("live activity")
 
         board.headline.insert(
             0,
@@ -103,111 +115,185 @@ class SourceStatsService:
         )
         return board
 
-    # ------------------------------------------------------------ per source
+    # --------------------------------------------------------------- GitHub
 
-    def _github_board(
-        self, board: SourceDashboard, items: list[FeedItem], now: datetime
-    ) -> None:
-        repos = Counter(item.repo for item in items if item.repo)
-        board.headline += [
-            StatLine(label="Repositories", value=len(repos), detail="active"),
-            StatLine(
-                label="Review requests",
-                value=sum(1 for i in items if i.type_tag.value == "review"),
-                detail="last 30 days",
-            ),
-        ]
-        board.breakdown = [
-            StatLine(label=repo, value=count, detail="notifications")
-            for repo, count in repos.most_common(10)
-        ]
+    def _github_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
+        board.breakdown_title = "Repositories"
+        if self._github is None:
+            repos = Counter(i.repo for i in items if i.repo)
+            board.breakdown = [
+                StatLine(label=r.split("/")[-1], value=c, detail="notifications")
+                for r, c in repos.most_common(10)
+            ]
+            return
 
-        if self._github is not None:
-            try:
-                activity = self._github.activity_summary()
-                board.headline.append(
-                    StatLine(label="Open PRs", value=activity.get("open_prs", 0), detail="yours")
+        try:
+            activity = self._github.activity_summary()
+            board.headline += [
+                StatLine(label="Open PRs", value=activity.get("open_prs", 0), detail="yours"),
+                StatLine(label="Merged", value=activity.get("merged_prs", 0), detail="30 days"),
+            ]
+        except Exception:
+            log.warning("github activity summary failed", exc_info=True)
+            board.unavailable.append("pull request counts")
+
+        try:
+            repos = self._github.repo_activity(_GITHUB_LOGINS)
+            total_commits = sum(r["commits"] for r in repos)
+            board.headline.insert(
+                1, StatLine(label="Commits", value=total_commits, detail="30 days, yours")
+            )
+            board.headline.insert(
+                1, StatLine(label="Repositories", value=len(repos), detail="most active")
+            )
+            board.breakdown = [
+                StatLine(
+                    label=repo["full_name"].split("/")[-1],
+                    value=repo["commits"],
+                    detail="your commits (30d)",
+                    url=repo["url"],
                 )
-                board.headline.append(
-                    StatLine(
-                        label="Merged",
-                        value=activity.get("merged_prs", 0),
-                        detail="last 30 days",
-                    )
-                )
-            except Exception:
-                log.warning("could not summarise GitHub activity", exc_info=True)
-                board.unavailable.append("pull request counts")
+                for repo in sorted(repos, key=lambda r: r["commits"], reverse=True)
+            ]
+        except Exception:
+            log.warning("github repo activity failed", exc_info=True)
+            board.unavailable.append("per-repository activity")
+
+    # --------------------------------------------------------------- Linear
 
     def _linear_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
-        due = sum(1 for i in items if i.deadline is not None)
-        board.headline += [
-            StatLine(label="Assigned", value=len(items), detail="to you"),
-            StatLine(label="With a due date", value=due),
-        ]
-        teams = Counter(item.context_chip or "Linear" for item in items)
-        board.breakdown = [
-            StatLine(label=team, value=count, detail="issues")
-            for team, count in teams.most_common(10)
-        ]
+        board.breakdown_title = "Projects"
+        if self._linear is None:
+            board.unavailable.append("linear")
+            return
+
+        try:
+            stats = self._linear.issue_stats()
+            board.headline += [
+                StatLine(label="Assigned", value=stats.get("assigned_open", 0), detail="open"),
+                StatLine(label="Completed", value=stats.get("completed_30d", 0), detail="30 days"),
+                StatLine(label="Overdue", value=stats.get("overdue", 0), detail="past due"),
+            ]
+        except Exception:
+            log.warning("linear issue stats failed", exc_info=True)
+            board.unavailable.append("issue counts")
+
+        try:
+            projects = self._linear.projects()
+            board.headline.insert(
+                1, StatLine(label="Projects", value=len(projects), detail="active")
+            )
+            board.breakdown = [
+                StatLine(
+                    label=project.get("name") or "(unnamed)",
+                    value=round((project.get("progress") or 0) * 100),
+                    value_label=(
+                        f"{round((project.get('progress') or 0) * 100)}%"
+                        if project.get("progress") is not None
+                        else "—"
+                    ),
+                    detail="complete",
+                    url=project.get("url"),
+                )
+                for project in projects
+            ]
+        except Exception:
+            log.warning("linear projects failed", exc_info=True)
+            board.unavailable.append("projects")
+
+    # ------------------------------------------------------------- Calendar
 
     def _calendar_board(self, board: SourceDashboard, now: datetime) -> None:
+        board.breakdown_title = "Most frequent, last 30 days"
         if self._calendar is None:
             board.unavailable.append("calendar")
             return
+
+        meetings_today = self._calendar.today(now=now)
+        booked_today = sum((m.end - m.start).total_seconds() / 3600 for m in meetings_today)
+        board.headline += [
+            StatLine(label="Today", value=len(meetings_today), detail="meetings"),
+            StatLine(label="Booked", value=round(booked_today), detail="hours today"),
+        ]
+
         try:
-            meetings = self._calendar.today(now=now)
+            window = self._calendar.window_meetings(now=now)
         except Exception:
-            log.warning("could not read the calendar", exc_info=True)
-            board.unavailable.append("today's meetings")
+            log.warning("calendar window failed", exc_info=True)
+            board.unavailable.append("30-day meetings")
             return
 
-        booked = sum(
-            (m.end - m.start).total_seconds() / 3600 for m in meetings
-        )
-        board.headline += [
-            StatLine(label="Today", value=len(meetings), detail="meetings"),
-            StatLine(label="Booked", value=round(booked), detail="hours today"),
-        ]
-        try:
-            count, hours = self._calendar.window_summary(now=now)
-            board.headline.append(
-                StatLine(label="Last 30 days", value=count, detail=f"{round(hours)}h total")
+        board.headline.append(
+            StatLine(
+                label="Last 30 days",
+                value=len(window),
+                detail=f"{round(sum(m['minutes'] for m in window) / 60)}h total",
             )
-        except Exception:
-            log.warning("could not summarise the calendar window", exc_info=True)
-            board.unavailable.append("30-day totals")
+        )
+        grouped: dict[str, list[int]] = defaultdict(list)
+        for meeting in window:
+            grouped[meeting["title"]].append(meeting["minutes"])
         board.breakdown = [
             StatLine(
-                label=m.title,
-                value=round((m.end - m.start).total_seconds() / 60),
-                detail=m.start.strftime("%H:%M"),
+                label=title,
+                value=len(durations),
+                value_label=f"{len(durations)}x · {_minutes_label(sum(durations))}",
+                detail="total time",
             )
-            for m in meetings
+            for title, durations in sorted(
+                grouped.items(), key=lambda kv: sum(kv[1]), reverse=True
+            )[:12]
         ]
+
+    # --------------------------------------------------------------- Gmail
 
     def _gmail_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
+        board.breakdown_title = "Top senders"
         noise = sum(1 for i in items if _tier_of(i) is Tier.NOISE)
         board.headline += [
-            StatLine(label="Unread", value=len(items), detail="last 30 days"),
-            StatLine(label="Filtered out", value=noise, detail="bulk and lists"),
+            StatLine(label="Unread", value=len(items), detail="30 days"),
+            StatLine(label="Filtered", value=noise, detail="bulk and lists"),
         ]
         senders = Counter(
-            item.sender_name or item.sender_handle or "unknown" for item in items
+            (i.sender_name or i.sender_handle or "unknown", i.sender_handle or "")
+            for i in items
         )
         board.breakdown = [
-            StatLine(label=sender, value=count, detail="unread")
-            for sender, count in senders.most_common(10)
+            StatLine(
+                label=name,
+                value=count,
+                detail="unread",
+                url=(
+                    f"https://mail.google.com/mail/u/0/#search/from:{handle}+is:unread"
+                    if handle
+                    else None
+                ),
+            )
+            for (name, handle), count in senders.most_common(12)
         ]
 
-    def _slack_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
-        dms = sum(1 for i in items if i.context_chip == "DM")
+    # --------------------------------------------------------------- Slack
+
+    def _slack_board(
+        self, board: SourceDashboard, items: list[FeedItem], now: datetime
+    ) -> None:
+        board.breakdown_title = "Where the traffic is"
+        if self._slack is None:
+            board.unavailable.append("slack")
+            return
+        try:
+            summary = self._slack.channel_summary(now=now)
+        except Exception:
+            log.warning("slack summary failed", exc_info=True)
+            board.unavailable.append("message volume")
+            return
+
         board.headline += [
-            StatLine(label="Messages", value=len(items), detail="last 30 days"),
-            StatLine(label="Direct", value=dms, detail="one to one"),
+            StatLine(label="Messages", value=summary["messages"], detail="30 days"),
+            StatLine(label="Channels", value=summary["channels"], detail="active"),
+            StatLine(label="DMs", value=summary["dms"], detail="one to one"),
         ]
-        channels = Counter(item.context_chip or "?" for item in items)
         board.breakdown = [
-            StatLine(label=channel, value=count, detail="messages")
-            for channel, count in channels.most_common(10)
+            StatLine(label=row["label"], value=row["count"], detail="messages", url=row.get("url"))
+            for row in sorted(summary["rows"], key=lambda r: r["count"], reverse=True)[:12]
         ]

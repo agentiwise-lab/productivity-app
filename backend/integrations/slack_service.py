@@ -203,6 +203,38 @@ class ComposioSlackService:
             return []
         return data.get("messages") or []
 
+    def channel_summary(self, now: datetime | None = None) -> dict[str, Any]:
+        """Message volume over 30 days, per conversation. Live, never stored.
+
+        Bounded to a handful of conversations and fetched in parallel, because
+        counting every message in every channel would be both slow and useless:
+        what matters is where the traffic is, not the exact total.
+        """
+        now = now or datetime.now(timezone.utc)
+        oldest = (now - BACKFILL).timestamp()
+        conversations = self._conversations()[:MAX_CONVERSATIONS]
+
+        def one(conversation: dict[str, Any]) -> dict[str, Any]:
+            channel = conversation.get("id")
+            messages = self._history(channel, oldest) if channel else []
+            is_dm = bool(conversation.get("is_im"))
+            label = "Direct message" if is_dm else f"#{conversation.get('name') or channel}"
+            return {
+                "label": label,
+                "count": len(messages),
+                "is_dm": is_dm,
+                "url": f"https://app.slack.com/client/-/{channel}",
+            }
+
+        with ThreadPoolExecutor(max_workers=min(8, len(conversations) or 1)) as pool:
+            rows = list(pool.map(one, conversations))
+        return {
+            "channels": sum(1 for r in rows if not r["is_dm"]),
+            "dms": sum(1 for r in rows if r["is_dm"]),
+            "messages": sum(r["count"] for r in rows),
+            "rows": [r for r in rows if r["count"] > 0],
+        }
+
     def resolve_identity(self) -> Identity:
         """Section 3.10: mention detection is impossible without this, and it
         is resolved once at connection time rather than per message."""

@@ -9,7 +9,7 @@ nor a due date is genuinely ambiguous.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.models.events import RawEvent
@@ -158,6 +158,50 @@ class ComposioLinearService:
             issue_to_raw_event(issue, assignee_id=assignee) for issue in issues
         ]
         return [event for event in found if event is not None]
+
+    def projects(self, limit: int = 20) -> list[dict[str, Any]]:
+        try:
+            data = self._execute("LINEAR_LIST_LINEAR_PROJECTS", {"first": limit})
+        except Exception:
+            log.warning("could not list Linear projects", exc_info=True)
+            return []
+        proj = data.get("projects") or data.get("nodes") or []
+        if isinstance(proj, dict):
+            proj = proj.get("nodes") or []
+        return proj
+
+    def issue_stats(self) -> dict[str, int]:
+        """Assigned, completed in 30 days, and overdue, for the dashboard."""
+        assignee = self.current_user_id()
+        data = self._execute("LINEAR_LIST_LINEAR_ISSUES", {"first": 100})
+        issues = data.get("issues") or data.get("nodes") or []
+        if isinstance(issues, dict):
+            issues = issues.get("nodes") or []
+        mine = [
+            i for i in issues if (i.get("assignee") or {}).get("id") == assignee
+        ]
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        now = datetime.now(timezone.utc)
+        completed = 0
+        overdue = 0
+        open_count = 0
+        for issue in mine:
+            state = str((issue.get("state") or {}).get("type") or "").lower()
+            if state in _DONE_STATES:
+                done_at = _parse(issue.get("completedAt") or issue.get("updatedAt"))
+                if done_at and done_at >= cutoff:
+                    completed += 1
+                continue
+            open_count += 1
+            due = _parse(issue.get("dueDate"))
+            if due is not None and _end_of_day(due) < now:
+                overdue += 1
+        return {
+            "assigned_open": open_count,
+            "completed_30d": completed,
+            "overdue": overdue,
+        }
 
     def comment(self, source_ref: str, body: str) -> None:
         issue_id = source_ref.split(":", 1)[1] if ":" in source_ref else source_ref

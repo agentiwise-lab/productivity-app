@@ -178,6 +178,7 @@ export default function App() {
       label: info.label,
       headline: [],
       breakdown: [],
+      breakdown_title: '',
       unavailable: [],
     });
     try {

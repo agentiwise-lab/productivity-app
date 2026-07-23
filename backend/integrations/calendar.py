@@ -173,6 +173,22 @@ class ComposioCalendarService:
             key=lambda m: m.start,
         )
 
+    def window_meetings(self, now: datetime | None = None) -> list[dict[str, Any]]:
+        """Every meeting in the last 30 days as {title, minutes}, for grouping
+        into a frequency breakdown on the dashboard."""
+        now = now or datetime.now(timezone.utc)
+        events = self._events(now - timedelta(days=30), now)
+        out = []
+        for event in events:
+            meeting = event_to_meeting(event)
+            if meeting is None or event.get("status") == "cancelled":
+                continue
+            minutes = round((meeting.end - meeting.start).total_seconds() / 60)
+            if minutes <= 0:
+                continue
+            out.append({"title": meeting.title, "minutes": minutes})
+        return out
+
     def window_summary(
         self, now: datetime | None = None
     ) -> tuple[int, float]:

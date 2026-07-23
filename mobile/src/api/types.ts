@@ -87,6 +87,8 @@ export interface StatLine {
   label: string;
   value: number;
   detail: string | null;
+  value_label: string | null;
+  url: string | null;
 }
 
 export interface SourceDashboard {
@@ -94,5 +96,6 @@ export interface SourceDashboard {
   label: string;
   headline: StatLine[];
   breakdown: StatLine[];
+  breakdown_title: string;
   unavailable: string[];
 }

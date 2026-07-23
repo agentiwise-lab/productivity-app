@@ -10,7 +10,8 @@ not a change to this file.
 
 from __future__ import annotations
 
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.integrations.github import Comment, PRRef, PullRequest
@@ -196,6 +197,55 @@ class ComposioGitHubService:
         return Comment(
             id=str(data.get("id", "")), url=data.get("html_url") or "", body=body
         )
+
+    def repositories(self, limit: int = 8) -> list[dict[str, Any]]:
+        """The user's repositories, most recently pushed first."""
+        data = self._execute(
+            "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
+            {"per_page": 30, "sort": "pushed"},
+        )
+        repos = data.get("repositories") or data.get("items") or []
+        if isinstance(data, list):
+            repos = data
+        return repos[:limit]
+
+    def repo_activity(self, logins: set[str]) -> list[dict[str, Any]]:
+        """Per repository: commits by this user and open PRs, last 30 days.
+
+        Bounded to the most recently pushed repos and fetched in parallel: one
+        commit call per repo in series would make the page crawl.
+        """
+        repos = self.repositories(limit=8)
+        since = (datetime.now(timezone.utc) - timedelta(days=30)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+
+        def one(repo: dict[str, Any]) -> dict[str, Any]:
+            full = repo.get("full_name") or ""
+            owner, _, name = full.partition("/")
+            commits = 0
+            try:
+                data = self._execute(
+                    "GITHUB_LIST_COMMITS",
+                    {"owner": owner, "repo": name, "since": since, "per_page": 100},
+                )
+                items = data.get("commits") or data.get("items") or []
+                commits = sum(
+                    1
+                    for cm in items
+                    if ((cm.get("author") or {}).get("login") or "") in logins
+                )
+            except Exception:
+                pass
+            return {
+                "full_name": full,
+                "url": repo.get("html_url") or f"https://github.com/{full}",
+                "commits": commits,
+                "pushed_at": repo.get("pushed_at"),
+            }
+
+        with ThreadPoolExecutor(max_workers=min(8, len(repos) or 1)) as pool:
+            return list(pool.map(one, repos))
 
     def activity_summary(self) -> dict[str, int]:
         """Cheap counts for the dashboard: PRs open and merged recently. Each is
