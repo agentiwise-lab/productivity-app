@@ -1,0 +1,310 @@
+<title>Home · ruler + feed + list</title>
+
+<style>
+  .pg{--bg:#12100E;--fg:#F2EDE4;--dim:#9A9086;--ln:#2A2521;
+      background:var(--bg);color:var(--fg);margin:0;padding:44px 26px 90px;
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      --c-bg:#F4F1EC;--c-sf:#FFFDFA;--c-fg:#20242B;--c-dim:#79808A;--c-ln:#E0DCD4;
+      --c-ac:#2F4858;--c-acsoft:#E0E7EC;--c-urg:#B25B33;--c-urgsoft:#F7E7DC;--c-onac:#F4F8FA;}
+  @media (prefers-color-scheme:light){.pg{--bg:#EFECE6;--fg:#1C1815;--dim:#6E645A;--ln:#DDD5C9;}}
+  :root[data-theme="light"] .pg{--bg:#EFECE6;--fg:#1C1815;--dim:#6E645A;--ln:#DDD5C9;}
+  :root[data-theme="dark"] .pg{--bg:#12100E;--fg:#F2EDE4;--dim:#9A9086;--ln:#2A2521;}
+  *{box-sizing:border-box;}
+  .pg h1{font-size:31px;line-height:1.14;letter-spacing:-.024em;margin:0 0 12px;max-width:21ch;}
+  .pg .lede{font-size:15px;line-height:1.62;color:var(--dim);max-width:66ch;margin:0;}
+  .eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 14px;}
+  .rail{display:flex;gap:22px;overflow-x:auto;padding:30px 0 14px;}
+  .rail::-webkit-scrollbar{height:8px;}.rail::-webkit-scrollbar-thumb{background:var(--ln);border-radius:4px;}
+  .cell{flex:none;width:272px;}
+  .cell .nm{font-size:12.5px;color:var(--dim);margin:11px 0 0;line-height:1.45;}
+  .cell .nm b{color:var(--fg);font-weight:600;display:block;font-size:13px;margin-bottom:2px;}
+
+  .ph{width:272px;height:566px;border-radius:26px;overflow:hidden;display:flex;flex-direction:column;
+      border:1px solid rgba(120,125,135,.3);box-shadow:0 16px 44px rgba(0,0,0,.3);
+      background:var(--c-bg);color:var(--c-fg);}
+  .sb{display:flex;justify-content:space-between;padding:10px 16px 2px;font-size:9.5px;color:var(--c-dim);
+      font-family:ui-monospace,Menlo,monospace;}
+  .hd{padding:5px 16px 10px;text-align:center;border-bottom:1px solid var(--c-ln);position:relative;}
+  .hd .nm2{font-size:12.5px;font-weight:600;}
+  .hd .dt{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--c-dim);margin-top:3px;}
+  .hd .lft,.hd .rgt{position:absolute;top:7px;font-size:14px;color:var(--c-dim);}
+  .hd .lft{left:14px;} .hd .rgt{right:14px;}
+  .bd{flex:1;overflow:hidden;}
+
+  /* B: ruler */
+  .card{margin:9px 13px 0;background:var(--c-sf);border:1px solid var(--c-ln);border-radius:14px;padding:11px 12px;}
+  .ttl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .ttl b{font-size:11.5px;font-weight:600;}
+  .ttl span{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--c-dim);
+    letter-spacing:.05em;text-transform:uppercase;}
+  .ruler{position:relative;height:30px;margin:2px 0 6px;}
+  .ruler .track{position:absolute;top:12px;left:0;right:0;height:6px;border-radius:3px;background:var(--c-acsoft);}
+  .ruler .blk{position:absolute;top:8px;height:14px;border-radius:4px;background:var(--c-ac);}
+  .ruler .blk.past{background:var(--c-dim);opacity:.38;}
+  .ruler .nowline{position:absolute;top:3px;width:2px;height:24px;background:var(--c-urg);border-radius:1px;}
+  .ruler .lbl{position:absolute;top:24px;font-family:ui-monospace,Menlo,monospace;font-size:8px;color:var(--c-dim);}
+  .rfoot{display:flex;justify-content:space-between;font-family:ui-monospace,Menlo,monospace;
+    font-size:9px;color:var(--c-dim);}
+
+  /* category chips */
+  .chips{display:flex;gap:6px;padding:11px 13px 3px;}
+  .chip{flex:1;border:1px solid var(--c-ln);border-radius:9px;padding:6px 4px;text-align:center;background:var(--c-sf);}
+  .chip .n{font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600;line-height:1;}
+  .chip .t{font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:var(--c-dim);margin-top:3px;}
+  .chip.on{border-color:var(--c-urg);background:var(--c-urgsoft);}
+  .chip.on .n{color:var(--c-urg);} .chip.on .t{color:var(--c-urg);}
+  .chip.sel{border-color:var(--c-ac);background:var(--c-acsoft);}
+  .chip.sel .n{color:var(--c-ac);} .chip.sel .t{color:var(--c-ac);}
+
+  /* horizontal feed */
+  .feedwrap{padding:9px 0 2px;overflow:hidden;}
+  .feed{display:flex;gap:9px;padding:0 13px;}
+  .fcard{flex:none;width:216px;background:var(--c-sf);border:1px solid var(--c-ln);
+    border-radius:15px;padding:12px;box-shadow:0 3px 10px rgba(32,36,43,.05);}
+  .fcard.dim{opacity:.5;}
+  .fc-top{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+  .ic{flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+    font-family:ui-monospace,Menlo,monospace;font-size:8.5px;font-weight:600;}
+  .ic.sl{background:#E4DCCB;color:#7A5A2E;} .ic.gh{background:#252A31;color:#E6EAEE;}
+  .ic.gd{background:#D8E2E8;color:#2E5A72;} .ic.ln{background:#DFDCEA;color:#4C4278;}
+  .ic.cal{background:#E8D8D2;color:#8A3E30;}
+  .tg{font-family:ui-monospace,Menlo,monospace;font-size:8px;letter-spacing:.07em;
+    text-transform:uppercase;border-radius:4px;padding:2px 5px;border:1px solid var(--c-ln);color:var(--c-dim);}
+  .tg.urg{border-color:var(--c-urg);color:var(--c-urg);background:var(--c-urgsoft);}
+  .tg.tod{border-color:var(--c-ac);color:var(--c-ac);background:var(--c-acsoft);}
+  .fc-ago{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;color:var(--c-dim);}
+  .fcard h4{margin:0 0 6px;font-size:13px;line-height:1.32;font-weight:600;}
+  .fcard .why{font-size:10.5px;line-height:1.42;color:var(--c-dim);margin:0 0 10px;}
+  .fc-btn{display:flex;gap:6px;}
+  .fc-btn .b{flex:1;text-align:center;border-radius:9px;padding:7px 4px;font-size:10.5px;
+    border:1px solid var(--c-ln);}
+  .fc-btn .b.p{background:var(--c-ac);border-color:var(--c-ac);color:var(--c-onac);font-weight:600;}
+  .dots{display:flex;gap:4px;justify-content:center;padding:9px 0 2px;}
+  .dots i{width:5px;height:5px;border-radius:50%;background:var(--c-ln);}
+  .dots i.on{background:var(--c-ac);width:14px;border-radius:3px;}
+
+  /* list */
+  .lsthd{display:flex;align-items:center;gap:7px;padding:12px 16px 5px;}
+  .lsthd .pip{width:6px;height:6px;border-radius:50%;background:var(--c-urg);}
+  .lsthd .pip.b{background:var(--c-ac);} .lsthd .pip.c{background:var(--c-ln);}
+  .lsthd .lb{font-size:11.5px;font-weight:600;}
+  .lsthd .ct{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--c-dim);}
+  .row{display:flex;gap:9px;padding:8px 16px 9px;border-top:1px solid var(--c-ln);align-items:flex-start;}
+  .rt{font-size:12px;line-height:1.34;margin:0 0 3px;}
+  .sm{font-size:10px;color:var(--c-dim);margin:0;}
+  .rmeta{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;color:var(--c-dim);}
+  .divider{padding:12px 16px 2px;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;
+    letter-spacing:.13em;text-transform:uppercase;color:var(--c-dim);}
+
+  .sticky{display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--c-sf);
+    border-bottom:1px solid var(--c-ln);}
+  .sticky .tm{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--c-ac);font-weight:600;}
+  .sticky .lb{font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sticky .fr{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--c-dim);}
+  .tb{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--c-ln);background:var(--c-sf);}
+  .tb div{padding:7px 2px 11px;text-align:center;font-size:8.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--c-dim);}
+  .tb i{display:block;width:13px;height:13px;margin:0 auto 4px;border-radius:4px;border:1.5px solid currentColor;opacity:.55;}
+  .tb .on{color:var(--c-ac);} .tb .on i{opacity:1;background:var(--c-acsoft);}
+</style>
+
+<div class="pg">
+  <p class="eyebrow">Home · ruler + card feed + list</p>
+  <h1>Swipe to deal, scroll to survey.</h1>
+  <p class="lede">The ruler answers what your day looks like. The card feed is the queue you swipe
+    through one at a time, acting as you go, and it never takes the whole screen. Under it, the full
+    list grouped by category, so nothing is hidden. Category counts sit between them and double as
+    filters.</p>
+
+  <div class="rail">
+
+    <!-- 1 -->
+    <div class="cell"><div class="ph">
+      <div class="sb"><span>12:20</span><span>82%</span></div>
+      <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+        <div class="dt">Thu 23 Jul</div><span class="rgt">◎</span></div>
+      <div class="bd">
+        <div class="card">
+          <div class="ttl"><b>Your day</b><span>09:00 to 18:00</span></div>
+          <div class="ruler"><div class="track"></div>
+            <div class="blk past" style="left:6%;width:8%"></div>
+            <div class="blk past" style="left:22%;width:11%"></div>
+            <div class="nowline" style="left:37%"></div>
+            <div class="blk" style="left:55%;width:11%"></div>
+            <div class="blk" style="left:83%;width:8%"></div>
+            <span class="lbl" style="left:0">9</span><span class="lbl" style="left:35%">now</span>
+            <span class="lbl" style="right:0">18</span></div>
+          <div class="rfoot"><span>next 14:00 Design review</span><span>1h 40m free</span></div>
+        </div>
+        <div class="chips">
+          <div class="chip on"><div class="n">3</div><div class="t">Urgent</div></div>
+          <div class="chip"><div class="n">3</div><div class="t">Today</div></div>
+          <div class="chip"><div class="n">1</div><div class="t">Can wait</div></div>
+        </div>
+        <div class="feedwrap"><div class="feed">
+          <div class="fcard">
+            <div class="fc-top"><div class="ic sl">SL</div><span class="tg urg">Reply</span>
+              <span class="fc-ago">18m</span></div>
+            <h4>Priya needs the staging deploy unblocked</h4>
+            <p class="why">Asks you directly with no deadline, and it has been blocked since 07:40.</p>
+            <div class="fc-btn"><div class="b p">Reply</div><div class="b">Snooze</div></div>
+          </div>
+          <div class="fcard dim">
+            <div class="fc-top"><div class="ic gh">GH</div><span class="tg urg">Review</span>
+              <span class="fc-ago">4h</span></div>
+            <h4>Review requested: restore shopify.svg</h4>
+            <p class="why">Release branch frozen until it merges.</p>
+            <div class="fc-btn"><div class="b p">Approve</div><div class="b">Open</div></div>
+          </div>
+        </div></div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <div class="divider">All items</div>
+        <div class="lsthd"><span class="pip"></span><span class="lb">Urgent</span><span class="ct">3</span></div>
+        <div class="row"><div class="ic sl">SL</div><div><p class="rt">Priya needs the deploy unblocked</p></div>
+          <span class="rmeta">18m</span></div>
+      </div>
+      <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+    </div><p class="nm"><b>1 · Home, top</b>Ruler, category counts, then the card feed. The next card
+      peeks so the swipe is obvious. Cards use about a third of the screen, not all of it.</p></div>
+
+    <!-- 2 -->
+    <div class="cell"><div class="ph">
+      <div class="sb"><span>12:21</span><span>82%</span></div>
+      <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+        <div class="dt">Thu 23 Jul</div><span class="rgt">◎</span></div>
+      <div class="bd">
+        <div class="card">
+          <div class="ttl"><b>Your day</b><span>09:00 to 18:00</span></div>
+          <div class="ruler"><div class="track"></div>
+            <div class="blk past" style="left:6%;width:8%"></div>
+            <div class="blk past" style="left:22%;width:11%"></div>
+            <div class="nowline" style="left:37%"></div>
+            <div class="blk" style="left:55%;width:11%"></div>
+            <div class="blk" style="left:83%;width:8%"></div>
+            <span class="lbl" style="left:0">9</span><span class="lbl" style="left:35%">now</span>
+            <span class="lbl" style="right:0">18</span></div>
+          <div class="rfoot"><span>next 14:00 Design review</span><span>1h 40m free</span></div>
+        </div>
+        <div class="chips">
+          <div class="chip on"><div class="n">2</div><div class="t">Urgent</div></div>
+          <div class="chip"><div class="n">3</div><div class="t">Today</div></div>
+          <div class="chip"><div class="n">1</div><div class="t">Can wait</div></div>
+        </div>
+        <div class="feedwrap"><div class="feed" style="margin-left:-108px">
+          <div class="fcard dim">
+            <div class="fc-top"><div class="ic sl">SL</div><span class="tg urg">Reply</span></div>
+            <h4>Priya needs the deploy unblocked</h4>
+          </div>
+          <div class="fcard">
+            <div class="fc-top"><div class="ic gh">GH</div><span class="tg urg">Review</span>
+              <span class="fc-ago">4h</span></div>
+            <h4>Review requested: restore shopify.svg icon</h4>
+            <p class="why">3 files, low risk, checks passing. The release branch is frozen until this
+              merges, and two PRs are stacked behind it.</p>
+            <div class="fc-btn"><div class="b p">Approve</div><div class="b">Comment</div></div>
+          </div>
+          <div class="fcard dim">
+            <div class="fc-top"><div class="ic gd">GD</div><span class="tg urg">Comment</span></div>
+            <h4>Abdul @mentioned you</h4>
+          </div>
+        </div></div>
+        <div class="dots"><i></i><i class="on"></i><i></i></div>
+        <div class="divider">All items</div>
+        <div class="lsthd"><span class="pip"></span><span class="lb">Urgent</span><span class="ct">2</span></div>
+        <div class="row"><div class="ic gh">GH</div><div><p class="rt">Review requested: shopify.svg</p></div>
+          <span class="rmeta">4h</span></div>
+      </div>
+      <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+    </div><p class="nm"><b>2 · Swiped one across</b>Priya is handled so the count dropped to 2. The
+      active card carries the full reason and its own actions.</p></div>
+
+    <!-- 3 -->
+    <div class="cell"><div class="ph">
+      <div class="sb"><span>12:22</span><span>82%</span></div>
+      <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+        <div class="dt">Thu 23 Jul</div><span class="rgt">◎</span></div>
+      <div class="sticky"><span class="tm">14:00</span><span class="lb">Design review</span>
+        <span class="fr">1h 40m free</span><span class="fr">⌄</span></div>
+      <div class="bd">
+        <div class="lsthd"><span class="pip"></span><span class="lb">Urgent</span><span class="ct">2</span></div>
+        <div class="row"><div class="ic gh">GH</div><div><p class="rt">Review requested: restore shopify.svg icon</p>
+          <p class="sm">Release branch frozen until merged</p></div><span class="rmeta">4h</span></div>
+        <div class="row"><div class="ic gd">GD</div><div><p class="rt">Abdul @mentioned you in LMS Migration</p>
+          <p class="sm">Asks which database to keep</p></div><span class="rmeta">1h</span></div>
+        <div class="lsthd"><span class="pip b"></span><span class="lb">Today</span><span class="ct">3</span></div>
+        <div class="row"><div class="ic sl">SL</div><div><p class="rt">Abdul shared the migration doc</p>
+          <p class="sm">Wants your call by tomorrow EOD</p></div><span class="rmeta">3h</span></div>
+        <div class="row"><div class="ic ln">LN</div><div><p class="rt">AGE-214 due today</p>
+          <p class="sm">Assigned to you, still in Todo</p></div><span class="rmeta">Linear</span></div>
+        <div class="row"><div class="ic cal">CA</div><div><p class="rt">Invite: Q3 planning, Friday 11:00</p>
+          <p class="sm">Clashes with your existing 11:00</p></div><span class="rmeta">RSVP</span></div>
+        <div class="lsthd"><span class="pip c"></span><span class="lb">Can wait</span><span class="ct">1</span></div>
+        <div class="row"><div class="ic gh">GH</div><div><p class="rt">Issue #88 assigned, no due date</p></div>
+          <span class="rmeta">flow</span></div>
+      </div>
+      <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+    </div><p class="nm"><b>3 · Scrolled down</b>Ruler collapses to the sticky line, card feed scrolls
+      away, and every category is visible as a grouped list. This is the holistic view.</p></div>
+
+    <!-- 4 -->
+    <div class="cell"><div class="ph">
+      <div class="sb"><span>12:20</span><span>82%</span></div>
+      <div class="hd"><span class="lft">☰</span><div class="nm2">Today</div>
+        <div class="dt">Thu 23 Jul</div><span class="rgt">◎</span></div>
+      <div class="bd">
+        <div class="card">
+          <div class="ttl"><b>Your day</b><span>09:00 to 18:00</span></div>
+          <div class="ruler"><div class="track"></div>
+            <div class="blk past" style="left:6%;width:8%"></div>
+            <div class="blk past" style="left:22%;width:11%"></div>
+            <div class="nowline" style="left:37%"></div>
+            <div class="blk" style="left:55%;width:11%"></div>
+            <div class="blk" style="left:83%;width:8%"></div>
+            <span class="lbl" style="left:0">9</span><span class="lbl" style="left:35%">now</span>
+            <span class="lbl" style="right:0">18</span></div>
+          <div class="rfoot"><span>next 14:00 Design review</span><span>1h 40m free</span></div>
+        </div>
+        <div class="chips">
+          <div class="chip on"><div class="n">3</div><div class="t">Urgent</div></div>
+          <div class="chip sel"><div class="n">3</div><div class="t">Today</div></div>
+          <div class="chip"><div class="n">1</div><div class="t">Can wait</div></div>
+        </div>
+        <div class="feedwrap"><div class="feed">
+          <div class="fcard">
+            <div class="fc-top"><div class="ic ln">LN</div><span class="tg tod">Assigned</span>
+              <span class="fc-ago">due today</span></div>
+            <h4>AGE-214 Doorstead billing edge case</h4>
+            <p class="why">Due today and still in Todo. You have 1h 40m free before your next meeting.</p>
+            <div class="fc-btn"><div class="b p">Open</div><div class="b">Comment</div></div>
+          </div>
+          <div class="fcard dim">
+            <div class="fc-top"><div class="ic cal">CA</div><span class="tg tod">RSVP</span></div>
+            <h4>Q3 planning, Friday 11:00</h4>
+            <p class="why">Clashes with an existing meeting.</p>
+            <div class="fc-btn"><div class="b p">Accept</div><div class="b">Decline</div></div>
+          </div>
+        </div></div>
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <div class="divider">All items</div>
+        <div class="lsthd"><span class="pip b"></span><span class="lb">Today</span><span class="ct">3</span></div>
+        <div class="row"><div class="ic ln">LN</div><div><p class="rt">AGE-214 due today</p></div>
+          <span class="rmeta">Linear</span></div>
+      </div>
+      <div class="tb"><div class="on"><i></i>Home</div><div><i></i>Sources</div><div><i></i>Later</div><div><i></i>You</div></div>
+    </div><p class="nm"><b>4 · Tapping a category</b>Tap "Today" and the card feed and list both
+      switch to it. The counts are the filter, which is how all three categories stay reachable from
+      one screen.</p></div>
+
+  </div>
+
+  <p class="lede" style="margin-top:46px;padding-top:22px;border-top:1px solid var(--ln)">
+    <strong style="color:var(--fg)">How the categories are handled.</strong> The three counts sit
+    directly under the ruler and act as filters. By default the feed shows Urgent, because that is
+    what is actually waiting on you. Tap Today or Can wait and both the cards and the list switch.
+    Nothing is buried: the grouped list below always shows every category in order, so scrolling gives
+    you the whole picture without touching a filter.
+  </p>
+</div>
