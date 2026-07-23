@@ -155,6 +155,25 @@ class ComposioCalendarService:
         )
         return data.get("items") or data.get("events") or []
 
+    def day_window(self, now: datetime | None = None) -> list[Meeting]:
+        """Meetings around the present moment, for the ruler.
+
+        A wide window from last night through tomorrow, deliberately not
+        filtered to "today" here: the server does not reliably know the user's
+        timezone, and at 00:15 local it is still yesterday in UTC. The client
+        knows its own calendar day and filters to it, so this only has to
+        return enough to choose from.
+        """
+        now = now or datetime.now(timezone.utc)
+        start = now - timedelta(hours=18)
+        meetings = [
+            event_to_meeting(event)
+            for event in self._events(start, now + timedelta(hours=30))
+        ]
+        return sorted(
+            (m for m in meetings if m is not None), key=lambda m: m.start
+        )
+
     def today(self, now: datetime | None = None) -> list[Meeting]:
         """The ruler's data. Read live on every open, never cached."""
         now = now or datetime.now(timezone.utc)

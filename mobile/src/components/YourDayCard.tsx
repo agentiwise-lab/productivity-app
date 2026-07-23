@@ -37,8 +37,14 @@ const clock = (date: Date) =>
     date.getMinutes(),
   ).padStart(2, '0')}`;
 
-export function YourDayCard({ meetings, now = new Date() }: Props) {
+export function YourDayCard({ meetings: allMeetings, now = new Date() }: Props) {
   const [shown, setShown] = useState<Meeting | null>(null);
+
+  // Only today's meetings, in the device's own timezone. The server sends a
+  // wider window because at 00:15 local it is still yesterday in UTC; the
+  // client is the only place that knows which calendar day "today" is.
+  const todayKey = now.toDateString();
+  const meetings = allMeetings.filter((m) => m.start.toDateString() === todayKey);
 
   const into = (date: Date) => date.getHours() * 60 + date.getMinutes();
   const nowFrac = into(now) / DAY_MINUTES;

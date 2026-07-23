@@ -150,8 +150,10 @@ const styles = StyleSheet.create({
     paddingTop: s(11),
   },
   tile: {
-    flexGrow: 1,
-    flexBasis: '30%',
+    // No flexGrow: a lone fourth tile stays tile-sized instead of stretching
+    // across the whole row, which read as a broken full-width bar.
+    flexGrow: 0,
+    flexBasis: '31.5%',
     minHeight: s(56),
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,

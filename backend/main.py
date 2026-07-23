@@ -232,7 +232,7 @@ def create_app(
                     end=m.end,
                     conference_url=m.conference_url,
                 )
-                for m in calendar.today()
+                for m in calendar.day_window()
             ]
         except Exception:
             log.warning("could not read the calendar", exc_info=True)

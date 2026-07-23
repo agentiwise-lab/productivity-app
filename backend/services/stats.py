@@ -188,37 +188,34 @@ class SourceStatsService:
 
         try:
             stats = self._linear.issue_stats()
-            board.headline += [
-                StatLine(label="Assigned", value=stats.get("assigned_open", 0), detail="open"),
-                StatLine(label="Completed", value=stats.get("completed_30d", 0), detail="30 days"),
-                StatLine(label="Overdue", value=stats.get("overdue", 0), detail="past due"),
-            ]
         except Exception:
             log.warning("linear issue stats failed", exc_info=True)
             board.unavailable.append("issue counts")
+            stats = {}
 
-        try:
-            projects = self._linear.projects()
-            board.headline.insert(
-                1, StatLine(label="Projects", value=len(projects), detail="active")
+        board.headline += [
+            StatLine(label="Completed", value=stats.get("completed_30d", 0), detail="this month"),
+            StatLine(label="Remaining", value=stats.get("remaining", 0), detail="open"),
+            StatLine(label="Backlog", value=stats.get("backlog", 0), detail="not started"),
+            StatLine(label="Overdue", value=stats.get("overdue", 0), detail="past due"),
+        ]
+
+        # Per project: how much is done and how much is left, the two numbers
+        # that actually say where the work stands. Sorted by what remains.
+        projects = stats.get("projects") or {}
+        board.breakdown = [
+            StatLine(
+                label=name,
+                value=counts["remaining"],
+                value_label=f"{counts['done']} done · {counts['remaining']} left",
+                detail=None,
             )
-            board.breakdown = [
-                StatLine(
-                    label=project.get("name") or "(unnamed)",
-                    value=round((project.get("progress") or 0) * 100),
-                    value_label=(
-                        f"{round((project.get('progress') or 0) * 100)}% done"
-                        if project.get("progress") is not None
-                        else "in progress"
-                    ),
-                    detail=(project.get("state") or "active"),
-                    url=project.get("url"),
-                )
-                for project in projects
-            ]
-        except Exception:
-            log.warning("linear projects failed", exc_info=True)
-            board.unavailable.append("projects")
+            for name, counts in sorted(
+                projects.items(),
+                key=lambda kv: (kv[1]["remaining"], kv[1]["done"]),
+                reverse=True,
+            )
+        ]
 
     # ------------------------------------------------------------- Calendar
 
@@ -267,29 +264,35 @@ class SourceStatsService:
     # --------------------------------------------------------------- Gmail
 
     def _gmail_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
-        board.breakdown_title = "Unread emails"
+        board.breakdown_title = "Senders"
         noise = sum(1 for i in items if _tier_of(i) is Tier.NOISE)
-        senders = len({i.sender_handle for i in items if i.sender_handle})
+        senders_map: dict[tuple[str, str], int] = defaultdict(int)
+        for i in items:
+            senders_map[(i.sender_name or i.sender_handle or "unknown", i.sender_handle or "")] += 1
+
         board.headline += [
             StatLine(label="Unread", value=len(items), detail="30 days"),
-            StatLine(label="Senders", value=senders, detail="distinct"),
+            StatLine(label="Senders", value=len(senders_map), detail="distinct"),
             StatLine(label="Filtered", value=noise, detail="bulk and lists"),
         ]
-        # The emails themselves, newest first, each opening that thread in
-        # Gmail. A sender count belongs in the headline, not as a row that
-        # jumps straight to one arbitrary email.
-        ordered = sorted(
-            items, key=lambda i: i.occurred_at or i.created_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
-        )
+        # Grouped by sender with the email count, like the GitHub repo rows.
+        # Tapping opens that sender's unread mail in Gmail, not one arbitrary
+        # message.
         board.breakdown = [
             StatLine(
-                label=item.title or "(no subject)",
-                value=0,
-                value_label="",
-                detail=item.sender_name or item.sender_handle or "unknown sender",
-                url=item.url,
+                label=name,
+                value=count,
+                value_label=f"{count} email" + ("s" if count != 1 else ""),
+                detail=None,
+                url=(
+                    f"https://mail.google.com/mail/u/0/#search/from:{handle}+is:unread"
+                    if handle
+                    else None
+                ),
             )
-            for item in ordered[:20]
+            for (name, handle), count in sorted(
+                senders_map.items(), key=lambda kv: kv[1], reverse=True
+            )[:15]
         ]
 
     # --------------------------------------------------------------- Slack
@@ -319,9 +322,13 @@ class SourceStatsService:
         board.breakdown = [
             StatLine(
                 label=row["label"],
-                value=0,
-                value_label="",
-                detail="channel",
+                value=row.get("count", 0),
+                value_label=(
+                    f"{row['count']} message" + ("s" if row["count"] != 1 else "")
+                    if row.get("count")
+                    else "—"
+                ),
+                detail=None,
                 url=row.get("url"),
             )
             for row in summary["rows"][:20]

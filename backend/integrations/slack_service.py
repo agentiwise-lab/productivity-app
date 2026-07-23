@@ -33,6 +33,9 @@ log = logging.getLogger(__name__)
 #: the app never surfaces something it would immediately drop.
 BACKFILL = timedelta(days=30)
 MAX_PER_CONVERSATION = 20
+#: Channels whose message volume the dashboard counts. Search is rate-limited,
+#: so only the first N are sampled; the rest still list, without a count.
+SLACK_CHANNEL_SAMPLE = 12
 
 
 class SlackMessageRef(BaseModel):
@@ -159,18 +162,21 @@ class ComposioSlackService:
         rows = [
             {
                 "label": f"#{c.get('name') or c.get('id')}",
+                "name": c.get("name") or "",
                 "is_dm": False,
                 "channel": c.get("id"),
                 "url": f"https://app.slack.com/client/-/{c.get('id')}",
+                "count": 0,
             }
             for c in channels_raw
             if c.get("id")
         ]
         dm_count = sum(1 for d in dms_raw if d.get("id"))
 
+        after = (now - BACKFILL).strftime("%Y-%m-%d")
+
         total = 0
         try:
-            after = (now - BACKFILL).strftime("%Y-%m-%d")
             data = self._execute(
                 "SLACK_SEARCH_MESSAGES", {"query": f"after:{after}", "count": 1}
             )
@@ -178,6 +184,26 @@ class ComposioSlackService:
         except Exception:
             log.info("slack message search failed", exc_info=True)
 
+        # Per-channel volume, so a row can say how busy it is. One search each,
+        # capped and run together: search is rate-limited too, so this is
+        # best-effort and a throttled channel simply shows nothing.
+        sample = [r for r in rows if r["name"]][:SLACK_CHANNEL_SAMPLE]
+
+        def count(row: dict) -> int:
+            try:
+                data = self._execute(
+                    "SLACK_SEARCH_MESSAGES",
+                    {"query": f"in:#{row['name']} after:{after}", "count": 1},
+                )
+                return (data.get("messages") or {}).get("total") or 0
+            except Exception:
+                return 0
+
+        with ThreadPoolExecutor(max_workers=min(5, len(sample) or 1)) as pool:
+            for row, c in zip(sample, pool.map(count, sample)):
+                row["count"] = c
+
+        rows.sort(key=lambda r: r["count"], reverse=True)
         return {
             "channels": len(rows),
             "dms": dm_count,

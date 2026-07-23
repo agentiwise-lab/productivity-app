@@ -170,37 +170,64 @@ class ComposioLinearService:
             proj = proj.get("nodes") or []
         return proj
 
-    def issue_stats(self) -> dict[str, int]:
-        """Assigned, completed in 30 days, and overdue, for the dashboard."""
+    def my_issues(self) -> list[dict[str, Any]]:
+        """Every issue assigned to this user."""
         assignee = self.current_user_id()
-        data = self._execute("LINEAR_LIST_LINEAR_ISSUES", {"first": 100})
+        data = self._execute("LINEAR_LIST_LINEAR_ISSUES", {"first": 250})
         issues = data.get("issues") or data.get("nodes") or []
         if isinstance(issues, dict):
             issues = issues.get("nodes") or []
-        mine = [
-            i for i in issues if (i.get("assignee") or {}).get("id") == assignee
-        ]
+        return [i for i in issues if (i.get("assignee") or {}).get("id") == assignee]
 
+    def issue_stats(self) -> dict[str, Any]:
+        """Counts by state, plus per-project completed/remaining.
+
+        Linear leaves ``state.type`` empty over Composio, so the state is read
+        from ``state.name`` (Done / Backlog / Todo / In Progress). Getting this
+        wrong is why every issue counted as open and backlog was invisible.
+        """
+        mine = self.my_issues()
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         now = datetime.now(timezone.utc)
-        completed = 0
-        overdue = 0
-        open_count = 0
+
+        done = backlog = todo = in_progress = overdue = completed_30d = 0
+        projects: dict[str, dict[str, int]] = {}
+
         for issue in mine:
-            state = str((issue.get("state") or {}).get("type") or "").lower()
-            if state in _DONE_STATES:
-                done_at = _parse(issue.get("completedAt") or issue.get("updatedAt"))
-                if done_at and done_at >= cutoff:
-                    completed += 1
+            name = str((issue.get("state") or {}).get("name") or "").lower()
+            is_done = name in {"done", "completed", "canceled", "cancelled"}
+            project = (issue.get("project") or {}).get("name") or "No project"
+            bucket = projects.setdefault(project, {"done": 0, "remaining": 0})
+
+            if is_done:
+                done += 1
+                bucket["done"] += 1
+                updated = _parse(issue.get("completedAt") or issue.get("updatedAt"))
+                if updated and updated >= cutoff:
+                    completed_30d += 1
                 continue
-            open_count += 1
+
+            bucket["remaining"] += 1
+            if "backlog" in name:
+                backlog += 1
+            elif "progress" in name or "started" in name:
+                in_progress += 1
+            else:
+                todo += 1
             due = _parse(issue.get("dueDate"))
             if due is not None and _end_of_day(due) < now:
                 overdue += 1
+
+        remaining = backlog + todo + in_progress
         return {
-            "assigned_open": open_count,
-            "completed_30d": completed,
+            "assigned": len(mine),
+            "remaining": remaining,
+            "completed_30d": completed_30d,
+            "backlog": backlog,
+            "in_progress": in_progress,
+            "todo": todo,
             "overdue": overdue,
+            "projects": projects,
         }
 
     def comment(self, source_ref: str, body: str) -> None:
