@@ -16,7 +16,9 @@ from fastapi import FastAPI
 
 from backend.integrations.composio_github import ComposioGitHubService
 from backend.integrations.openrouter import DefaultTriageModel
+from backend.integrations.slack_service import ComposioSlackService
 from backend.main import create_app
+from backend.repositories.connections import InMemoryConnectionRepository
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.classifier import (
     DefaultClassificationService,
@@ -39,7 +41,15 @@ def build_app() -> FastAPI:
     from composio import Composio
 
     composio = Composio(api_key=_require("COMPOSIO_API_KEY"))
-    github = ComposioGitHubService(composio, user_id=_require("COMPOSIO_USER_ID"))
+    composio_user = _require("COMPOSIO_USER_ID")
+    github = ComposioGitHubService(composio, user_id=composio_user)
+    slack = ComposioSlackService(composio, user_id=composio_user)
+
+    # Without this, identity is never resolved and every Slack channel message
+    # is silently dropped for want of a user id to match mentions against.
+    connections = InMemoryConnectionRepository(
+        composio=composio, composio_user_id=composio_user
+    )
 
     repo = _build_repository()
     classifier = DefaultClassificationService(
@@ -74,6 +84,8 @@ def build_app() -> FastAPI:
     return create_app(
         github=github,
         repo=repo,
+        slack=slack,
+        connections=connections,
         auth_mode=auth_mode,
         jwt_secret=os.environ.get("SUPABASE_JWT_SECRET"),
         classifier=classifier,

@@ -73,10 +73,32 @@ def test_a_dm_context_chip_says_dm():
     assert direct_message_to_raw_event(DM, identity=ME).context_chip == "DM"
 
 
-def test_your_own_dm_is_not_a_notification():
-    """Slack delivers messages you send yourself in a DM channel too."""
+def test_your_own_reply_in_someone_elses_dm_is_not_a_notification():
+    """The trigger fires on every message in the conversation, including the
+    ones you send. Without this, replying to Priya would file your own reply
+    back into your feed as something needing your attention."""
     own = {**DM, "user": "U_ME"}
     assert direct_message_to_raw_event(own, identity=ME) is None
+
+
+def test_a_note_to_yourself_is_kept():
+    """A self-DM is Slack's save-for-later, and the sender being you is the
+    whole point of it. It is indistinguishable from your own reply by sender
+    alone, so the self-DM channel id is what separates them."""
+    me_with_channel = Identity(slack_user_id="U_ME", slack_dm_channel="D_SELF")
+    note = {**DM, "user": "U_ME", "channel": "D_SELF"}
+
+    event = direct_message_to_raw_event(note, identity=me_with_channel)
+
+    assert event is not None
+    assert event.context_chip == "Note to self"
+    assert event.is_blocking is False  # nobody else is waiting on it
+
+
+def test_your_own_reply_is_still_dropped_when_the_self_channel_is_known():
+    me_with_channel = Identity(slack_user_id="U_ME", slack_dm_channel="D_SELF")
+    reply = {**DM, "user": "U_ME", "channel": "D01ABC"}
+    assert direct_message_to_raw_event(reply, identity=me_with_channel) is None
 
 
 # --- channel messages ------------------------------------------------------

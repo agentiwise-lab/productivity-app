@@ -133,23 +133,44 @@ def _unusable(message: dict[str, Any]) -> bool:
 def direct_message_to_raw_event(
     message: dict[str, Any], *, identity: Identity
 ) -> RawEvent | None:
-    """A DM is always a person addressing this user, so it always counts."""
+    """A DM is a person addressing this user, so it counts by default.
+
+    The exception is the user's own messages. The trigger fires on everything in
+    the conversation, so a reply you send to Priya comes straight back at you as
+    something needing your attention. The one message from yourself that does
+    count is a note in your own self-DM, which is Slack's save-for-later.
+    """
     if _unusable(message):
         return None
-    # Slack delivers the messages the user sends in a DM channel too.
-    if identity.slack_user_id and message.get("user") == identity.slack_user_id:
+
+    own_message = (
+        identity.slack_user_id is not None
+        and message.get("user") == identity.slack_user_id
+    )
+    note_to_self = own_message and (
+        identity.slack_dm_channel is not None
+        and message.get("channel") == identity.slack_dm_channel
+    )
+    if own_message and not note_to_self:
         return None
 
-    reason = "slack_dm"
     if message.get("bot_id"):
         reason = (
             "slack_bot_failure"
             if _is_failure_report(message.get("text", ""))
             else "slack_bot_noise"
         )
+    elif note_to_self:
+        reason = "slack_note_to_self"
+    else:
+        reason = "slack_dm"
 
     return _base_event(
-        message, reason=reason, context_chip="DM", is_blocking=reason == "slack_dm"
+        message,
+        reason=reason,
+        context_chip="Note to self" if note_to_self else "DM",
+        # Nobody else is waiting on a note you wrote yourself.
+        is_blocking=reason == "slack_dm",
     )
 
 

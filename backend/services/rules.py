@@ -74,6 +74,9 @@ _DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
     # judgement. The rules' job on Slack is the filtering that happens in the
     # mapper, before anything reaches here.
     "slack_dm": (Tier.TODAY, TypeTag.REPLY),
+    # You wrote it to yourself, so nobody is blocked. It still gets read, since
+    # a note saying "ship this before the call" is a real deadline.
+    "slack_note_to_self": (Tier.CAN_WAIT, TypeTag.FYI),
     "slack_mention": (Tier.TODAY, TypeTag.REPLY),
     "slack_thread_reply": (Tier.CAN_WAIT, TypeTag.REPLY),
     # Automation reporting that the user's own work broke is the one bot case

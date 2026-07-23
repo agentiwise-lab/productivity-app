@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.models.identity import Identity
 from backend.models.tiers import Tier, TypeTag
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.ingest import WebhookIngestService
@@ -154,6 +155,47 @@ def test_a_malformed_payload_is_dropped_not_raised(ingest):
         envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", {})
     )
     assert result.handled is False
+    assert repo.list_by_user(USER) == []
+
+
+# --- identity reaches the mapper -------------------------------------------
+
+
+SLACK_MENTION = {
+    "channel": "C01ENG",
+    "channel_type": "channel",
+    "user": "U_PRIYA",
+    "text": "<@U_ME> can you look before the release?",
+    "ts": "1784812011.000300",
+    "team_id": "T01",
+}
+
+
+def test_a_channel_mention_becomes_an_item_when_identity_is_known(ingest):
+    """The bug this pins: production wired a connection repository that always
+    returned an empty Identity, so mention matching had no id to match against
+    and every channel message was dropped. The webhooks arrived, verified, and
+    returned 200 while producing nothing, which is the hardest kind of failure
+    to notice."""
+    service, repo, connections = ingest
+    connections.identities[(USER, "slack")] = Identity(slack_user_id="U_ME")
+
+    result = service.handle(
+        envelope("SLACK_CHANNEL_MESSAGE_RECEIVED", SLACK_MENTION)
+    )
+
+    assert result.handled is True
+    assert repo.list_by_user(USER)[0].type_tag is TypeTag.REPLY
+
+
+def test_the_same_message_is_dropped_when_identity_is_missing(ingest):
+    service, repo, _ = ingest
+    result = service.handle(
+        envelope("SLACK_CHANNEL_MESSAGE_RECEIVED", SLACK_MENTION)
+    )
+
+    assert result.handled is False
+    assert result.reason == "not_for_this_user"
     assert repo.list_by_user(USER) == []
 
 
