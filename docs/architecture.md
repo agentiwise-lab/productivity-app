@@ -78,26 +78,51 @@ The one hard requirement is **a stable public HTTPS URL that is always reachable
 | **AWS EC2** (t4g.small) | Also fine, and you have done it before. More control, slightly more setup. Good target once it is real. |
 | **Vercel** | Works for webhooks, but serverless timeouts (10s on hobby) will bite when we batch LLM summarization. Not recommended for this shape. |
 
-Recommendation: start on a small container host, move to EC2 when you want the control. Either way it is one service and one URL.
+### Local first, deploy later (validated)
+
+For the demo we do **not** deploy at all. The backend runs on your Mac and **ngrok** gives it a public HTTPS URL so Composio can reach it. This was tested end to end on 2026-07-23:
+
+- Local listener on `:8787`, ngrok tunnel up, public URL reachable from the internet and the request logged locally.
+- Webhook subscription registered with Composio against that ngrok URL.
+- Trigger created; Composio's own poll loop confirmed running (see section 3).
+
+So the order is: **everything on localhost with ngrok → demo on your phone via Expo → then EC2** when it needs to be always-on. Nothing about the local setup has to change when we deploy; only the webhook URL does.
+
+Recommendation for eventual hosting: a small always-on container, or EC2 since you are comfortable there. Either way it is one service and one URL.
 
 ---
 
-## 6. Categories: one model, not two
+## 6. Categories: urgency tiers, not semantic types
 
-The previous plan had two overlapping taxonomies (action types *and* urgency groups), which is exactly why it was confusing. Collapsed into one.
+Earlier drafts had two overlapping taxonomies and a "Blocked on others" bucket. **"Blocked on others" is dropped: we cannot reliably know it.** Inferring that someone else is the holdup means guessing at intent, and a category built on a guess will be wrong often enough to destroy trust. What we *can* honestly say is "your PR has been awaiting review for 4 hours", and that is a detail on an item, not a category.
 
-### The six categories (what is being asked of you)
+The organising principle is **urgency**, because that is how the question is actually asked: *what do I have to deal with right now.*
 
-| # | Category | What it means | Where it comes from |
-|---|---|---|---|
-| 1 | **Needs your decision** | A call only you can make | GitHub: CI failed on your PR, changes requested, repo invitation · Calendar: invite awaiting RSVP · Drive: access request · Linear: issue assigned, untriaged |
-| 2 | **Needs your review** | Someone's work waits on your eyes | GitHub: review requested, ready for review · Drive: doc shared for review |
-| 3 | **Needs your reply** | Someone waits on your words | Slack: DM, mention, thread · Drive: doc comment or @mention · Gmail: reply-needed · GitHub: comment on your PR |
-| 4 | **Blocked on others** | Yours, ball is not in your court | Your PR awaiting review, you asked with no answer |
-| 5 | **Worth knowing** | Context, digest only | Merged, closed, CI passed, release, event cancelled |
-| 6 | **Others** | Everything else, low signal | Promotions, channel chatter, automated noise |
+### Home has two zones
 
-**Ordering is a score, not another taxonomy.** Inside Home, items are ranked by an urgency score (who is blocked, how long it has waited, deadline proximity, who asked). There is no second set of buckets. That removes the "needs you now vs later today" confusion entirely.
+**Zone 1: Your day.** Time-anchored, always on top. Next meeting, meetings remaining, and what is due today. From Calendar plus Linear. This is the "what is happening and what is pending for the day" view.
+
+**Zone 2: Needs you.** Three tiers, nothing more.
+
+| Tier | Meaning | Examples |
+|---|---|---|
+| **Urgent** | Someone is actively waiting on you right now | GitHub: review requested, assigned to you, @mentioned, changes requested on your PR, CI failed on your PR · Slack: a message the model judges needs an answer now · Docs: someone @mentioned you in a comment |
+| **Today** | Real, should be handled today, nobody is blocked this minute | Slack message that asks something but states a later deadline · PR awaiting your review that is not blocking a release · issue due today |
+| **Can wait** | Needs you eventually, no time pressure | Assigned with no deadline, non-blocking mention |
+
+**Noise** is the fourth bucket and it **never appears on Home**. It lives in its own tab: CI passed, merged, closed, releases, channel chatter, promotions, automated mail.
+
+### Type is a tag, not a section
+
+Each row carries a small tag (**Reply · Review · Assigned · Comment**) and a source icon (Slack, GitHub, Docs). You can see what kind of action it is without type becoming a second layer of grouping. One hierarchy only: urgency.
+
+### Lifecycle: unread in, handled out
+
+- Unread and unhandled: visible.
+- Replied, reacted to, or read at the source: **disappears immediately.**
+- Read state syncs both directions (`SLACK_SET_READ_CURSOR_IN_A_CONVERSATION`, GitHub mark-read), so the app and the source never disagree.
+
+This is the single biggest simplification. The app only ever shows unhandled work, so the list shrinks as you work and reaches zero.
 
 ### On "does GitHub really tell us this?"
 
@@ -107,26 +132,23 @@ Yes, verified live. GitHub's notification API returns a `reason` field per item,
 
 ---
 
-## 7. Notification levels, explained plainly
+## 7. Notifications: derived from the tier, not a second system
 
-Three levels, per category. Not custom rules.
+There is no separate notification taxonomy. **The tier decides the notification.**
 
-- **Push**: your phone buzzes immediately.
-- **Brief**: the item is held and delivered as **one** summary notification twice a day (say 08:30 and 16:30). Twenty low-priority events become one notification instead of twenty buzzes. This is the whole anti-noise mechanism.
-- **Off**: never notified. Still visible in the app when you look.
+- **Urgent** sends a push. Your phone buzzes.
+- **Today** and **Can wait** do not push. They are simply there when you open the app.
+- **Noise** never notifies at all.
 
-**No custom rule builder.** The settings screen is simply the six categories with a three-way choice each. Sensible defaults:
+That is the whole model. One setting exists, with three options:
 
-| Category | Default |
+| Setting | Behaviour |
 |---|---|
-| Needs your decision | Push |
-| Needs your review | Push |
-| Needs your reply | Push |
-| Blocked on others | Brief |
-| Worth knowing | Brief |
-| Others | Off |
+| **Urgent only** (default) | Push only when someone is actively waiting |
+| **Urgent and Today** | For people who want more |
+| **Nothing** | Silent, check when you like |
 
-The data model still stores rules generically, so per-channel or per-repo control can be added later without a migration. The user just never sees a rule builder.
+No per-category matrix, no rule builder. The data model stores rules generically so per-repo or per-channel control can be added later without a migration, but the user never sees that.
 
 ---
 
@@ -173,11 +195,24 @@ This is your "fourth tab for things that do not matter much", and it solves the 
 
 ## 10. Home screen composition
 
-Home answers two questions in order: **how is my day shaped**, then **what needs me**.
+Home answers two questions in that order: **how is my day shaped**, then **what needs me now**.
 
-1. **Day plan strip.** From Calendar: meetings done, next meeting, free time left today. Plus tasks due today from Linear. This is the "what is remaining on me today" view.
-2. **Attention summary.** Counts per category, precise wording.
-3. **The feed.** Ranked by urgency score, each row carrying its source icon, category tag, one-line LLM summary, and who is waiting.
-4. **Cleared state** when the list is empty.
+1. **Your day.** Next meeting, meetings remaining, free time left, and what is due today. Calendar plus Linear.
+2. **Urgent.** Someone is waiting. Each row: source icon, type tag, one-line summary, who is waiting and for how long.
+3. **Today.** Handle before end of day.
+4. **Can wait.** Collapsed by default.
+5. **Cleared state** when nothing is left.
 
-Categories 5 and 6 never appear on Home. They live in Later.
+Noise never appears here. It has its own tab.
+
+### How urgency is actually decided
+
+**GitHub is mostly deterministic.** The notification `reason` field already tells us the type (`review_requested`, `assign`, `mention`, `ci_activity`), so tier assignment is a rule. The model is used only to summarise and to order within a tier.
+
+**Slack is where the model does the real work,** because a Slack message carries no type at all, only text. The judgement is exactly the one you described:
+
+- *"can you unblock the staging deploy?"* → **Urgent.** A direct ask, nothing scheduled, someone is stopped.
+- *"can you look at this when you get a chance, need it by tomorrow EOD"* → **Today**, not Urgent. It asks something, but it states its own deadline.
+- *"shipped the fix, thanks all"* → **Noise.** No ask.
+
+That distinction cannot be hard-coded, which is precisely why the model is in Phase 1 rather than deferred. Same judgement applies to Google Doc comments: an @mention that asks a question is Urgent, one that says "looks good" is Noise.
