@@ -101,6 +101,7 @@ class DefaultFeedService:
             ),
             deadline=event.deadline or event.milestone_due,
             occurred_at=event.occurred_at or now,
+            body=event.body,
             is_blocking=event.is_blocking,
             created_at=now,
             raw=event.raw,

@@ -85,6 +85,7 @@ def build_app() -> FastAPI:
         calendar=calendar,
         classifier=classifier,
         identity_for=connections.identity_for,
+        classify_async=True,
     )
 
     webhook_secret = os.environ.get("COMPOSIO_WEBHOOK_SECRET")

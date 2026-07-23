@@ -108,14 +108,22 @@ export default function App() {
     }
   }, []);
 
+  /**
+   * Paint first, then fetch. Pulling five providers takes seconds, and making
+   * the user watch a skeleton for all of them before seeing anything is the
+   * difference between an app that feels instant and one that feels broken.
+   * The cached feed and the connection list render immediately; the pull
+   * happens behind them and the rows update when it lands.
+   */
   const refresh = useCallback(async () => {
+    await Promise.all([load(), loadSources(), loadDay()]);
     try {
       await api.refresh();
     } catch {
-      // A failed pull is not a failed screen. Fall through to load(), which
-      // serves the cache when the network is the thing that broke.
+      // A failed pull is not a failed screen: the rows above still stand.
+      return;
     }
-    await Promise.all([load(), loadSources(), loadDay()]);
+    await Promise.all([load(), loadSources()]);
   }, [load, loadSources, loadDay]);
 
   useEffect(() => {
@@ -255,9 +263,11 @@ const styles = StyleSheet.create({
     // Tall enough for icon plus label plus the home indicator. At 62 the
     // labels were clipped by the bar's own bottom edge.
     borderTopWidth: StyleSheet.hairlineWidth,
-    height: s(52),
-    paddingTop: s(5),
-    paddingBottom: s(16),
+    // Icon, label and the home indicator all need room. Too short and the
+    // labels are clipped away entirely, leaving four unexplained glyphs.
+    height: s(58),
+    paddingTop: s(6),
+    paddingBottom: s(12),
   },
-  tabLabel: { ...type.tabLabel, marginTop: s(2) },
+  tabLabel: { ...type.tabLabel, marginTop: s(3), paddingBottom: s(2) },
 });

@@ -43,21 +43,11 @@ export function SourcesScreen({
   onOpen,
   onConnect,
 }: Props) {
-  const total = sources.reduce((sum, info) => sum + info.count, 0);
-  const connected = sources.filter((info) => info.status === 'connected').length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <Header title="Sources" subtitle="Tap one to go deeper" rightGlyph="+" />
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.summary}>
-          <Text style={styles.summaryValue}>{total}</Text>
-          <Text style={styles.summaryLabel}>
-            need you, across {connected} connected{' '}
-            {connected === 1 ? 'source' : 'sources'}
-          </Text>
-        </View>
-
         {sources.map((info) => {
           const broken = info.status === 'expired' || info.status === 'error';
           const off = info.status === 'disconnected';
@@ -67,6 +57,13 @@ export function SourcesScreen({
               onPress={() => (off || broken ? onConnect(info) : onOpen(info))}
               style={styles.row}
             >
+              <View
+                style={[
+                  styles.dot,
+                  info.status === 'connected' && styles.dotOk,
+                  broken && styles.dotBad,
+                ]}
+              />
               <BrandMark source={info.source} size={s(24)} radius={s(7)} />
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, off && styles.rowTitleOff]}>
@@ -101,26 +98,24 @@ export function SourcesScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   body: { paddingBottom: s(30) },
-  summary: {
-    marginHorizontal: s(13),
-    marginTop: s(11),
-    marginBottom: s(6),
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
+  /** Green when live, ochre when broken, hollow when never connected. */
+  dot: {
+    width: s(6),
+    height: s(6),
+    borderRadius: s(3),
+    borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: s(14),
-    paddingHorizontal: s(12),
-    paddingVertical: s(11),
+    backgroundColor: 'transparent',
   },
-  summaryValue: { fontFamily: 'Menlo', fontSize: s(22), fontWeight: '600', color: colors.fg },
-  summaryLabel: { ...type.rowSub, marginTop: s(2) },
+  dotOk: { backgroundColor: '#3F8F5F', borderColor: '#3F8F5F' },
+  dotBad: { backgroundColor: colors.urgent, borderColor: colors.urgent },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: s(9),
     paddingHorizontal: s(16),
-    paddingTop: s(9),
-    paddingBottom: s(10),
+    paddingTop: s(11),
+    paddingBottom: s(12),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
   },

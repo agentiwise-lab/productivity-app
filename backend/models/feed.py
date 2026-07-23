@@ -81,7 +81,14 @@ class FeedItem(BaseModel):
     # Hash of the classified content. The LLM cache is keyed on this, not on
     # source_ref, because a thread's content changes under a stable reference.
     content_hash: str | None = None
+    #: The full readable content: an email body, a Slack message, an issue
+    #: description. The card shows a summary; the sheet shows this.
+    body: str | None = None
     raw: dict = Field(default_factory=dict)
+
+    def body_text(self) -> str:
+        """What the model reads and the sheet renders."""
+        return self.body or str(self.raw.get("text") or "") or self.title
 
 
 class FeedRow(FeedItem):

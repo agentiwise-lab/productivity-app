@@ -14,6 +14,7 @@ morning.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -48,7 +49,12 @@ class SourceSync:
         classifier: Any | None = None,
         identity_for: Callable[[str, str], Identity] | None = None,
         clock: Callable[[], datetime] | None = None,
+        timeout: float = 25.0,
+        classify_async: bool = False,
     ) -> None:
+        self._timeout = timeout
+        self._classify_async = classify_async
+        self._background = ThreadPoolExecutor(max_workers=1)
         self._feed = feed
         self._sources: dict[Source, Callable[[], list[RawEvent]]] = {}
         if github is not None:
@@ -67,15 +73,24 @@ class SourceSync:
         prefs = prefs or UserPreferences(user_id=user_id)
         report = SyncReport()
 
-        for source, fetch in self._sources.items():
-            try:
-                events = fetch()
-            except Exception as error:
-                # Degrade this source only. The others still refresh.
-                log.warning("refresh failed for %s", source.value, exc_info=True)
-                report.failed[source.value] = str(error)[:200]
-                continue
+        # Fetched in parallel. These are independent network calls to different
+        # providers, and run in series they add up: Gmail alone took most of a
+        # fifteen-second refresh while GitHub and Calendar sat idle waiting for
+        # it. Wall time is now the slowest source, not the sum of all of them.
+        fetched: dict[Source, Any] = {}
+        with ThreadPoolExecutor(max_workers=max(1, len(self._sources))) as pool:
+            futures = {
+                pool.submit(fetch): source for source, fetch in self._sources.items()
+            }
+            for future, source in futures.items():
+                try:
+                    fetched[source] = future.result(timeout=self._timeout)
+                except Exception as error:
+                    # Degrade this source only. The others still refresh.
+                    log.warning("refresh failed for %s", source.value, exc_info=True)
+                    report.failed[source.value] = str(error)[:200]
 
+        for source, events in fetched.items():
             identity = self._identity_for(user_id, source.value)
             count = 0
             for event in events:
@@ -94,10 +109,19 @@ class SourceSync:
             report.ingested += count
 
         if self._classifier is not None:
-            try:
-                report.classified = self._classifier.classify_pending(user_id).classified
-            except Exception:
-                # Rules-only is a working product; a dead model is not an outage.
-                log.warning("classification pass failed", exc_info=True)
+            if self._classify_async:
+                # The feed is already correct at rule tiers, so nobody waits for
+                # the model. Summaries appear on the next read (plan 4.4).
+                self._background.submit(self._classify_quietly, user_id)
+            else:
+                report.classified = self._classify_quietly(user_id)
 
         return report
+
+    def _classify_quietly(self, user_id: str) -> int:
+        try:
+            return self._classifier.classify_pending(user_id).classified
+        except Exception:
+            # Rules-only is a working product; a dead model is not an outage.
+            log.warning("classification pass failed", exc_info=True)
+            return 0

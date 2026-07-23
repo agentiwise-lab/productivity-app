@@ -122,9 +122,13 @@ export const text = {
   monoLabel: { fontFamily: mono, fontSize: s(8.5), letterSpacing: 0.6 },
 } as const;
 
+/**
+ * "Today" alongside "Urgent" reads as a time window rather than a priority, and
+ * urgent things are also today. "By EOD" says what is actually being claimed.
+ */
 export const tierLabel = {
   urgent: 'Urgent',
-  today: 'Today',
+  today: 'By EOD',
   can_wait: 'Can wait',
   noise: 'Noise',
 } as const;

@@ -19,21 +19,19 @@ import { GroupHeader, ListRow } from '../components/ListRow';
 import { EmptyBucket } from '../components/states';
 import type { FeedRow, Tier } from '../api/types';
 
-type Bucket = 'needs_you' | 'snoozed' | 'noise';
+/**
+ * Later holds what was set aside, not what is live. Anything still needing you
+ * is on Home, and duplicating it here made the two screens disagree about what
+ * the word "later" meant.
+ */
+type Bucket = 'noise' | 'snoozed';
 
 const TABS: { id: Bucket; label: string }[] = [
-  { id: 'needs_you', label: 'Needs you' },
-  { id: 'snoozed', label: 'Snoozed' },
   { id: 'noise', label: 'Held back' },
+  { id: 'snoozed', label: 'Snoozed' },
 ];
 
 const EMPTY: Record<Bucket, { title: string; explains: string; hint: string }> = {
-  needs_you: {
-    title: 'Nothing waiting',
-    explains:
-      'Anything you have not replied to, approved or answered collects here from every source, and stays for 30 days.',
-    hint: 'Pull down on Home to fetch again.',
-  },
   snoozed: {
     title: 'Nothing snoozed',
     explains:
@@ -57,7 +55,7 @@ export function LaterScreen({
   rows: FeedRow[];
   onOpen: (row: FeedRow) => void;
 }) {
-  const [bucket, setBucket] = useState<Bucket>('needs_you');
+  const [bucket, setBucket] = useState<Bucket>('noise');
 
   const shown = useMemo(() => {
     const now = Date.now();
@@ -66,7 +64,7 @@ export function LaterScreen({
         row.snoozed_until !== null && new Date(row.snoozed_until).getTime() > now;
       if (bucket === 'snoozed') return snoozed;
       if (snoozed) return false;
-      return bucket === 'noise' ? row.tier === 'noise' : row.tier !== 'noise';
+      return row.tier === 'noise';
     });
   }, [rows, bucket]);
 
@@ -85,7 +83,6 @@ export function LaterScreen({
       (r) => r.snoozed_until !== null && new Date(r.snoozed_until).getTime() > now,
     ).length;
     return {
-      needs_you: rows.filter((r) => r.tier !== 'noise').length - snoozed,
       snoozed,
       noise: rows.filter((r) => r.tier === 'noise').length,
     };

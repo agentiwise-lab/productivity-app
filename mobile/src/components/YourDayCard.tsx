@@ -62,17 +62,23 @@ export function YourDayCard({
     <View style={styles.card}>
       <View style={styles.titleRow}>
         <Text style={styles.title}>Your day</Text>
-        <Text style={styles.meta}>
+        <Text style={styles.meta} numberOfLines={1}>
           {String(workStartHour).padStart(2, '0')}:00 to {workEndHour}:00
         </Text>
       </View>
 
       <View style={styles.ruler}>
-        <View style={styles.track} />
+        <View style={styles.trackClip}>
+          <View style={styles.track} />
         {meetings.map((meeting, index) => {
-          const left = into(meeting.start) / spanMinutes;
-          const width =
-            (meeting.end.getTime() - meeting.start.getTime()) / 60000 / spanMinutes;
+          // Clamped to the working window. A meeting at 23:00 was drawn far
+          // past the right edge and spilled out of the card, which is what
+          // made the strip look broken rather than full.
+          const rawLeft = into(meeting.start) / spanMinutes;
+          const rawEnd = into(meeting.end) / spanMinutes;
+          const left = Math.max(0, Math.min(rawLeft, 1));
+          const width = Math.max(0.012, Math.min(rawEnd, 1) - left);
+          if (rawEnd <= 0 || rawLeft >= 1) return null;
           const past = meeting.end <= now;
           return (
             <View
@@ -80,22 +86,27 @@ export function YourDayCard({
               style={[
                 styles.block,
                 past && styles.blockPast,
-                { left: pct(left), width: pct(Math.max(width, 0.015)) },
+                { left: pct(left), width: pct(width) },
               ]}
             />
           );
         })}
-        <View style={[styles.nowLine, { left: pct(nowFrac) }]} />
+          <View style={[styles.nowLine, { left: pct(nowFrac) }]} />
+        </View>
         <Text style={[styles.tick, { left: 0 }]}>{workStartHour}</Text>
-        <Text style={[styles.tick, { left: pct(nowFrac - 0.03) }]}>now</Text>
+        {nowFrac > 0.08 && nowFrac < 0.9 ? (
+          <Text style={[styles.tick, { left: pct(nowFrac - 0.04) }]}>now</Text>
+        ) : null}
         <Text style={[styles.tick, { right: 0 }]}>{workEndHour}</Text>
       </View>
 
       <View style={styles.foot}>
-        <Text style={styles.meta} numberOfLines={1}>
+        <Text style={[styles.meta, styles.footNext]} numberOfLines={1}>
           {next ? `next ${clock(next.start)} ${next.title}` : 'nothing left today'}
         </Text>
-        <Text style={styles.meta}>{freeLabel}</Text>
+        <Text style={[styles.meta, styles.footFree]} numberOfLines={1}>
+          {freeLabel}
+        </Text>
       </View>
     </View>
   );
@@ -111,6 +122,7 @@ const styles = StyleSheet.create({
     borderRadius: s(14),
     paddingHorizontal: s(12),
     paddingVertical: s(11),
+    overflow: 'hidden',
   },
   titleRow: {
     flexDirection: 'row',
@@ -120,7 +132,15 @@ const styles = StyleSheet.create({
   },
   title: { ...type.cardTitle, color: colors.fg },
   meta: { ...type.cardMeta },
-  ruler: { height: s(30), marginTop: s(2), marginBottom: s(6) },
+  ruler: { height: s(34), marginTop: s(2), marginBottom: s(8) },
+  trackClip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: s(24),
+    overflow: 'hidden',
+  },
   track: {
     position: 'absolute',
     top: s(12),
@@ -153,5 +173,7 @@ const styles = StyleSheet.create({
     fontSize: s(8),
     color: colors.dim,
   },
-  foot: { flexDirection: 'row', justifyContent: 'space-between', gap: s(8) },
+  foot: { flexDirection: 'row', alignItems: 'baseline', gap: s(8) },
+  footNext: { flex: 1 },
+  footFree: { flexShrink: 0 },
 });

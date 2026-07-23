@@ -56,11 +56,22 @@ RULES
   user's own work.
 - Recency alone never makes something urgent.
 
+WRITING THE TWO LINES
+- summary: what this actually asks of the user, in their words. Name the thing
+  being asked for. "Priya needs the staging deploy unblocked" is useful;
+  "a Slack message from Priya" is not, because the card already says that.
+- reason: the specific evidence for the tier, not a restatement of it. Good:
+  "asks a direct question, no deadline given". Useless: "direct reply",
+  "no subject", "it is an email". If the only evidence is that the item exists,
+  the tier is wrong and should be lower.
+- Never mention the source, the sender's name alone, or the absence of a
+  subject line as a reason. None of those make anything urgent.
+
 OUTPUT
 A JSON array with one object per input id, no prose:
 {"id": "...", "tier": "urgent|today|can_wait|noise",
- "summary": "<=90 chars: what it is and why it matters",
- "reason":  "<=60 chars: why this tier"}
+ "summary": "<=90 chars: what it asks of this user",
+ "reason":  "<=60 chars: the evidence for that tier"}
 """
 
 
@@ -241,7 +252,7 @@ class DefaultClassificationService:
             "type": item.type_tag.value,
             "sender": item.sender_name or item.sender_handle,
             "title": truncate(item.title),
-            "text": truncate(str(item.raw.get("text") or "")),
+            "text": truncate(item.body_text()),
             "labels": item.raw.get("labels") or [],
             "deadline": item.deadline.isoformat() if item.deadline else None,
             "is_direct": item.is_blocking,

@@ -11,12 +11,16 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { colors, s, type } from '../theme';
 
+/**
+ * A title and, where it earns its place, one line of context beneath it.
+ *
+ * The mockup carried a hamburger and a target glyph. Neither had anywhere to
+ * go, and a control that does nothing is worse than no control: it invites a
+ * tap and then ignores it. They are gone until they mean something.
+ */
 export function Header({
   title,
   subtitle,
-  onLeft,
-  onRight,
-  rightGlyph = '◎',
 }: {
   title: string;
   subtitle?: string;
@@ -26,16 +30,8 @@ export function Header({
 }) {
   return (
     <View style={styles.header}>
-      <Pressable onPress={onLeft} hitSlop={12} style={styles.headerLeft}>
-        <Text style={styles.glyph}>{'☰'}</Text>
-      </Pressable>
-      <View style={styles.headerCentre}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.headerDate}>{subtitle}</Text> : null}
-      </View>
-      <Pressable onPress={onRight} hitSlop={12} style={styles.headerRight}>
-        <Text style={styles.glyph}>{rightGlyph}</Text>
-      </Pressable>
+      <Text style={styles.headerTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.headerDate}>{subtitle}</Text> : null}
     </View>
   );
 }
@@ -124,11 +120,9 @@ export function TabIcon({
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: s(13),
-    paddingTop: s(4),
-    paddingBottom: s(6),
+    paddingHorizontal: s(14),
+    paddingTop: s(6),
+    paddingBottom: s(8),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
     backgroundColor: colors.bg,
@@ -136,8 +130,8 @@ const styles = StyleSheet.create({
   headerLeft: { width: s(20) },
   headerRight: { width: s(20), alignItems: 'flex-end' },
   headerCentre: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline' },
-  headerTitle: { ...type.headerTitle, color: colors.fg },
-  headerDate: { ...type.headerDate, marginLeft: s(5) },
+  headerTitle: { fontSize: s(17), fontWeight: '700', letterSpacing: -0.3, color: colors.fg },
+  headerDate: { ...type.headerDate, marginTop: s(2) },
   glyph: { fontSize: s(13), color: colors.dim },
 
   sticky: {

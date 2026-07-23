@@ -44,6 +44,7 @@ _SOURCE_COLUMNS = (
     "occurred_at",
     "is_blocking",
     "content_hash",
+    "body",
     "raw",
 )
 

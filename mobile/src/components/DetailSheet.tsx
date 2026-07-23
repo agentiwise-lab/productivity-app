@@ -1,10 +1,13 @@
 /**
- * The detail sheet: the quoted original, why this tier, and the reply field.
+ * The detail sheet.
  *
- * "Why this is urgent" is the model's own stated reason, shown verbatim. If the
- * app is going to reorder someone's day it has to be able to say why, in one
- * line, without the user having to trust it blindly. When the reason is missing
- * the block is omitted rather than filled with something plausible.
+ * Three regions, and the split is the point. The head (who, where, when, tier)
+ * and the footer (what you can do) are fixed, and only the message scrolls
+ * between them. Letting the whole sheet scroll pushes the actions off-screen
+ * exactly when a long message makes you want them.
+ *
+ * The message itself is shown in full. A row that says only "dswh/glued_landing"
+ * and offers a reply box is asking you to answer something you have not read.
  */
 
 import React, { useState } from 'react';
@@ -19,8 +22,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { colors, space, radius, text, tierLabel } from '../theme';
-import { BrandMark } from '../components/BrandMark';
+import { colors, s, text, type, tierLabel } from '../theme';
+import { BrandMark } from './BrandMark';
 import { ago, deadlineLabel } from '../lib/time';
 import { actionsFor, overflowFor } from '../lib/actions';
 import type { FeedRow } from '../api/types';
@@ -40,6 +43,8 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
   const [primary, secondary] = actionsFor(row);
   const overflow = overflowFor(row);
   const canReply = ['reply', 'comment'].includes(primary.id);
+  const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
+  const body = row.body?.trim() || row.title;
 
   const send = (action: string) => {
     onAction(row, action, draft.trim() || undefined);
@@ -48,50 +53,61 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      {/* The backdrop fills the screen behind the sheet rather than sitting
+          above it in the flow. As a flex sibling it stole the height the sheet
+          needed, and the message area collapsed to a sliver. */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+        <View style={styles.backdrop} />
+      </Pressable>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetWrap}
+        style={styles.wrap}
+        pointerEvents="box-none"
       >
         <View style={styles.sheet}>
           <View style={styles.grabber} />
 
-          <ScrollView contentContainerStyle={styles.body}>
-            <View style={styles.head}>
-              <BrandMark source={row.source} size={28} />
-              <View style={styles.headText}>
-                <Text style={styles.sender}>
-                  {row.sender_name ?? row.sender_handle ?? 'Unknown'}
-                </Text>
-                <Text style={styles.meta}>
-                  {row.context_chip ? `${row.context_chip} · ` : ''}
-                  {deadlineLabel(row.deadline) ?? ago(row.occurred_at)}
-                </Text>
-              </View>
-              <View
-                style={[styles.tierPill, urgent && styles.tierPillUrgent]}
-              >
-                <Text style={[styles.tierText, urgent && styles.tierTextUrgent]}>
-                  {tierLabel[row.tier]}
-                </Text>
-              </View>
+          {/* Fixed head. */}
+          <View style={styles.head}>
+            <BrandMark source={row.source} size={s(24)} radius={s(7)} />
+            <View style={styles.headText}>
+              <Text style={styles.sender} numberOfLines={1}>
+                {row.sender_name || row.sender_handle || row.context_chip || 'Unknown sender'}
+              </Text>
+              <Text style={styles.meta} numberOfLines={1}>
+                {row.context_chip ? `${row.context_chip} · ` : ''}
+                {when}
+              </Text>
             </View>
-
-            <View style={styles.quote}>
-              <Text style={styles.quoteText}>{row.title}</Text>
+            <View style={[styles.pill, urgent && styles.pillUrgent]}>
+              <Text style={[styles.pillText, urgent && styles.pillTextUrgent]}>
+                {tierLabel[row.tier]}
+              </Text>
             </View>
+          </View>
 
-            {row.reason ? (
-              <View style={[styles.why, urgent && styles.whyUrgent]}>
-                <Text style={[styles.whyLabel, urgent && styles.whyLabelUrgent]}>
-                  Why this is {tierLabel[row.tier].toLowerCase()}
-                </Text>
-                <Text style={[styles.whyText, urgent && styles.whyTextUrgent]}>
-                  {row.reason}
-                </Text>
-              </View>
-            ) : null}
+          <Text style={styles.subject} numberOfLines={2}>
+            {row.title}
+          </Text>
 
+          {row.reason ? (
+            <View style={[styles.why, urgent && styles.whyUrgent]}>
+              <Text style={[styles.whyLabel, urgent && styles.whyLabelUrgent]}>
+                Why this is {tierLabel[row.tier].toLowerCase()}
+              </Text>
+              <Text style={[styles.whyText, urgent && styles.whyTextUrgent]}>
+                {row.reason}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* The only scrolling region. */}
+          <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.bodyPad}>
+            <Text style={styles.bodyText}>{body}</Text>
+          </ScrollView>
+
+          {/* Fixed footer. */}
+          <View style={styles.footer}>
             {canReply ? (
               <TextInput
                 value={draft}
@@ -128,13 +144,13 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                   key={action.id}
                   disabled={busy}
                   onPress={() => send(action.id)}
-                  style={styles.overflowBtn}
+                  style={styles.chip}
                 >
-                  <Text style={styles.overflowText}>{action.label}</Text>
+                  <Text style={styles.chipText}>{action.label}</Text>
                 </Pressable>
               ))}
             </View>
-          </ScrollView>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -142,94 +158,125 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(32,36,43,0.35)' },
-  sheetWrap: { justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(32,36,43,0.32)' },
+  wrap: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.bg,
-    borderTopLeftRadius: radius.lg + 6,
-    borderTopRightRadius: radius.lg + 6,
-    maxHeight: '86%',
+    borderTopLeftRadius: s(18),
+    borderTopRightRadius: s(18),
+    // Tall by default: the sheet is where you read, so it should not open as a
+    // letterbox that needs dragging before it is useful.
+    height: '82%',
+    overflow: 'hidden',
   },
   grabber: {
     alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: s(26),
+    height: s(3),
+    borderRadius: s(2),
     backgroundColor: colors.line,
-    marginTop: space.sm,
+    marginTop: s(6),
+    marginBottom: s(2),
   },
-  body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  headText: { flex: 1, gap: 2 },
-  sender: { ...text.h2, color: colors.fg },
-  meta: { ...text.small, color: colors.dim },
-  tierPill: {
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: s(8),
+    paddingHorizontal: s(14),
+    paddingTop: s(8),
+  },
+  headText: { flex: 1 },
+  sender: { ...type.groupLabel, color: colors.fg },
+  meta: { ...type.rowSub, marginTop: s(1) },
+  pill: {
     backgroundColor: colors.accentSoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 4,
+    borderRadius: 999,
+    paddingHorizontal: s(8),
+    paddingVertical: s(3),
   },
-  tierPillUrgent: { backgroundColor: colors.urgentSoft },
-  tierText: { ...text.small, fontWeight: '700', color: colors.accent },
-  tierTextUrgent: { color: colors.urgent },
-  quote: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.line,
-    padding: space.lg,
+  pillUrgent: { backgroundColor: colors.urgentSoft },
+  pillText: { ...type.tag, color: colors.accent },
+  pillTextUrgent: { color: colors.urgent },
+  subject: {
+    ...type.cardHeading,
+    color: colors.fg,
+    paddingHorizontal: s(14),
+    paddingTop: s(10),
   },
-  quoteText: { ...text.body, color: colors.fg },
   why: {
+    marginHorizontal: s(14),
+    marginTop: s(9),
     backgroundColor: colors.accentSoft,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: 2,
+    borderRadius: s(9),
+    paddingHorizontal: s(10),
+    paddingVertical: s(7),
   },
   whyUrgent: { backgroundColor: colors.urgentSoft },
-  whyLabel: { ...text.monoLabel, color: colors.accent },
+  whyLabel: { ...type.tag, color: colors.accent },
   whyLabelUrgent: { color: colors.urgent },
-  whyText: { ...text.body, color: colors.accent },
+  whyText: { ...text.small, color: colors.accent, marginTop: s(2) },
   whyTextUrgent: { color: colors.urgent },
+  bodyScroll: {
+    flex: 1,
+    marginTop: s(10),
+    marginHorizontal: s(14),
+    backgroundColor: colors.surface,
+    borderRadius: s(11),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  bodyPad: { padding: s(12) },
+  bodyText: { ...text.body, color: colors.fg },
+  footer: {
+    paddingHorizontal: s(14),
+    paddingTop: s(10),
+    paddingBottom: s(20),
+    gap: s(8),
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    backgroundColor: colors.bg,
+  },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: s(9),
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    padding: space.md,
-    minHeight: 76,
+    paddingHorizontal: s(10),
+    paddingVertical: s(8),
+    minHeight: s(38),
+    maxHeight: s(70),
     ...text.body,
     color: colors.fg,
   },
-  actions: { flexDirection: 'row', gap: space.sm },
+  actions: { flexDirection: 'row', gap: s(6) },
   primary: {
     flex: 1,
     backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    paddingVertical: space.md,
+    borderRadius: s(9),
+    paddingVertical: s(9),
     alignItems: 'center',
   },
   primaryUrgent: { backgroundColor: colors.urgent },
   busy: { opacity: 0.6 },
-  primaryText: { ...text.body, fontWeight: '600', color: '#FFFFFF' },
+  primaryText: { ...type.button, fontWeight: '600', color: colors.onAccent },
   secondary: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    borderRadius: radius.md,
-    paddingVertical: space.md,
+    borderRadius: s(9),
+    paddingVertical: s(9),
     alignItems: 'center',
   },
-  secondaryText: { ...text.body, fontWeight: '600', color: colors.accent },
-  overflow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  overflowBtn: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
+  secondaryText: { ...type.button, fontWeight: '600', color: colors.accent },
+  overflow: { flexDirection: 'row', flexWrap: 'wrap', gap: s(6) },
+  chip: {
+    paddingHorizontal: s(10),
+    paddingVertical: s(5),
+    borderRadius: 999,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
   },
-  overflowText: { ...text.small, fontWeight: '600', color: colors.dim },
+  chipText: { ...type.chipLabel, color: colors.dim },
 });

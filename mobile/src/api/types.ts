@@ -56,6 +56,8 @@ export interface FeedRow {
 
   is_blocking: boolean;
   status: FeedStatus;
+  /** The full readable content: an email body, a Slack message, a description. */
+  body: string | null;
 }
 
 export interface RefreshResult {

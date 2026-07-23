@@ -53,6 +53,51 @@ def _sender(from_header: str) -> tuple[str, str]:
     return from_header.strip(), from_header.strip()
 
 
+def _decode(data: str) -> str:
+    import base64
+
+    try:
+        return base64.urlsafe_b64decode(data + "===").decode("utf-8", "replace")
+    except Exception:
+        return ""
+
+
+def _walk_parts(part: dict[str, Any], out: list[str]) -> None:
+    """Depth-first for the text/plain parts.
+
+    Preferred over text/html: the sheet renders text, and stripping tags out of
+    a marketing email produces worse output than the plain alternative the
+    sender already provided.
+    """
+    mime = part.get("mimeType") or ""
+    body = part.get("body") or {}
+    if mime == "text/plain" and body.get("data"):
+        out.append(_decode(body["data"]))
+    for child in part.get("parts") or []:
+        _walk_parts(child, out)
+
+
+def _plain_body(message: dict[str, Any]) -> str:
+    for key in ("messageText", "body", "text"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    parts: list[str] = []
+    _walk_parts(message.get("payload") or {}, parts)
+    text = "\n".join(part for part in parts if part.strip())
+    if not text:
+        return ""
+    # Quoted history doubles the length and adds nothing: the reply is at the
+    # top and the thread is already in the app.
+    lines: list[str] = []
+    for line in text.splitlines():
+        if line.startswith(">") or line.startswith("On ") and line.endswith("wrote:"):
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()[:4000]
+
+
 def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     labels = set(message.get("labelIds") or message.get("label_ids") or [])
     if "UNREAD" not in labels:
@@ -69,7 +114,9 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     if _header(payload, "List-Unsubscribe"):
         noisy = True
 
-    snippet = message.get("snippet") or message.get("messageText") or ""
+    # The whole readable message, not just Gmail's one-line snippet. The
+    # detail sheet shows the mail itself, and a snippet is not a mail.
+    body = _plain_body(message) or message.get("snippet") or ""
 
     return RawEvent(
         source="gmail",
@@ -77,7 +124,7 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
         reason="gmail_bulk" if noisy else "gmail_message",
         subject_type="Email",
         title=subject,
-        body=snippet,
+        body=body,
         url=(
             f"https://mail.google.com/mail/u/0/#inbox/"
             f"{message.get('threadId') or message.get('id', '')}"
