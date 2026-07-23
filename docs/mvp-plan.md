@@ -15,7 +15,8 @@
 
 ## 1. The product in one screen
 
-- **Home** is everything combined: one ranked feed of what needs you across GitHub, Slack, Linear and (later) Gmail.
+- **Home** is everything combined: one ranked feed of what needs you across GitHub, Slack, Calendar, Drive, Linear and (later) Gmail, clustered by what is being asked of you rather than by which app it came from.
+- **Home also knows your time.** Calendar supplies how much free time is actually left today, which turns the feed from a list into a plan: "seven things need you, and you have 90 free minutes before your 14:00".
 - **Per-integration tabs** (GitHub, Slack, ...) each show a summary dashboard first (counts, repo-wise or channel-wise breakdown), then that tool's items.
 - **You act in the app**: approve a PR, reply to a thread, comment, snooze. No app-hopping.
 - **It stays quiet by default.** Only "someone is blocked on you" earns a push. Everything else batches into two briefs a day.
@@ -113,13 +114,15 @@ Every table is keyed by `user_id` and protected by row-level security, so a user
 
 ### 6.1 Action type (what you are being asked to do)
 
-| Type | Meaning | Example |
+Framed as *what is being asked of you*, so it holds for a developer and a non-developer alike. Clusters are assigned by **deterministic rules**, not the LLM, so the same input always lands in the same place. Full per-platform mapping in [capabilities.md](capabilities.md) section 11.
+
+| Cluster | Meaning | Sources across platforms |
 |---|---|---|
-| **Review** | Look at someone's work | PR review requested, PR ready for review |
-| **Approve** | A gated decision waits on you | Deployment approval, required approver |
-| **Reply** | Someone is waiting on your words | Slack DM or mention, unresolved PR comment |
-| **Decide** | Needs your judgement, no obvious owner | Assigned issue, changes requested, CI failed on your PR |
-| **FYI** | Context only, never interrupts | Approved, merged, closed, CI passed, release |
+| **Needs your decision** | A call only you can make | GitHub: CI failed on your PR, changes requested, repo invitation, security alert · Calendar: **invite awaiting RSVP**, moved or conflicting meeting · Drive: access request · Linear/Jira: issue assigned needing triage |
+| **Needs your review** | Someone's work is waiting on your eyes | GitHub: review requested, ready for review · Drive: **doc shared for review**, pending suggestion · Calendar: agenda needing prep |
+| **Needs your reply** | Someone is waiting on your words | Slack: **DM, mention, thread awaiting** · Drive: **comment or @mention on a doc** · Gmail: reply-needed thread · GitHub: comment on your PR · Notion/Linear: comment mentioning you |
+| **Blocked on others** | Yours, but the ball is not in your court | Your PR awaiting review, you asked with no answer, awaiting others' RSVP |
+| **Worth knowing** | Context only, digest only, never pings | Merged, closed, CI passed, release, file updated, **event cancelled (time back)**, status changed |
 
 ### 6.2 Urgency grouping (how Home is sectioned)
 
@@ -221,11 +224,18 @@ The failure mode for this product is becoming another anxiety source. Explicit c
 **Phase 5: Slack**
 - Composio Slack triggers (real-time push, avoids the read rate limit).
 - Slack tab with its summary dashboard.
-- Reply to a thread from the app.
+- Reply in thread, react, and mark read from the app.
 
-**Phase 6: Linear, then Gmail**
-- Linear (47 tools, 12 triggers via Composio), low compliance cost.
+**Phase 6: Calendar, then Drive**
+- **Calendar** (45 tools, 7 triggers): today's events, invites awaiting RSVP, cancellations. This is the phase that turns Home from a list into a plan, because it adds "and here is when you could actually do it".
+- **Drive** (77 tools, 7 triggers): **document comments and @mentions**, and files shared with you. Note that Docs comments arrive via Drive's `COMMENT_ADDED`, not via the Docs toolkit. Reply to a doc comment in-app with `GOOGLEDRIVE_CREATE_REPLY`.
+
+**Phase 7: Linear, then Gmail**
+- Linear (46 tools, 12 triggers), low compliance cost, and the only source of **native due dates**.
 - **Gmail last**, because restricted scopes bring a recurring annual CASA security assessment once you move off Composio's managed auth to your own branding.
+- Notion and Jira on demand (Notion carries `COMMENT_CREATED`; Jira can **transition issue status** from the app).
+
+**Why this order changed from v1:** the full capability sweep ([capabilities.md](capabilities.md)) showed Calendar and Drive deliver more feed value per unit of integration cost than Gmail, and neither carries Gmail's recurring audit. Gmail moved later.
 
 ---
 
