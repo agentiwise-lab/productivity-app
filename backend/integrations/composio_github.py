@@ -33,6 +33,30 @@ _BLOCKING_REASONS = {"review_requested", "approval_requested", "assign"}
 _SUBJECT_PATH = {"PullRequest": "pull", "Issue": "issues"}
 
 
+_REASON_TEXT = {
+    "review_requested": "Your review was requested on this pull request.",
+    "approval_requested": "Your approval is required before this can proceed.",
+    "assign": "This was assigned to you.",
+    "mention": "You were mentioned here.",
+    "team_mention": "A team you belong to was mentioned here.",
+    "comment": "There is a new comment on a thread you are part of.",
+    "author": "You opened this, and there has been activity on it.",
+    "subscribed": "You are watching this repository.",
+    "state_change": "This was opened, closed or merged.",
+    "ci_activity": "A workflow run finished.",
+    "security_alert": "A security alert was raised on this repository.",
+    "invitation": "You were invited to this repository.",
+}
+
+
+def _describe(reason: str, subject_type: str, repo: str, number: int | None) -> str:
+    what = _REASON_TEXT.get(reason, f"GitHub notification ({reason or 'unknown'}).")
+    where = f"{subject_type or 'Item'}"
+    if number is not None:
+        where += f" #{number}"
+    return f"{what}\n\n{where} in {repo}."
+
+
 def _parse_time(value: str | None) -> datetime | None:
     """GitHub's own timestamp for the thread.
 
@@ -81,6 +105,10 @@ def notification_to_raw_event(notification: dict[str, Any]) -> RawEvent:
 
     reason = notification.get("reason") or ""
     return RawEvent(
+        # GitHub's notification API returns no message body at all, so a row
+        # would otherwise show a repository name and nothing else. This says
+        # what the notification actually is, in GitHub's own vocabulary.
+        body=_describe(reason, subject.get("type") or "", repo, number),
         occurred_at=_parse_time(notification.get("updated_at")),
         source="github",
         source_ref=source_ref,
@@ -162,6 +190,15 @@ class ComposioGitHubService:
         return Comment(
             id=str(data.get("id", "")), url=data.get("html_url") or "", body=body
         )
+
+    def open_pull_request_count(self) -> int | None:
+        """Pull requests this user has open, across every repository."""
+        data = self._execute(
+            "GITHUB_FIND_PULL_REQUESTS", {"state": "open", "query": "is:pr author:@me"}
+        )
+        items = data.get("items") or data.get("pull_requests") or []
+        total = data.get("total_count")
+        return int(total) if isinstance(total, int) else len(items)
 
     def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
         owner, _, name = ref.repo.partition("/")

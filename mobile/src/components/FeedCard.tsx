@@ -7,8 +7,15 @@
  * next one always peeks and the swipe is obvious without being explained.
  */
 
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useRef } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Animated,
+  PanResponder,
+} from 'react-native';
 import { colors, s, type, roundel } from '../theme';
 import { ago, deadlineLabel } from '../lib/time';
 import { BrandMark } from './BrandMark';
@@ -30,6 +37,9 @@ const TAG_LABEL: Record<string, string> = {
   fyi: 'FYI',
 };
 
+/** Past this, a horizontal drag is a decision rather than a scroll. */
+const SWIPE_THRESHOLD = 96;
+
 export function FeedCard({
   row,
   onPress,
@@ -41,12 +51,64 @@ export function FeedCard({
   onAction: (row: FeedRow, action: string) => void;
   dimmed?: boolean;
 }) {
+  const pan = useRef(new Animated.ValueXY()).current;
+
+  /**
+   * Swipe right to snooze, left to dismiss.
+   *
+   * The gesture only claims a drag that is clearly horizontal and clearly
+   * deliberate: the card strip scrolls horizontally too, and stealing an
+   * ordinary flick would make the feed impossible to browse.
+   */
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > 18 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
+      onPanResponderMove: Animated.event([null, { dx: pan.x }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (_event, gesture) => {
+        if (Math.abs(gesture.dx) < SWIPE_THRESHOLD) {
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+            bounciness: 6,
+          }).start();
+          return;
+        }
+        const action = gesture.dx > 0 ? 'snooze' : 'dismiss';
+        Animated.timing(pan, {
+          toValue: { x: gesture.dx > 0 ? 400 : -400, y: 0 },
+          duration: 160,
+          useNativeDriver: false,
+        }).start(() => {
+          pan.setValue({ x: 0, y: 0 });
+          onAction(row, action);
+        });
+      },
+    }),
+  ).current;
+
   const urgent = row.tier === 'urgent';
   const today = row.tier === 'today';
   const [primary, secondary] = actionsFor(row);
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
 
   return (
+    <Animated.View
+      {...responder.panHandlers}
+      style={[
+        styles.swipeWrap,
+        {
+          transform: [{ translateX: pan.x }],
+          opacity: pan.x.interpolate({
+            inputRange: [-260, 0, 260],
+            outputRange: [0.25, 1, 0.25],
+            extrapolate: 'clamp',
+          }),
+        },
+      ]}
+    >
     <Pressable
       onPress={() => onPress(row)}
       style={[styles.card, dimmed && styles.dimmed]}
@@ -83,6 +145,8 @@ export function FeedCard({
         </Text>
       ) : null}
 
+      <View style={styles.spacer} />
+
       <View style={styles.buttons}>
         <Pressable
           onPress={() => onAction(row, primary.id)}
@@ -95,6 +159,7 @@ export function FeedCard({
         </Pressable>
       </View>
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -110,8 +175,14 @@ export function Dots({ count, active }: { count: number; active: number }) {
 }
 
 const styles = StyleSheet.create({
+  swipeWrap: { width: CARD_WIDTH },
+  // Fixed so a card with no summary is not shorter than its neighbours: a
+  // strip of uneven cards reads as broken rather than varied.
+  cardHeight: {},
   card: {
     width: CARD_WIDTH,
+    height: s(132),
+    justifyContent: 'flex-start',
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
@@ -139,7 +210,8 @@ const styles = StyleSheet.create({
   tagTextToday: { color: colors.accent },
   ago: { ...type.ago, marginLeft: 'auto' },
   heading: { ...type.cardHeading, color: colors.fg, marginBottom: s(6) },
-  why: { ...type.why, marginBottom: s(10) },
+  why: { ...type.why },
+  spacer: { flex: 1 },
   buttons: { flexDirection: 'row', gap: s(6) },
   button: {
     flex: 1,

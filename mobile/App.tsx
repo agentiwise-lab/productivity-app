@@ -19,9 +19,16 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors, s, type } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
-import type { FeedRow, MeetingOut, Source, SourceInfo } from './src/api/types';
+import type {
+  FeedRow,
+  MeetingOut,
+  Source,
+  SourceDashboard,
+  SourceInfo,
+} from './src/api/types';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SourcesScreen } from './src/screens/SourcesScreen';
+import { SourceDetailScreen } from './src/screens/SourceDetailScreen';
 import { LaterScreen } from './src/screens/LaterScreen';
 import { YouScreen, type NotifyLevel } from './src/screens/YouScreen';
 import { DetailSheet } from './src/components/DetailSheet';
@@ -61,6 +68,8 @@ export default function App() {
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [dashboard, setDashboard] = useState<SourceDashboard | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
   const connectedCount = useMemo(
     () => sources.filter((info) => info.status === 'connected').length,
@@ -162,6 +171,25 @@ export default function App() {
     [rows],
   );
 
+  const openSource = useCallback(async (info: SourceInfo) => {
+    setDashboardLoading(true);
+    setDashboard({
+      source: info.source,
+      label: info.label,
+      headline: [],
+      breakdown: [],
+      unavailable: [],
+    });
+    try {
+      setDashboard(await api.sourceDashboard(info.source));
+    } catch {
+      setDashboard(null);
+      Alert.alert("Couldn't load", `${info.label} did not answer. Try again.`);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, []);
+
   const connectSource = useCallback(async (info: SourceInfo) => {
     try {
       const { url } = await api.connectUrl(info.source);
@@ -219,7 +247,7 @@ export default function App() {
               <SourcesScreen
                 sources={sources}
                 loadingStatus={loadingSources}
-                onOpen={() => notImplemented()}
+                onOpen={openSource}
                 onConnect={connectSource}
               />
             )}
@@ -244,6 +272,14 @@ export default function App() {
             )}
           </Tab.Screen>
         </Tab.Navigator>
+
+        {dashboard ? (
+          <SourceDetailScreen
+            dashboard={dashboard}
+            loading={dashboardLoading}
+            onBack={() => setDashboard(null)}
+          />
+        ) : null}
 
         <DetailSheet
           row={selected}

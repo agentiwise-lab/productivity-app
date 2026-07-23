@@ -82,3 +82,17 @@ export interface MeetingOut {
   end: string;
   conference_url: string | null;
 }
+
+export interface StatLine {
+  label: string;
+  value: number;
+  detail: string | null;
+}
+
+export interface SourceDashboard {
+  source: Source;
+  label: string;
+  headline: StatLine[];
+  breakdown: StatLine[];
+  unavailable: string[];
+}

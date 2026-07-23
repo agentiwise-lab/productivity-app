@@ -120,6 +120,7 @@ export function TabIcon({
 
 const styles = StyleSheet.create({
   header: {
+    alignItems: 'center',
     paddingHorizontal: s(14),
     paddingTop: s(6),
     paddingBottom: s(8),

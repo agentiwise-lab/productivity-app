@@ -24,6 +24,7 @@ from backend.integrations.github import Comment, GitHubService, PRRef, PullReque
 from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.models.sources import CATALOGUE, Source, SourceInfo
+from backend.services.stats import SourceDashboard
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
 from backend.services.actions import (
     ActionFailed,
@@ -114,6 +115,7 @@ def create_app(
     connections: Any | None = None,
     classifier: DefaultClassificationService | None = None,
     connection_service: Any | None = None,
+    stats: Any | None = None,
     calendar: Any | None = None,
     sync: Any | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
@@ -202,6 +204,19 @@ def create_app(
         if connection_service is None:
             raise HTTPException(status_code=503, detail="connections not configured")
         return {"url": connection_service.link_url(user_id, provider)}
+
+    @app.get("/sources/{provider}", response_model=SourceDashboard)
+    def get_source_dashboard(
+        provider: Source, user_id: str = Depends(current_user)
+    ) -> SourceDashboard:
+        """What has been going on in one source.
+
+        A different question from the feed's "what needs me now", and the reason
+        Sources is a tab rather than a settings page.
+        """
+        if stats is None:
+            raise HTTPException(status_code=503, detail="stats not configured")
+        return stats.dashboard(provider, repo.list_by_user(user_id))
 
     @app.get("/day", response_model=list[MeetingOut])
     def get_day(user_id: str = Depends(current_user)) -> list[MeetingOut]:

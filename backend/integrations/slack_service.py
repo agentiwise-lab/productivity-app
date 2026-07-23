@@ -14,8 +14,28 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
-from backend.integrations.slack import SLACK_TOOLKIT_VERSION
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+
+from backend.integrations.slack import (
+    SLACK_TOOLKIT_VERSION,
+    channel_message_to_raw_event,
+    direct_message_to_raw_event,
+)
+from backend.models.events import RawEvent
 from backend.models.identity import Identity
+
+log = logging.getLogger(__name__)
+
+#: How far back an unread backfill reaches. Matches the feed's own retention,
+#: so the app never shows something it would immediately drop.
+BACKFILL = timedelta(days=30)
+
+#: Conversations scanned per refresh. Beyond this the call cost grows without
+#: the feed getting more useful: what matters is unread, and unread is rare.
+MAX_CONVERSATIONS = 12
+MAX_PER_CONVERSATION = 20
 
 
 class SlackMessageRef(BaseModel):
@@ -30,6 +50,11 @@ class SlackService(Protocol):
         ...
 
     def mark_read(self, source_ref: str) -> None:
+        ...
+
+    def unread(
+        self, identity: Identity, now: datetime | None = None
+    ) -> list[RawEvent]:
         ...
 
     def resolve_identity(self) -> Identity:
@@ -87,6 +112,96 @@ class ComposioSlackService:
             "SLACK_SET_READ_CURSOR_IN_A_CONVERSATION",
             {"channel": ref.channel, "ts": ref.ts},
         )
+
+    def unread(self, identity: Identity, now: datetime | None = None) -> list[RawEvent]:
+        """Unread DMs and mentions from the last 30 days.
+
+        Triggers only fire while the backend is running, so without this the
+        app is blind to anything that happened before it started: a message
+        from this morning simply does not exist. Fetched live on every refresh
+        and never archived; only the items that survive the mention and unread
+        filters become feed rows, and those age out with everything else.
+        """
+        now = now or datetime.now(timezone.utc)
+        oldest = (now - BACKFILL).timestamp()
+
+        wanted = [
+            conversation
+            for conversation in self._conversations()
+            if conversation.get("id")
+            # Slack reports what the user has not read. Anything below that
+            # mark they have already dealt with, by their own action.
+            and conversation.get("unread_count_display") != 0
+        ]
+        if not wanted:
+            return []
+
+        # One history call per conversation, run together. In series a dozen
+        # conversations overran the refresh timeout on their own and Slack
+        # dropped out of the sync entirely.
+        with ThreadPoolExecutor(max_workers=min(8, len(wanted))) as pool:
+            histories = list(
+                pool.map(
+                    lambda conversation: (
+                        conversation,
+                        self._history(conversation["id"], oldest),
+                    ),
+                    wanted,
+                )
+            )
+
+        found: list[RawEvent] = []
+        for conversation, messages in histories:
+            channel = conversation["id"]
+            is_dm = bool(conversation.get("is_im"))
+            name = conversation.get("name") or ""
+            for message in messages:
+                payload = {
+                    **message,
+                    "channel": channel,
+                    "channel_type": "im" if is_dm else "channel",
+                    "channel_name": name,
+                }
+                event = (
+                    direct_message_to_raw_event(payload, identity=identity)
+                    if is_dm
+                    else channel_message_to_raw_event(payload, identity=identity)
+                )
+                if event is not None:
+                    found.append(event)
+        return found
+
+    def _conversations(self) -> list[dict[str, Any]]:
+        try:
+            data = self._execute(
+                "SLACK_LIST_CONVERSATIONS",
+                {
+                    "types": "im,mpim,public_channel,private_channel",
+                    "exclude_archived": True,
+                    "limit": MAX_CONVERSATIONS,
+                },
+            )
+        except Exception:
+            log.warning("could not list Slack conversations", exc_info=True)
+            return []
+        channels = data.get("channels") or data.get("conversations") or []
+        return channels[:MAX_CONVERSATIONS]
+
+    def _history(self, channel: str, oldest: float) -> list[dict[str, Any]]:
+        try:
+            data = self._execute(
+                "SLACK_FETCH_CONVERSATION_HISTORY",
+                {
+                    "channel": channel,
+                    "oldest": str(oldest),
+                    "limit": MAX_PER_CONVERSATION,
+                },
+            )
+        except Exception:
+            # One unreadable conversation must not lose the others.
+            log.info("could not read history for %s", channel, exc_info=True)
+            return []
+        return data.get("messages") or []
 
     def resolve_identity(self) -> Identity:
         """Section 3.10: mention detection is impossible without this, and it

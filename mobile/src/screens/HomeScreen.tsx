@@ -31,6 +31,21 @@ import { Clear, NothingConnected, Skeleton, StaleBanner } from '../components/st
 import type { FeedRow, Tier } from '../api/types';
 
 const TIERS: Tier[] = ['urgent', 'today', 'can_wait'];
+
+/** A mark per tier, so the chips read at a glance rather than as three numbers. */
+const TIER_GLYPH: Record<Tier, string> = {
+  urgent: '!',
+  today: '◐',
+  can_wait: '○',
+  noise: '·',
+};
+
+const TIER_TINT: Record<Tier, string> = {
+  urgent: colors.urgentSoft,
+  today: colors.accentSoft,
+  can_wait: colors.line,
+  noise: colors.line,
+};
 const COLLAPSE_AT = s(70);
 
 interface Props {
@@ -148,35 +163,41 @@ export function HomeScreen({
 
         {stale ? <StaleBanner fetchedAt={fetchedAt} /> : null}
 
+        {/* Only selection highlights. Colouring Urgent permanently meant it
+            looked chosen at all times, so tapping the others read as two
+            filters being active at once. */}
         <View style={styles.chips}>
           {TIERS.map((tier) => {
             const selected = filter === tier;
-            const loud = tier === 'urgent' && counts.urgent > 0;
             return (
               <Pressable
                 key={tier}
                 onPress={() => setFilter(selected ? null : tier)}
                 style={[
                   styles.chip,
-                  loud && styles.chipLoud,
-                  selected && styles.chipSelected,
+                  selected && (tier === 'urgent' ? styles.chipOnUrgent : styles.chipOn),
                 ]}
               >
+                {/* Mark and count share the top line; the label owns the full
+                    width beneath it. Side by side, a two-digit count and a
+                    word like "Can wait" fought for the same few points. */}
+                <View style={styles.chipTop}>
+                  <View
+                    style={[
+                      styles.chipGlyph,
+                      { backgroundColor: TIER_TINT[tier] },
+                      selected && styles.chipGlyphOn,
+                    ]}
+                  >
+                    <Text style={styles.chipGlyphText}>{TIER_GLYPH[tier]}</Text>
+                  </View>
+                  <Text style={[styles.chipNumber, selected && styles.chipTextOn]}>
+                    {counts[tier]}
+                  </Text>
+                </View>
                 <Text
-                  style={[
-                    styles.chipNumber,
-                    loud && styles.chipTextLoud,
-                    selected && styles.chipTextSelected,
-                  ]}
-                >
-                  {counts[tier]}
-                </Text>
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    loud && styles.chipTextLoud,
-                    selected && styles.chipTextSelected,
-                  ]}
+                  style={[styles.chipLabel, selected && styles.chipTextOn]}
+                  numberOfLines={1}
                 >
                   {tierLabel[tier]}
                 </Text>
@@ -240,20 +261,33 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: s(6), paddingHorizontal: s(13), paddingTop: s(11) },
   chip: {
     flex: 1,
-    alignItems: 'center',
+    gap: s(5),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    borderRadius: s(9),
+    borderRadius: s(10),
     backgroundColor: colors.surface,
-    paddingVertical: s(6),
-    paddingHorizontal: s(4),
+    paddingVertical: s(7),
+    paddingHorizontal: s(7),
   },
-  chipLoud: { borderColor: colors.urgent, backgroundColor: colors.urgentSoft },
-  chipSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  chipNumber: { ...type.chipNumber, color: colors.fg },
-  chipLabel: { ...type.chipLabel, color: colors.dim, marginTop: s(3) },
-  chipTextLoud: { color: colors.urgent },
-  chipTextSelected: { color: colors.accent },
+  chipOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  chipOnUrgent: { borderColor: colors.urgent, backgroundColor: colors.urgentSoft },
+  chipGlyph: {
+    width: s(20),
+    height: s(20),
+    borderRadius: s(6),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipGlyphOn: { backgroundColor: 'rgba(255,255,255,0.65)' },
+  chipGlyphText: { fontSize: s(10), fontWeight: '700', color: colors.fg },
+  chipTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chipNumber: { ...type.chipNumber, fontSize: s(15), color: colors.fg },
+  chipLabel: { ...type.chipLabel, color: colors.dim, width: '100%' },
+  chipTextOn: { color: colors.accent },
   feedWrap: { paddingTop: s(9) },
   feed: { paddingHorizontal: s(13), gap: CARD_GAP },
 });

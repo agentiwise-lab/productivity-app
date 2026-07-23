@@ -80,7 +80,13 @@ export function SourcesScreen({
                   {off ? 'Connect' : 'Fix'}
                 </Text>
               ) : (
-                <Text style={styles.count}>{info.count}</Text>
+                <>
+                  <Text style={styles.count}>{info.count}</Text>
+                  {/* Into the source's own dashboard. The count says what
+                      needs you; the page behind it says what has been going
+                      on, which the feed deliberately does not. */}
+                  <Text style={styles.chevron}>{'\u203A'}</Text>
+                </>
               )}
             </Pressable>
           );
@@ -125,6 +131,7 @@ const styles = StyleSheet.create({
   rowSub: { ...type.rowSub, marginTop: s(1) },
   rowSubBad: { color: colors.urgent },
   count: { ...type.groupCount, color: colors.fg },
+  chevron: { fontSize: s(15), color: colors.dim, marginLeft: s(2) },
   action: { ...type.rowSub, fontWeight: '600', color: colors.accent },
   actionBad: { color: colors.urgent },
   skeletonPill: {

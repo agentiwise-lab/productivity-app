@@ -20,8 +20,10 @@ from backend.models.feed import Actor
 CALENDAR_TOOLKIT_VERSION = "20260721_00"
 
 #: A meeting this close is the most urgent thing a person can have, because
-#: unlike everything else in the feed it cannot be done later.
-STARTING_SOON = timedelta(minutes=15)
+#: unlike everything else in the feed it cannot be done later. An hour is the
+#: point at which you would want to be told, not fifteen minutes, by which time
+#: being told is no longer useful.
+STARTING_SOON = timedelta(hours=1)
 
 
 class Meeting(BaseModel):
@@ -98,10 +100,21 @@ def event_to_raw_event(
         reason=reason,
         subject_type="Event",
         title=meeting.title,
-        body=event.get("description"),
         url=event.get("htmlLink") or "",
         repo="",
         context_chip=meeting.start.strftime("%H:%M"),
+        # The description and location, so the card can say what the meeting is
+        # rather than only when it is.
+        body="\n".join(
+            part
+            for part in (
+                event.get("description"),
+                f"Location: {meeting.location}" if meeting.location else None,
+                f"Join: {meeting.conference_url}" if meeting.conference_url else None,
+                f"{meeting.start:%H:%M} to {meeting.end:%H:%M}",
+            )
+            if part
+        ),
         actor=Actor(login=organizer, display_name=organizer.split("@")[0] or None),
         deadline=meeting.start,
         occurred_at=meeting.start,

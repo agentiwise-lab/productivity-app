@@ -9,7 +9,13 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { FeedRow, MeetingOut, RefreshResult, SourceInfo } from './types';
+import type {
+  FeedRow,
+  MeetingOut,
+  RefreshResult,
+  SourceDashboard,
+  SourceInfo,
+} from './types';
 
 const CACHE_KEY = 'feed.cache.v1';
 const CACHE_AT_KEY = 'feed.cache.at.v1';
@@ -116,6 +122,10 @@ export class ApiClient {
   /** Read live on every open. A cached schedule eventually becomes a lie. */
   day(): Promise<MeetingOut[]> {
     return this.request<MeetingOut[]>('/day');
+  }
+
+  sourceDashboard(provider: string): Promise<SourceDashboard> {
+    return this.request<SourceDashboard>(`/sources/${provider}`);
   }
 
   connectUrl(provider: string): Promise<{ url: string }> {

@@ -1,17 +1,18 @@
 /**
- * "Your day", as a card with a proportional ruler. Matches the mockup's
- * .card / .ruler / .rfoot exactly.
+ * "Your day": the whole day at true proportion, midnight to midnight.
  *
- * The ruler is the point: it shows the day at true proportion, so a wall of
- * meetings looks like a wall and a clear afternoon looks clear. Three numbers
- * in boxes could not do that, which is why the approved design is a strip.
+ * Full 24 hours rather than 9 to 18, because this app is not only for office
+ * work and an 11pm meeting is still a meeting. A meeting that runs past
+ * midnight is clipped at the edge rather than dropped, which is what used to
+ * make a real 23:00 to 00:00 booking simply vanish from the strip.
  *
- * Free time is derived from the meetings drawn directly above it, never stored,
- * so the number and the picture cannot contradict each other.
+ * Three block colours carry three different facts: what is done, what is next,
+ * and what is later. Free time is derived from the same meetings drawn above
+ * it, so the picture and the number cannot disagree.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { colors, s, type } from '../theme';
 
 export interface Meeting {
@@ -23,25 +24,27 @@ export interface Meeting {
 interface Props {
   meetings: Meeting[];
   now?: Date;
-  workStartHour?: number;
-  workEndHour?: number;
 }
+
+const DAY_MINUTES = 24 * 60;
+const HOUR_MARKS = [0, 6, 12, 18, 24];
 
 const pct = (value: number) =>
   `${Math.max(0, Math.min(100, value * 100))}%` as `${number}%`;
 
-export function YourDayCard({
-  meetings,
-  now = new Date(),
-  workStartHour = 9,
-  workEndHour = 18,
-}: Props) {
-  const spanMinutes = (workEndHour - workStartHour) * 60;
-  const into = (date: Date) =>
-    (date.getHours() - workStartHour) * 60 + date.getMinutes();
-  const nowFrac = Math.min(Math.max(into(now) / spanMinutes, 0), 1);
+const clock = (date: Date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(
+    date.getMinutes(),
+  ).padStart(2, '0')}`;
 
-  const upcoming = meetings.filter((m) => m.end > now);
+export function YourDayCard({ meetings, now = new Date() }: Props) {
+  const [shown, setShown] = useState<Meeting | null>(null);
+
+  const into = (date: Date) => date.getHours() * 60 + date.getMinutes();
+  const nowFrac = into(now) / DAY_MINUTES;
+
+  const sorted = [...meetings].sort((a, b) => a.start.getTime() - b.start.getTime());
+  const upcoming = sorted.filter((m) => m.end > now);
   const next = upcoming[0];
 
   const bookedAhead = upcoming.reduce(
@@ -49,63 +52,96 @@ export function YourDayCard({
       total + (m.end.getTime() - Math.max(m.start.getTime(), now.getTime())) / 60000,
     0,
   );
-  const freeMinutes = Math.max(0, spanMinutes - into(now) - bookedAhead);
+  const leftInDay = Math.max(0, DAY_MINUTES - into(now));
+  const freeMinutes = Math.max(0, leftInDay - bookedAhead);
   const freeLabel =
     freeMinutes >= 60
       ? `${Math.floor(freeMinutes / 60)}h ${Math.round(freeMinutes % 60)}m free`
       : `${Math.round(freeMinutes)}m free`;
 
-  const clock = (date: Date) =>
-    `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const caption = shown
+    ? `${clock(shown.start)} to ${clock(shown.end)}  ${shown.title}`
+    : next
+      ? `${clock(next.start)}  ${next.title}`
+      : 'Nothing left on the calendar today';
 
   return (
     <View style={styles.card}>
       <View style={styles.titleRow}>
         <Text style={styles.title}>Your day</Text>
         <Text style={styles.meta} numberOfLines={1}>
-          {String(workStartHour).padStart(2, '0')}:00 to {workEndHour}:00
+          {upcoming.length} {upcoming.length === 1 ? 'meeting' : 'meetings'} left ·{' '}
+          {freeLabel}
         </Text>
       </View>
 
       <View style={styles.ruler}>
-        <View style={styles.trackClip}>
-          <View style={styles.track} />
-        {meetings.map((meeting, index) => {
-          // Clamped to the working window. A meeting at 23:00 was drawn far
-          // past the right edge and spilled out of the card, which is what
-          // made the strip look broken rather than full.
-          const rawLeft = into(meeting.start) / spanMinutes;
-          const rawEnd = into(meeting.end) / spanMinutes;
-          const left = Math.max(0, Math.min(rawLeft, 1));
-          const width = Math.max(0.012, Math.min(rawEnd, 1) - left);
-          if (rawEnd <= 0 || rawLeft >= 1) return null;
+        <View style={styles.track} />
+
+        {HOUR_MARKS.slice(1, -1).map((hour) => (
+          <View
+            key={`grid-${hour}`}
+            style={[styles.grid, { left: pct(hour / 24) }]}
+          />
+        ))}
+
+        {sorted.map((meeting, index) => {
+          const startFrac = into(meeting.start) / DAY_MINUTES;
+          // A meeting ending after midnight reports an end-of-day earlier than
+          // its start. Clamp it to the edge instead of computing a negative
+          // width and drawing nothing at all.
+          const crossesMidnight = meeting.end <= meeting.start;
+          const endFrac = crossesMidnight ? 1 : into(meeting.end) / DAY_MINUTES;
+          const width = Math.max(0.008, endFrac - startFrac);
+
           const past = meeting.end <= now;
+          const isNext = next != null && meeting === next;
+
           return (
-            <View
+            <Pressable
               key={index}
+              onPress={() => setShown(shown === meeting ? null : meeting)}
               style={[
                 styles.block,
-                past && styles.blockPast,
-                { left: pct(left), width: pct(width) },
+                past ? styles.blockPast : isNext ? styles.blockNext : styles.blockLater,
+                { left: pct(startFrac), width: pct(width) },
               ]}
             />
           );
         })}
-          <View style={[styles.nowLine, { left: pct(nowFrac) }]} />
-        </View>
-        <Text style={[styles.tick, { left: 0 }]}>{workStartHour}</Text>
-        {nowFrac > 0.08 && nowFrac < 0.9 ? (
-          <Text style={[styles.tick, { left: pct(nowFrac - 0.04) }]}>now</Text>
-        ) : null}
-        <Text style={[styles.tick, { right: 0 }]}>{workEndHour}</Text>
+
+        <View style={[styles.nowLine, { left: pct(nowFrac) }]} />
+
+        {HOUR_MARKS.map((hour) => (
+          <Text
+            key={`tick-${hour}`}
+            style={[
+              styles.tick,
+              hour === 24
+                ? { right: 0 }
+                : hour === 0
+                  ? { left: 0 }
+                  : { left: pct(hour / 24), marginLeft: -s(4) },
+            ]}
+          >
+            {String(hour).padStart(2, '0')}
+          </Text>
+        ))}
       </View>
 
       <View style={styles.foot}>
-        <Text style={[styles.meta, styles.footNext]} numberOfLines={1}>
-          {next ? `next ${clock(next.start)} ${next.title}` : 'nothing left today'}
-        </Text>
-        <Text style={[styles.meta, styles.footFree]} numberOfLines={1}>
-          {freeLabel}
+        <View
+          style={[
+            styles.dot,
+            shown
+              ? shown.end <= now
+                ? styles.blockPast
+                : styles.blockNext
+              : styles.blockNext,
+          ]}
+        />
+        <Text style={styles.caption} numberOfLines={2}>
+          {caption}
         </Text>
       </View>
     </View>
@@ -122,58 +158,64 @@ const styles = StyleSheet.create({
     borderRadius: s(14),
     paddingHorizontal: s(12),
     paddingVertical: s(11),
-    overflow: 'hidden',
+    gap: s(2),
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: s(6),
+    gap: s(8),
   },
   title: { ...type.cardTitle, color: colors.fg },
-  meta: { ...type.cardMeta },
-  ruler: { height: s(34), marginTop: s(2), marginBottom: s(8) },
-  trackClip: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: s(24),
-    overflow: 'hidden',
-  },
+  meta: { ...type.cardMeta, flexShrink: 1 },
+  ruler: { height: s(32), marginTop: s(6), marginBottom: s(4) },
   track: {
     position: 'absolute',
-    top: s(12),
+    top: s(6),
     left: 0,
     right: 0,
-    height: s(6),
-    borderRadius: s(3),
-    backgroundColor: colors.accentSoft,
+    height: s(11),
+    borderRadius: s(4),
+    backgroundColor: colors.bg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  grid: {
+    position: 'absolute',
+    top: s(6),
+    width: StyleSheet.hairlineWidth,
+    height: s(11),
+    backgroundColor: colors.line,
   },
   block: {
     position: 'absolute',
-    top: s(8),
-    height: s(14),
-    borderRadius: s(4),
-    backgroundColor: colors.accent,
+    top: s(7),
+    height: s(9),
+    borderRadius: s(3),
+    minWidth: s(3),
   },
-  blockPast: { backgroundColor: colors.dim, opacity: 0.38 },
+  /** Done. Present but spent. */
+  blockPast: { backgroundColor: '#C3BFB7' },
+  /** The one you are walking into. */
+  blockNext: { backgroundColor: '#3F8F5F' },
+  /** Later today. */
+  blockLater: { backgroundColor: colors.accent },
   nowLine: {
     position: 'absolute',
     top: s(3),
     width: 2,
-    height: s(24),
+    height: s(17),
     backgroundColor: colors.urgent,
     borderRadius: 1,
   },
   tick: {
     position: 'absolute',
-    top: s(24),
+    top: s(20),
     fontFamily: 'Menlo',
-    fontSize: s(8),
+    fontSize: s(7.5),
     color: colors.dim,
   },
-  foot: { flexDirection: 'row', alignItems: 'baseline', gap: s(8) },
-  footNext: { flex: 1 },
-  footFree: { flexShrink: 0 },
+  foot: { flexDirection: 'row', alignItems: 'flex-start', gap: s(6) },
+  dot: { width: s(6), height: s(6), borderRadius: s(3), marginTop: s(3) },
+  caption: { flex: 1, fontSize: s(10.5), lineHeight: s(10.5) * 1.35, color: colors.fg },
 });

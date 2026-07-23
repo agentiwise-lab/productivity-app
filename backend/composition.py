@@ -24,6 +24,7 @@ from backend.main import create_app
 from backend.repositories.connections import InMemoryConnectionRepository
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.connections import DefaultConnectionService
+from backend.services.stats import SourceStatsService
 from backend.services.sync import SourceSync
 from backend.services.feed import DefaultFeedService
 from backend.services.rules import DefaultRuleClassifier
@@ -83,9 +84,17 @@ def build_app() -> FastAPI:
         linear=linear,
         gmail=gmail,
         calendar=calendar,
+        slack=slack,
+        identity_provider=lambda provider: connections.identity_for(
+            composio_user, provider
+        ),
         classifier=classifier,
         identity_for=connections.identity_for,
         classify_async=True,
+    )
+
+    stats = SourceStatsService(
+        github=github, linear=linear, calendar=calendar, gmail=gmail, slack=slack
     )
 
     webhook_secret = os.environ.get("COMPOSIO_WEBHOOK_SECRET")
@@ -118,6 +127,7 @@ def build_app() -> FastAPI:
         jwt_secret=os.environ.get("SUPABASE_JWT_SECRET"),
         classifier=classifier,
         connection_service=connection_service,
+        stats=stats,
         calendar=calendar,
         sync=sync,
         verify_webhook=verify_webhook,

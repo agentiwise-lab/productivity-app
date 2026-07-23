@@ -46,6 +46,8 @@ class SourceSync:
         linear: Any | None = None,
         gmail: Any | None = None,
         calendar: Any | None = None,
+        slack: Any | None = None,
+        identity_provider: Any | None = None,
         classifier: Any | None = None,
         identity_for: Callable[[str, str], Identity] | None = None,
         clock: Callable[[], datetime] | None = None,
@@ -65,6 +67,12 @@ class SourceSync:
             self._sources[Source.GMAIL] = gmail.unread
         if calendar is not None:
             self._sources[Source.CALENDAR] = calendar.pending
+        if slack is not None and identity_provider is not None:
+            # Slack pushes in real time, but only while we are running. The
+            # backfill is what makes this morning's messages exist at all.
+            self._sources[Source.SLACK] = lambda: slack.unread(
+                identity_provider("slack")
+            )
         self._classifier = classifier
         self._identity_for = identity_for or (lambda user, provider: Identity())
         self._now = clock or (lambda: datetime.now(timezone.utc))
