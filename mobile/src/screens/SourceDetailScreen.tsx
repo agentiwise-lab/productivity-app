@@ -59,10 +59,12 @@ export function SourceDetailScreen({
           <View style={styles.tiles}>
             {dashboard.headline.map((stat) => (
               <View key={stat.label} style={styles.tile}>
-                <Text style={styles.tileValue}>
+                <Text style={styles.tileValue} numberOfLines={1}>
                   {stat.value_label ?? stat.value}
                 </Text>
-                <Text style={styles.tileLabel}>{stat.label}</Text>
+                <Text style={styles.tileLabel} numberOfLines={1}>
+                  {stat.label}
+                </Text>
                 {stat.detail ? (
                   <Text style={styles.tileDetail}>{stat.detail}</Text>
                 ) : null}
@@ -150,11 +152,13 @@ const styles = StyleSheet.create({
     paddingTop: s(11),
   },
   tile: {
-    // No flexGrow: a lone fourth tile stays tile-sized instead of stretching
-    // across the whole row, which read as a broken full-width bar.
+    // Two per row. Three was too narrow for labels like "Messages" or
+    // "Remaining", which wrapped their last letter onto a second line. No
+    // flexGrow, so a lone fifth tile stays half-width rather than stretching
+    // across the whole row.
     flexGrow: 0,
-    flexBasis: '31.5%',
-    minHeight: s(56),
+    flexBasis: '48.5%',
+    minHeight: s(54),
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
@@ -164,8 +168,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tileSkeleton: {
-    flexGrow: 1,
-    flexBasis: '30%',
+    flexGrow: 0,
+    flexBasis: '48.5%',
     height: s(56),
     borderRadius: s(11),
     backgroundColor: colors.surface,
@@ -174,6 +178,7 @@ const styles = StyleSheet.create({
   },
   tileValue: { fontFamily: 'Menlo', fontSize: s(17), fontWeight: '600', color: colors.fg },
   tileLabel: { ...type.rowTitle, fontWeight: '600', color: colors.fg, marginTop: s(3) },
+  // (labels are single-line via numberOfLines on the element)
   tileDetail: { ...type.rowSub, fontSize: s(9.5), marginTop: s(1) },
   divider: {
     ...type.divider,
