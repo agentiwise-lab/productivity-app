@@ -9,6 +9,8 @@ not content. Enrichment fills in the rest before an event becomes a FeedItem.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from backend.models.feed import Actor
@@ -24,9 +26,24 @@ class RawEvent(BaseModel):
     title: str
     url: str
     repo: str
-    actor: Actor | None = None
+    actor: Actor | None = None  # who triggered the event
     # Refinements pulled during enrichment that can override the coarse reason.
     review_state: str | None = None  # "changes_requested" | "approved" | ...
     check_conclusion: str | None = None  # "failure" | "success" | ...
+    # Who owns the subject. Distinct from `actor`: the CI-failure rule is scoped
+    # to the user's *own* PR, which the coarse notification reason cannot tell us.
+    subject_author: str | None = None
+    # Enrichment can reveal that a PR is both review-requested and approval-
+    # gated, while the notification carries only one coarse reason. The
+    # precedence ladder needs both facts to pick a single winning tag.
+    review_requested: bool = False
+    approval_requested: bool = False
+    labels: list[str] = Field(default_factory=list)
+    milestone_due: datetime | None = None
+    deadline: datetime | None = None
+    # Free text the LLM reads. Never used by rules.
+    body: str | None = None
+    # The source's own timestamp, not our ingest time. Ranking uses this.
+    occurred_at: datetime | None = None
     is_blocking: bool = False
     raw: dict = Field(default_factory=dict)

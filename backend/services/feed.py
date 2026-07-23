@@ -1,9 +1,13 @@
-"""Feed orchestration: the spine that ties the tracer together.
+"""Feed orchestration: the spine.
 
-``ingest`` turns a RawEvent into a stored, classified, scored FeedItem.
-``list_feed`` returns a user's items ranked. ``comment`` acts from the feed back
-into GitHub. It depends only on the other services' contracts, never their
-implementations.
+``ingest`` turns a RawEvent into a stored, rule-classified FeedItem. It never
+waits on the model: the rule tier is assigned and the row is stored immediately,
+so the item is visible at once, and classification catches up later (plan 4.4).
+
+``list_feed`` computes the tier and the score at read time and returns the rows
+ranked. ``comment`` acts from the feed back into GitHub.
+
+It depends only on the other services' contracts, never their implementations.
 """
 
 from __future__ import annotations
@@ -14,10 +18,12 @@ from uuid import uuid4
 
 from backend.integrations.github import GitHubService, PRRef
 from backend.models.events import RawEvent
-from backend.models.feed import FeedItem, FeedStatus, UserPreferences
+from backend.models.feed import FeedItem, FeedRow, FeedStatus, UserPreferences
+from backend.models.identity import Identity
 from backend.repositories.feed_repository import FeedRepository
-from backend.services.classification import ClassificationService
-from backend.services.priority import PriorityService
+from backend.services.hashing import content_hash
+from backend.services.ranking import effective_tier, score
+from backend.services.rules import RuleClassifier
 
 
 class ItemNotFound(Exception):
@@ -34,11 +40,17 @@ def _pr_ref_from_source_ref(source_ref: str) -> PRRef:
 
 class FeedService(Protocol):
     def ingest(
-        self, user_id: str, event: RawEvent, prefs: UserPreferences
+        self,
+        user_id: str,
+        event: RawEvent,
+        prefs: UserPreferences,
+        identity: Identity | None = None,
     ) -> FeedItem:
         ...
 
-    def list_feed(self, user_id: str) -> list[FeedItem]:
+    def list_feed(
+        self, user_id: str, prefs: UserPreferences | None = None
+    ) -> list[FeedRow]:
         ...
 
     def comment(self, user_id: str, item_id: str, body: str) -> FeedItem:
@@ -49,39 +61,66 @@ class DefaultFeedService:
     def __init__(
         self,
         repo: FeedRepository,
-        classifier: ClassificationService,
-        prioritizer: PriorityService,
+        rules: RuleClassifier,
         github: GitHubService,
         id_factory: Callable[[], str] | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._repo = repo
-        self._classifier = classifier
-        self._prioritizer = prioritizer
+        self._rules = rules
         self._github = github
         self._new_id = id_factory or (lambda: uuid4().hex)
+        self._now = clock or (lambda: datetime.now(timezone.utc))
 
     def ingest(
-        self, user_id: str, event: RawEvent, prefs: UserPreferences
+        self,
+        user_id: str,
+        event: RawEvent,
+        prefs: UserPreferences,
+        identity: Identity | None = None,
     ) -> FeedItem:
+        verdict = self._rules.classify(event, identity=identity or Identity())
+        now = self._now()
         item = FeedItem(
             id=self._new_id(),
             user_id=user_id,
             source=event.source,
             source_ref=event.source_ref,
-            action_type=self._classifier.classify(event),
+            rule_tier=verdict.tier,
+            type_tag=verdict.type_tag,
+            needs_llm=verdict.needs_llm,
+            content_hash=content_hash(event),
             title=event.title,
             url=event.url,
             repo=event.repo,
             actors=[event.actor] if event.actor else [],
+            sender_handle=event.actor.login if event.actor else None,
+            sender_name=(
+                event.actor.display_name or event.actor.login if event.actor else None
+            ),
+            deadline=event.deadline or event.milestone_due,
+            occurred_at=event.occurred_at or now,
             is_blocking=event.is_blocking,
-            created_at=datetime.now(timezone.utc),
+            created_at=now,
+            raw=event.raw,
         )
-        item.priority_score = self._prioritizer.score(item, prefs)
         return self._repo.upsert(item)
 
-    def list_feed(self, user_id: str) -> list[FeedItem]:
-        items = self._repo.list_by_user(user_id)
-        return sorted(items, key=lambda i: i.priority_score, reverse=True)
+    def list_feed(
+        self, user_id: str, prefs: UserPreferences | None = None
+    ) -> list[FeedRow]:
+        prefs = prefs or UserPreferences(user_id=user_id)
+        now = self._now()
+        rows = [
+            FeedRow(
+                **item.model_dump(),
+                tier=effective_tier(item, now=now),
+                priority_score=score(item, prefs, now=now),
+            )
+            for item in self._repo.list_by_user(user_id)
+        ]
+        rows.sort(key=lambda row: row.priority_score, reverse=True)
+        return rows
 
     def comment(self, user_id: str, item_id: str, body: str) -> FeedItem:
         item = self._repo.get(user_id, item_id)
@@ -90,5 +129,6 @@ class DefaultFeedService:
         self._github.comment_on_pull_request(
             _pr_ref_from_source_ref(item.source_ref), body
         )
-        acted = item.model_copy(update={"status": FeedStatus.ACTED})
-        return self._repo.upsert(acted)
+        return self._repo.mark_handled(
+            user_id, item_id, status=FeedStatus.ACTED, at=self._now()
+        )

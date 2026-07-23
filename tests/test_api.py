@@ -6,9 +6,27 @@ from tests.fakes import FakeGitHubService, make_event
 
 prefs = UserPreferences(user_id="me")
 
+USER = "8f1c2c1e-0000-4000-8000-000000000001"
+
+NOTIFICATION = {
+    "id": "1",
+    "reason": "review_requested",
+    "repository": {"full_name": "octo/repo"},
+    "subject": {
+        "type": "PullRequest",
+        "title": "Add rate limiting",
+        "url": "https://api.github.com/repos/octo/repo/pulls/42",
+    },
+    "updated_at": "2026-07-23T11:00:00Z",
+}
+
+
+def dev_app(**kwargs):
+    return create_app(github=FakeGitHubService(), auth_mode="dev", **kwargs)
+
 
 def test_feed_endpoint_returns_ranked_items():
-    app = create_app(github=FakeGitHubService())
+    app = dev_app()
     svc = app.state.feed_service
     svc.ingest("me", make_event(source_ref="octo/repo#1", reason="subscribed"), prefs)
     svc.ingest(
@@ -19,12 +37,16 @@ def test_feed_endpoint_returns_ranked_items():
     response = client.get("/feed", headers={"X-User-Id": "me"})
 
     assert response.status_code == 200
-    assert [row["action_type"] for row in response.json()] == ["approve", "fyi"]
+    body = response.json()
+    assert [row["type_tag"] for row in body] == ["approve", "fyi"]
+    # The tier and the score exist only on the wire, never in a stored column.
+    assert [row["tier"] for row in body] == ["urgent", "noise"]
+    assert body[0]["priority_score"] > body[1]["priority_score"]
 
 
 def test_action_endpoint_comments_and_marks_acted():
     github = FakeGitHubService()
-    app = create_app(github=github)
+    app = create_app(github=github, auth_mode="dev")
     svc = app.state.feed_service
     item = svc.ingest(
         "me", make_event(source_ref="octo/repo#7", reason="review_requested"), prefs
@@ -41,19 +63,159 @@ def test_action_endpoint_comments_and_marks_acted():
 
 
 def test_action_on_missing_item_returns_404():
-    app = create_app(github=FakeGitHubService())
-    client = TestClient(app)
+    client = TestClient(dev_app())
     response = client.post(
         "/feed/nope/actions", json={"body": "x"}, headers={"X-User-Id": "me"}
     )
     assert response.status_code == 404
 
 
-def test_feed_is_isolated_per_user_via_header():
-    app = create_app(github=FakeGitHubService())
-    svc = app.state.feed_service
-    svc.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
+def test_feed_is_isolated_per_user():
+    app = dev_app()
+    app.state.feed_service.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
 
     client = TestClient(app)
     assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1
     assert client.get("/feed", headers={"X-User-Id": "someone-else"}).json() == []
+
+
+# --- auth ------------------------------------------------------------------
+
+
+def test_the_dev_header_is_refused_outside_dev_mode():
+    """A trusted user-id header is the exact thing plan 6.5 forbids. It exists
+    for local development, so it must be impossible to leave on by accident."""
+    app = create_app(github=FakeGitHubService(), auth_mode="supabase", jwt_secret="s")
+    client = TestClient(app)
+    assert client.get("/feed", headers={"X-User-Id": "me"}).status_code == 401
+
+
+def test_supabase_mode_requires_a_valid_token():
+    app = create_app(github=FakeGitHubService(), auth_mode="supabase", jwt_secret="s")
+    client = TestClient(app)
+    assert client.get("/feed").status_code == 401
+    assert (
+        client.get("/feed", headers={"Authorization": "Bearer nonsense"}).status_code
+        == 401
+    )
+
+
+def test_supabase_mode_reads_the_user_from_the_verified_token():
+    import jwt
+
+    app = create_app(
+        github=FakeGitHubService(), auth_mode="supabase", jwt_secret="topsecret"
+    )
+    token = jwt.encode({"sub": USER, "aud": "authenticated"}, "topsecret", "HS256")
+    client = TestClient(app)
+    response = client.get("/feed", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_a_token_signed_with_the_wrong_key_is_refused():
+    import jwt
+
+    app = create_app(
+        github=FakeGitHubService(), auth_mode="supabase", jwt_secret="topsecret"
+    )
+    forged = jwt.encode({"sub": USER, "aud": "authenticated"}, "guess", "HS256")
+    client = TestClient(app)
+    assert (
+        client.get("/feed", headers={"Authorization": f"Bearer {forged}"}).status_code
+        == 401
+    )
+
+
+# --- webhook ---------------------------------------------------------------
+
+
+def envelope(user_id=USER):
+    return {
+        "id": "msg_1",
+        "type": "composio.trigger.message",
+        "timestamp": "2026-07-23T12:00:00Z",
+        "data": NOTIFICATION,
+        "metadata": {
+            "user_id": user_id,
+            "trigger_slug": "GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER",
+            "connected_account_id": "ca_1",
+        },
+    }
+
+
+def test_a_verified_webhook_creates_a_feed_item():
+    app = create_app(
+        github=FakeGitHubService(),
+        auth_mode="dev",
+        verify_webhook=lambda body, headers: envelope(),
+    )
+    client = TestClient(app)
+    response = client.post("/webhooks/composio", json=envelope())
+
+    assert response.status_code == 200
+    assert response.json()["handled"] is True
+    assert len(app.state.feed_service.list_feed(USER)) == 1
+
+
+def test_an_unverified_webhook_is_refused_and_writes_nothing():
+    def reject(body, headers):
+        raise ValueError("bad signature")
+
+    app = create_app(
+        github=FakeGitHubService(), auth_mode="dev", verify_webhook=reject
+    )
+    client = TestClient(app)
+    response = client.post("/webhooks/composio", json=envelope())
+
+    assert response.status_code == 401
+    assert app.state.feed_service.list_feed(USER) == []
+
+
+def test_an_unmapped_trigger_returns_200_so_it_is_not_redelivered_forever():
+    """Composio retries a failed webhook. Returning an error for something we
+    have simply chosen not to handle would turn that into an endless loop."""
+    unmapped = envelope()
+    unmapped["metadata"]["trigger_slug"] = "SOMETHING_ELSE"
+    app = create_app(
+        github=FakeGitHubService(),
+        auth_mode="dev",
+        verify_webhook=lambda body, headers: unmapped,
+    )
+    response = TestClient(app).post("/webhooks/composio", json=unmapped)
+
+    assert response.status_code == 200
+    assert response.json()["handled"] is False
+
+
+# --- fetch on open ---------------------------------------------------------
+
+
+def test_refresh_pulls_notifications_into_the_feed():
+    """GitHub's urgent items arrive on open rather than by push, so this is the
+    primary GitHub path, not a fallback (plan 10.5)."""
+    github = FakeGitHubService(
+        notifications=[make_event(source_ref="octo/repo#3", reason="review_requested")]
+    )
+    app = create_app(github=github, auth_mode="dev")
+    client = TestClient(app)
+
+    response = client.post("/feed/refresh", headers={"X-User-Id": "me"})
+
+    assert response.status_code == 200
+    assert response.json()["ingested"] == 1
+    assert [row["tier"] for row in client.get("/feed", headers={"X-User-Id": "me"}).json()] == [
+        "urgent"
+    ]
+
+
+def test_refresh_is_idempotent():
+    github = FakeGitHubService(
+        notifications=[make_event(source_ref="octo/repo#3", reason="review_requested")]
+    )
+    app = create_app(github=github, auth_mode="dev")
+    client = TestClient(app)
+    client.post("/feed/refresh", headers={"X-User-Id": "me"})
+    client.post("/feed/refresh", headers={"X-User-Id": "me"})
+
+    assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1

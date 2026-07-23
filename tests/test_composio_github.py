@@ -7,6 +7,7 @@ GITHUB_LIST_NOTIFICATIONS, captured from a live call.
 from datetime import datetime, timezone
 
 from backend.integrations.composio_github import (
+    GITHUB_TOOLKIT_VERSION,
     ComposioGitHubService,
     notification_to_raw_event,
 )
@@ -34,8 +35,8 @@ class _FakeTools:
         self.payload = payload
         self.calls: list[tuple] = []
 
-    def execute(self, slug, user_id=None, arguments=None):
-        self.calls.append((slug, user_id, arguments))
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        self.calls.append((slug, user_id, arguments, version))
         return self.payload
 
 
@@ -110,7 +111,7 @@ def test_list_notifications_maps_payload():
 
     assert len(events) == 1
     assert events[0].source_ref == "dswh/glued_landing#23"
-    slug, user_id, args = client.tools.calls[0]
+    slug, user_id, args, version = client.tools.calls[0]
     assert slug == "GITHUB_LIST_NOTIFICATIONS"
     assert user_id == "me"
     # `all` must NOT be sent without `since`: that combination returns 0 results.
@@ -123,9 +124,21 @@ def test_list_notifications_sends_all_with_since():
 
     service.list_notifications(since=datetime(2026, 1, 1, tzinfo=timezone.utc))
 
-    _, _, args = client.tools.calls[0]
+    _, _, args, _ = client.tools.calls[0]
     assert args["all"] is True
     assert args["since"] == "2026-01-01T00:00:00Z"
+
+
+def test_every_call_pins_the_toolkit_version():
+    """Composio refuses manual execution without one, and refuses "latest". An
+    unpinned call fails at runtime, not at import, so it needs a test."""
+    client = _FakeComposio({"successful": True, "data": {"notifications": []}})
+    service = ComposioGitHubService(client, user_id="me")
+
+    service.list_notifications()
+    service.comment_on_pull_request(PRRef(repo="a/b", number=1), "hi")
+
+    assert all(call[3] == GITHUB_TOOLKIT_VERSION for call in client.tools.calls)
 
 
 def test_list_notifications_handles_empty_payload():
@@ -144,7 +157,7 @@ def test_comment_on_pull_request_uses_issue_number():
         PRRef(repo="dswh/glued_landing", number=23), "LGTM"
     )
 
-    slug, _, args = client.tools.calls[0]
+    slug, _, args, _ = client.tools.calls[0]
     assert slug == "GITHUB_CREATE_AN_ISSUE_COMMENT"
     assert args == {
         "owner": "dswh",

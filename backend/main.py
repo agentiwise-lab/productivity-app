@@ -1,66 +1,113 @@
 """FastAPI app for the feed.
 
-``create_app`` takes its dependencies as arguments so tests can inject a fake
-GitHub service and a fresh repository. The tracer has no signup: the user is read
-from an ``X-User-Id`` header and defaults to a single dev user. Real auth (a
-Supabase-issued identity) replaces ``current_user`` later, with no change to the
-routes. Isolation still holds because every service call is scoped to the id.
+``create_app`` takes its dependencies as arguments, so tests inject fakes and
+production injects the real Composio, Supabase and OpenRouter clients. Nothing
+in this file reads an environment variable; that is ``composition.py``'s job,
+which keeps the routes testable and keeps configuration in one place.
+
+Routes are deliberately thin. Each one authenticates, delegates to a service
+contract, and translates an exception into a status code.
 """
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+import logging
+from typing import Any, Callable
+
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-from backend.integrations.github import GitHubService, PRRef, PullRequest, Comment
+from backend.auth import AuthMode, build_current_user
+from backend.integrations.github import Comment, GitHubService, PRRef, PullRequest
 from backend.models.events import RawEvent
-from backend.models.feed import FeedItem
+from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
-from backend.services.classification import DefaultClassificationService
+from backend.services.classifier import DefaultClassificationService
 from backend.services.feed import DefaultFeedService, ItemNotFound
-from backend.services.priority import DefaultPriorityService
+from backend.services.ingest import IngestResult, WebhookIngestService
+from backend.services.rules import DefaultRuleClassifier
+
+log = logging.getLogger(__name__)
 
 
 class _UnconfiguredGitHubService:
-    """Placeholder used by the module-level app until a real GitHub App client is
-    wired. Reads return empty; write actions fail loudly rather than silently."""
+    """Placeholder for an app built without a GitHub client. Reads return empty;
+    writes fail loudly rather than silently doing nothing."""
 
     def list_notifications(self, since=None) -> list[RawEvent]:
         return []
 
     def get_pull_request(self, ref: PRRef) -> PullRequest:
-        raise NotImplementedError("GitHub App client not configured")
+        raise NotImplementedError("GitHub client not configured")
 
     def comment_on_pull_request(self, ref: PRRef, body: str) -> Comment:
-        raise NotImplementedError("GitHub App client not configured")
+        raise NotImplementedError("GitHub client not configured")
+
+
+class _NullConnectionRepository:
+    def mark_status(self, user_id: str, provider: str, status: str) -> None:
+        log.warning("connection %s/%s -> %s (not persisted)", user_id, provider, status)
+
+    def identity_for(self, user_id: str, provider: str):
+        from backend.models.identity import Identity
+
+        return Identity()
 
 
 class CommentBody(BaseModel):
     body: str
 
 
-def current_user(x_user_id: str = Header(default="me")) -> str:
-    return x_user_id
+class RefreshResult(BaseModel):
+    ingested: int
+    classified: int
 
 
 def create_app(
-    github: GitHubService, repo: FeedRepository | None = None
+    github: GitHubService | None = None,
+    repo: FeedRepository | None = None,
+    *,
+    auth_mode: AuthMode = "dev",
+    jwt_secret: str | None = None,
+    connections: Any | None = None,
+    classifier: DefaultClassificationService | None = None,
+    verify_webhook: Callable[[bytes, dict], dict] | None = None,
 ) -> FastAPI:
+    github = github or _UnconfiguredGitHubService()
     repo = repo or InMemoryFeedRepository()
+    connections = connections or _NullConnectionRepository()
+
     feed_service = DefaultFeedService(
-        repo=repo,
-        classifier=DefaultClassificationService(),
-        prioritizer=DefaultPriorityService(),
-        github=github,
+        repo=repo, rules=DefaultRuleClassifier(), github=github
     )
+    ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
+    current_user = build_current_user(auth_mode, jwt_secret)
 
-    app = FastAPI(title="Work Feed (GitHub tracer)")
-    # Exposed so the poller/webhook path (and tests) can ingest events.
+    app = FastAPI(title="Work feed")
     app.state.feed_service = feed_service
+    app.state.ingest_service = ingest_service
 
-    @app.get("/feed", response_model=list[FeedItem])
-    def get_feed(user_id: str = Depends(current_user)) -> list[FeedItem]:
-        return feed_service.list_feed(user_id)
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/feed", response_model=list[FeedRow])
+    def get_feed(user_id: str = Depends(current_user)) -> list[FeedRow]:
+        return feed_service.list_feed(user_id, UserPreferences(user_id=user_id))
+
+    @app.post("/feed/refresh", response_model=RefreshResult)
+    def refresh(user_id: str = Depends(current_user)) -> RefreshResult:
+        """Fetch on open. GitHub's account-wide triggers cannot carry the urgent
+        tier, so this poll is the primary GitHub path rather than a fallback."""
+        prefs = UserPreferences(user_id=user_id)
+        events = github.list_notifications()
+        for event in events:
+            feed_service.ingest(user_id, event, prefs)
+
+        classified = 0
+        if classifier is not None:
+            classified = classifier.classify_pending(user_id).classified
+        return RefreshResult(ingested=len(events), classified=classified)
 
     @app.post("/feed/{item_id}/actions", response_model=FeedItem)
     def post_action(
@@ -71,7 +118,23 @@ def create_app(
         except ItemNotFound:
             raise HTTPException(status_code=404, detail="feed item not found")
 
+    @app.post("/webhooks/composio", response_model=IngestResult)
+    async def composio_webhook(request: Request) -> IngestResult:
+        """Unauthenticated by URL and authenticated by signature.
+
+        Anything we simply do not handle still answers 200: Composio retries a
+        failed delivery, so returning an error for an unmapped trigger would
+        turn a shrug into an endless redelivery loop.
+        """
+        body = await request.body()
+        if verify_webhook is None:
+            raise HTTPException(status_code=503, detail="webhooks not configured")
+        try:
+            envelope = verify_webhook(body, dict(request.headers))
+        except Exception:
+            log.warning("rejected an unverified webhook", exc_info=True)
+            raise HTTPException(status_code=401, detail="invalid signature")
+
+        return ingest_service.handle(envelope)
+
     return app
-
-
-app = create_app(github=_UnconfiguredGitHubService())

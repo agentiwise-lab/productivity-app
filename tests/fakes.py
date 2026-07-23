@@ -8,6 +8,10 @@ from datetime import datetime
 from backend.integrations.github import Comment, PRRef, PullRequest
 from backend.models.events import RawEvent
 from backend.models.feed import Actor
+from backend.models.identity import Identity
+from backend.repositories.feed_repository import InMemoryFeedRepository
+from backend.services.feed import DefaultFeedService
+from backend.services.rules import DefaultRuleClassifier
 
 
 class FakeGitHubService:
@@ -31,6 +35,31 @@ class FakeGitHubService:
     def comment_on_pull_request(self, ref: PRRef, body: str) -> Comment:
         self.comments.append((ref, body))
         return Comment(id="c1", url="https://github.com/comment/1", body=body)
+
+
+class FakeConnectionRepository:
+    """Records connection status changes so tests can assert an expired
+    connection was surfaced rather than silently swallowed."""
+
+    def __init__(self) -> None:
+        self.statuses: dict[tuple[str, str], str] = {}
+        self.identities: dict[tuple[str, str], Identity] = {}
+
+    def mark_status(self, user_id: str, provider: str, status: str) -> None:
+        self.statuses[(user_id, provider)] = status
+
+    def identity_for(self, user_id: str, provider: str) -> Identity:
+        return self.identities.get((user_id, provider), Identity())
+
+
+def build_feed_service(repo=None, github=None) -> DefaultFeedService:
+    """The real feed service with fake edges. Used wherever a test needs a
+    working spine but is not testing the spine itself."""
+    return DefaultFeedService(
+        repo=repo or InMemoryFeedRepository(),
+        rules=DefaultRuleClassifier(),
+        github=github or FakeGitHubService(),
+    )
 
 
 def make_event(**overrides) -> RawEvent:

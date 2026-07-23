@@ -20,6 +20,12 @@ from backend.models.feed import Actor
 # GitHub caps notification pages at 50.
 _PAGE_SIZE = 50
 
+# Composio requires an explicit toolkit version for manual execution, and
+# refuses "latest". Pinning is the better behaviour anyway: an upstream tool
+# revision cannot silently change the payload shape our mappers depend on.
+# Bumping it is a deliberate change with the fixtures re-checked.
+GITHUB_TOOLKIT_VERSION = "20260721_00"
+
 # Reasons that mean another person is waiting on this user to act.
 _BLOCKING_REASONS = {"review_requested", "approval_requested", "assign"}
 
@@ -75,9 +81,12 @@ def notification_to_raw_event(notification: dict[str, Any]) -> RawEvent:
 class ComposioGitHubService:
     """GitHubService implementation backed by Composio tool calls."""
 
-    def __init__(self, composio: Any, user_id: str) -> None:
+    def __init__(
+        self, composio: Any, user_id: str, version: str = GITHUB_TOOLKIT_VERSION
+    ) -> None:
         self._composio = composio
         self._user_id = user_id
+        self._version = version
 
     @staticmethod
     def _data(result: Any) -> dict[str, Any]:
@@ -88,7 +97,10 @@ class ComposioGitHubService:
     def _execute(self, slug: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return self._data(
             self._composio.tools.execute(
-                slug, user_id=self._user_id, arguments=arguments
+                slug,
+                user_id=self._user_id,
+                arguments=arguments,
+                version=self._version,
             )
         )
 

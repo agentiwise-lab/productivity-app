@@ -433,3 +433,17 @@ cd mobile && npx expo start
 3. Confirm OpenRouter per-token pricing at implementation time.
 4. Calendar RSVP is a patch on the attendee response, with no dedicated tool. Verify before Phase 5.
 5. GitHub urgent items surface on app open rather than as instant push, unless a repo is opted into real-time watching at 720 calls/month. Accepted for now.
+6. **`GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER`'s payload shape is assumed, not captured.** The mapper reads it as a GitHub issue object. Confirm against a real delivery before relying on it; the notification trigger's shape *is* captured and tested.
+7. **Slack needs its own mappers.** Phase 4 adds them; the ingest router already dispatches by trigger slug, so it is a new entry in `_MAPPERS`, not a new path.
+
+---
+
+## 11. Implementation notes
+
+Things the build established that the plan could not have known.
+
+- **Composio requires an explicit toolkit version** for manual tool execution and rejects `latest`. GitHub is pinned to `20260721_00` in `composio_github.py`. Pinning is the better behaviour regardless: an upstream tool revision cannot silently reshape the payload our mappers depend on. Bumping it is a deliberate change with the fixtures re-checked.
+- **The webhook secret is required, not optional.** Without it the endpoint would accept any POST to a public URL as a genuine event for whatever user id it names. `composio.triggers.parse(verify_secret=...)` does the verification.
+- **`AUTH_MODE` has no default in code.** A default would be either `dev`, which ships an open door, or `supabase`, which breaks local work in a way somebody would "fix" by re-adding the trusted header. Explicit costs one argument and removes both failures.
+- **Two paths write to a feed item and they must stay apart.** `upsert` owns the source's content; `mark_handled` owns the user's. Merging them means a refetch resurrects items the user already replied to, which the contract tests now pin.
+- **Live check, 2026-07-23:** all 19 of the account's real GitHub notifications carry `reason: author`, because opening a PR subscribes you to it. They correctly classify as Noise, which means the feed for this account is currently the "you're clear" state rather than the demo. A second account, or a review request, is needed to see a populated urgent tier.
