@@ -327,6 +327,56 @@ flowchart LR
 
 Note that **we never talk to GitHub or Slack directly.** Composio holds every connection and runs every poll. Our backend only receives webhooks, classifies, stores, and serves.
 
+### Verified end to end (2026-07-23)
+
+A real Slack DM was delivered from Composio to a listener on localhost through ngrok. The exact payload shape:
+
+```jsonc
+{
+  "id": "msg_240690a5-...",
+  "type": "composio.trigger.message",
+  "timestamp": "2026-07-23T12:43:36.638Z",
+  "metadata": {
+    "trigger_slug": "SLACK_DIRECT_MESSAGE_RECEIVED",
+    "trigger_id": "ti_4iQsbdv6yVUp",
+    "connected_account_id": "ca_xa784GOt4Dul",
+    "auth_config_id": "ac_Qf9iy2_Ih2fT",
+    "user_id": "pg-test-86b8d0d9-..."      // <-- the routing key
+  },
+  "data": {                                 // provider-native payload
+    "channel": "D09P6BCPZ8U", "channel_type": "im",
+    "user": "U09PFMNAYP3", "ts": "1784810612.222159",
+    "text": "...", "bot_id": null
+  }
+}
+```
+
+**The routing key is `metadata.user_id`, not `data.user_id`.** `data` is the provider's own payload (Slack's message object here), and its `user` field is the *sender*, not our user. Confusing these would route events to the wrong account.
+
+Confirmed by this test: Composio runs the poll loop itself, delivers to one webhook, stamps every event with the user identity, and no scheduler runs on our side.
+
+### The quota constraint (this shapes the design)
+
+Every poll Composio performs is a tool call against our quota. Measured against the 20,000/month free tier, **for a single user watching a single repo**:
+
+| Poll interval | Calls/month | Share of free tier |
+|---|---:|---:|
+| 2 min | 21,600 | **108%, exceeds it alone** |
+| 5 min | 8,640 | 43% |
+| 15 min | 2,880 | 14% |
+| 30 min | 1,440 | 7% |
+| 60 min | 720 | 4% |
+
+The 2-minute test trigger was disabled immediately after the test for exactly this reason.
+
+**Three consequences:**
+
+1. **Short-interval polling does not scale.** Ten users at 15 minutes is 28,800 calls/month, already past the free tier before anyone does anything.
+2. **Fetch-on-open is not just simpler, it is dramatically cheaper.** A user opening the app a few times a day costs a handful of calls, versus hundreds for a background poll that mostly finds nothing. Your instinct here was the economically right one, not only the simpler one.
+3. **Prefer genuinely push-based triggers.** Slack pushes to Composio, so `SLACK_DIRECT_MESSAGE_RECEIVED` costs nothing while idle. Reserve polling for sources that offer no push, and give those long intervals.
+
+**Resulting policy:** push triggers where the provider supports them (Slack, Linear public teams), fetch-on-open for everything else, and background polling only for genuinely urgent sources at 15 minutes or slower.
+
 ### Scaling note
 
 Trigger instances multiply as users times event types. At 100 users watching 4 event types that is 400 instances inside Composio, and each poll is a tool call against the quota. This is the number to model before opening the doors, and it is an argument for preferring genuinely push-based triggers (Slack) over polled ones (Gmail, Calendar) wherever both exist.
