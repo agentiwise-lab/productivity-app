@@ -1,0 +1,768 @@
+<title>Work Feed · 25 Screen Explorations</title>
+
+<style>
+  /* ============ page shell ============ */
+  .pg{--pbg:#111214;--pfg:#EDEDEF;--pdim:#8B8D93;--pline:#26282C;
+      background:var(--pbg);color:var(--pfg);margin:0;padding:44px 26px 90px;
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+      -webkit-font-smoothing:antialiased;}
+  @media (prefers-color-scheme:light){.pg{--pbg:#F4F4F5;--pfg:#191A1C;--pdim:#6B6D73;--pline:#DEDFE2;}}
+  :root[data-theme="light"] .pg{--pbg:#F4F4F5;--pfg:#191A1C;--pdim:#6B6D73;--pline:#DEDFE2;}
+  :root[data-theme="dark"] .pg{--pbg:#111214;--pfg:#EDEDEF;--pdim:#8B8D93;--pline:#26282C;}
+  *{box-sizing:border-box;}
+  .pg h1{font-size:33px;line-height:1.12;letter-spacing:-.024em;margin:0 0 12px;max-width:20ch;text-wrap:balance;}
+  .pg .lede{font-size:15.5px;line-height:1.6;color:var(--pdim);max-width:66ch;margin:0 0 6px;}
+  .mono{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--pdim);margin:0 0 14px;}
+
+  .thm{margin-top:64px;padding-top:26px;border-top:1px solid var(--pline);}
+  .thm-h{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 26px;margin-bottom:6px;}
+  .thm-h h2{font-size:23px;letter-spacing:-.02em;margin:0;}
+  .thm-h .no{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--pdim);}
+  .thm p.d{font-size:14px;line-height:1.6;color:var(--pdim);max-width:70ch;margin:8px 0 0;}
+  .sw{display:flex;gap:5px;margin-top:12px;}
+  .sw i{width:26px;height:26px;border-radius:6px;border:1px solid rgba(128,128,128,.28);display:block;}
+  .tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;}
+  .tags span{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;letter-spacing:.05em;
+    border:1px solid var(--pline);border-radius:5px;padding:4px 7px;color:var(--pdim);}
+
+  .rail{display:flex;gap:20px;overflow-x:auto;padding:22px 0 12px;scroll-snap-type:x proximity;}
+  .rail::-webkit-scrollbar{height:8px;} .rail::-webkit-scrollbar-thumb{background:var(--pline);border-radius:4px;}
+  .cell{flex:none;width:268px;scroll-snap-align:start;}
+  .cell .nm{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--pdim);margin:11px 0 0;}
+
+  /* ============ phone chrome (shared) ============ */
+  .ph{width:268px;height:552px;border-radius:24px;overflow:hidden;display:flex;flex-direction:column;
+      border:1px solid rgba(128,128,128,.25);box-shadow:0 14px 40px rgba(0,0,0,.3);}
+  .ph .sb{display:flex;justify-content:space-between;padding:9px 15px 3px;font-size:9.5px;letter-spacing:.03em;}
+  .ph .bd{flex:1;overflow:hidden;}
+  .ph .tb{display:grid;grid-template-columns:repeat(4,1fr);}
+  .ph .tb div{padding:8px 2px 11px;text-align:center;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;}
+  .ph .tb i{display:block;width:13px;height:13px;margin:0 auto 4px;border-radius:4px;border:1.4px solid currentColor;opacity:.5;}
+  .ph .tb .on i{opacity:1;}
+
+  /* =================== T1  GRAPHITE & GOLD  (dense list) =================== */
+  .t1{--bg:#131315;--sf:#1B1B1F;--fg:#F2EFE9;--dim:#8E8A82;--ln:#2A2A2F;--ac:#C9A227;--sg:#D8734A;}
+  .t1 .ph{background:var(--bg);color:var(--fg);}
+  .t1 .sb{color:var(--dim);font-family:ui-monospace,Menlo,monospace;}
+  .t1 .hd{padding:4px 15px 11px;border-bottom:1px solid var(--ln);}
+  .t1 .hd .big{font-size:27px;letter-spacing:-.03em;line-height:1;}
+  .t1 .hd .big b{color:var(--ac);font-weight:600;}
+  .t1 .hd .sm{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--dim);margin-top:6px;}
+  .t1 .sec{display:flex;justify-content:space-between;padding:12px 15px 5px;
+    font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);}
+  .t1 .sec b{color:var(--sg);font-weight:400;}
+  .t1 .r{display:flex;gap:9px;padding:9px 15px;border-top:1px solid var(--ln);}
+  .t1 .g{width:22px;height:22px;border-radius:5px;background:#26262B;border:1px solid var(--ln);
+    font-family:ui-monospace,Menlo,monospace;font-size:8px;display:grid;place-items:center;color:var(--dim);flex:none;}
+  .t1 .tt{font-size:12px;line-height:1.35;margin:0 0 4px;}
+  .t1 .mt{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--dim);display:flex;gap:6px;flex-wrap:wrap;}
+  .t1 .k{border:1px solid var(--ln);border-radius:4px;padding:1px 4px;letter-spacing:.06em;}
+  .t1 .k.h{border-color:var(--sg);color:var(--sg);}
+  .t1 .stat{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--ln);}
+  .t1 .stat div{padding:10px 12px;border-right:1px solid var(--ln);}
+  .t1 .stat .v{font-family:ui-monospace,Menlo,monospace;font-size:19px;letter-spacing:-.02em;}
+  .t1 .stat .l{font-family:ui-monospace,Menlo,monospace;font-size:8px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--dim);margin-top:3px;}
+  .t1 .act{display:flex;gap:6px;padding:11px 15px;flex-wrap:wrap;}
+  .t1 .b{border:1px solid var(--ln);border-radius:7px;padding:8px 11px;font-size:11.5px;flex:1;text-align:center;}
+  .t1 .b.p{background:var(--ac);border-color:var(--ac);color:#17150C;font-weight:600;}
+  .t1 .tb{background:var(--sf);border-top:1px solid var(--ln);color:var(--dim);}
+  .t1 .tb .on{color:var(--ac);}
+  .t1 .sum{margin:11px 15px;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--sf);}
+  .t1 .sum h4{font-family:ui-monospace,Menlo,monospace;font-size:8.5px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--ac);margin:0 0 5px;}
+  .t1 .sum p{font-size:11.5px;line-height:1.5;color:var(--dim);margin:0;}
+
+  /* =================== T2  WARM SAND  (hero + queue) =================== */
+  .t2{--bg:#F5F1EA;--sf:#FFFDF9;--fg:#2E2A25;--dim:#877D70;--ln:#E4DCCF;--ac:#8A5A3B;--sg:#B0502F;}
+  .t2 .ph{background:var(--bg);color:var(--fg);}
+  .t2 .sb{color:var(--dim);}
+  .t2 .hd{padding:6px 18px 14px;}
+  .t2 .hd .t{font-size:22px;letter-spacing:-.025em;margin:0;}
+  .t2 .hd .s{font-size:11.5px;color:var(--dim);margin:4px 0 0;}
+  .t2 .hero{margin:0 15px;background:var(--sf);border:1px solid var(--ln);border-radius:16px;padding:15px;}
+  .t2 .hero .lab{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ac);margin:0 0 8px;}
+  .t2 .hero .h{font-size:16px;line-height:1.32;letter-spacing:-.015em;margin:0 0 8px;}
+  .t2 .hero .w{font-size:11.5px;line-height:1.5;color:var(--dim);margin:0 0 13px;}
+  .t2 .hero .row{display:flex;gap:7px;}
+  .t2 .hero .b{flex:1;text-align:center;border-radius:10px;padding:9px;font-size:11.5px;border:1px solid var(--ln);}
+  .t2 .hero .b.p{background:var(--ac);color:#FFF8F1;border-color:var(--ac);font-weight:600;}
+  .t2 .qh{padding:16px 18px 7px;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);}
+  .t2 .q{display:flex;gap:10px;align-items:center;padding:9px 18px;}
+  .t2 .q .d{width:6px;height:6px;border-radius:50%;background:var(--ac);flex:none;}
+  .t2 .q .d.o{background:var(--ln);}
+  .t2 .q p{margin:0;font-size:12px;line-height:1.35;}
+  .t2 .q span{font-size:10px;color:var(--dim);}
+  .t2 .tiles{display:flex;gap:9px;padding:0 15px;}
+  .t2 .tile{flex:1;background:var(--sf);border:1px solid var(--ln);border-radius:13px;padding:12px;}
+  .t2 .tile .v{font-size:23px;letter-spacing:-.02em;}
+  .t2 .tile .l{font-size:9.5px;color:var(--dim);margin-top:3px;letter-spacing:.05em;text-transform:uppercase;}
+  .t2 .tb{background:var(--sf);border-top:1px solid var(--ln);color:var(--dim);}
+  .t2 .tb .on{color:var(--ac);}
+
+  /* =================== T3  PRUSSIAN  (bento) =================== */
+  .t3{--bg:#0F1A24;--sf:#16242F;--fg:#E8EEF2;--dim:#7E93A1;--ln:#22323F;--ac:#5B8FB0;--sg:#D9A441;}
+  .t3 .ph{background:var(--bg);color:var(--fg);}
+  .t3 .sb{color:var(--dim);font-family:ui-monospace,Menlo,monospace;}
+  .t3 .hd{padding:5px 14px 10px;}
+  .t3 .hd h3{margin:0;font-size:18px;letter-spacing:-.02em;}
+  .t3 .hd p{margin:3px 0 0;font-size:10px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;}
+  .t3 .bento{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px;}
+  .t3 .c{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:11px;}
+  .t3 .c.w{grid-column:1/-1;}
+  .t3 .c .lab{font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;}
+  .t3 .c .big{font-size:29px;letter-spacing:-.03em;line-height:1;margin:0;}
+  .t3 .c .big small{font-size:12px;color:var(--dim);letter-spacing:0;}
+  .t3 .c .v{font-size:20px;letter-spacing:-.02em;margin:0;}
+  .t3 .c .txt{font-size:11px;line-height:1.45;color:var(--dim);margin:0;}
+  .t3 .c.acc{border-color:var(--ac);}
+  .t3 .c .hot{color:var(--sg);}
+  .t3 .li{display:flex;gap:8px;padding:7px 0;border-top:1px solid var(--ln);}
+  .t3 .li:first-of-type{border-top:none;}
+  .t3 .li p{margin:0;font-size:11px;line-height:1.35;}
+  .t3 .li span{font-size:9px;color:var(--dim);}
+  .t3 .pill{font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--ln);
+    border-radius:4px;padding:2px 5px;color:var(--dim);}
+  .t3 .pill.h{border-color:var(--sg);color:var(--sg);}
+  .t3 .b{border:1px solid var(--ln);border-radius:9px;padding:9px;font-size:11px;text-align:center;background:var(--sf);}
+  .t3 .b.p{background:var(--ac);border-color:var(--ac);color:#0B1720;font-weight:600;}
+  .t3 .tb{background:var(--sf);border-top:1px solid var(--ln);color:var(--dim);}
+  .t3 .tb .on{color:var(--ac);}
+
+  /* =================== T4  PAPER & INK  (editorial) =================== */
+  .t4{--bg:#FAF8F4;--sf:#FFFFFF;--fg:#1C1A17;--dim:#6E6862;--ln:#DDD8CF;--ac:#7A2E2E;}
+  .t4 .ph{background:var(--bg);color:var(--fg);}
+  .t4 .sb{color:var(--dim);font-family:ui-monospace,Menlo,monospace;}
+  .t4 .mast{padding:6px 17px 10px;border-bottom:2px solid var(--fg);}
+  .t4 .mast .dt{font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--dim);}
+  .t4 .mast h3{font-family:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+    font-size:27px;line-height:1.08;letter-spacing:-.02em;margin:7px 0 0;font-weight:600;}
+  .t4 .brief{padding:12px 17px;border-bottom:1px solid var(--ln);}
+  .t4 .brief p{font-family:ui-serif,Georgia,serif;font-size:12.5px;line-height:1.6;margin:0;color:#332F2A;}
+  .t4 .brief p b{color:var(--ac);font-weight:600;}
+  .t4 .kick{padding:13px 17px 5px;font-family:ui-monospace,Menlo,monospace;font-size:8.5px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ac);}
+  .t4 .art{padding:8px 17px;border-top:1px solid var(--ln);}
+  .t4 .art h4{font-family:ui-serif,Georgia,serif;font-size:14px;line-height:1.3;margin:0 0 4px;font-weight:600;}
+  .t4 .art .by{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--dim);letter-spacing:.04em;}
+  .t4 .rule{height:1px;background:var(--ln);margin:0 17px;}
+  .t4 .fig{display:flex;gap:0;border-top:1px solid var(--ln);border-bottom:1px solid var(--ln);}
+  .t4 .fig div{flex:1;padding:11px 8px;text-align:center;border-right:1px solid var(--ln);}
+  .t4 .fig div:last-child{border-right:none;}
+  .t4 .fig .v{font-family:ui-serif,Georgia,serif;font-size:21px;}
+  .t4 .fig .l{font-family:ui-monospace,Menlo,monospace;font-size:7.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--dim);margin-top:3px;}
+  .t4 .b{border:1px solid var(--fg);border-radius:2px;padding:9px;font-size:11px;text-align:center;
+    font-family:ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;}
+  .t4 .b.p{background:var(--ac);border-color:var(--ac);color:#FFF;}
+  .t4 .tb{background:var(--sf);border-top:1px solid var(--fg);color:var(--dim);}
+  .t4 .tb .on{color:var(--ac);}
+
+  /* =================== T5  SLATE & SAGE  (card stack) =================== */
+  .t5{--bg:#EEF0EC;--sf:#FFFFFF;--fg:#22272A;--dim:#78827F;--ln:#DCE2DD;--ac:#4F7362;--sg:#B4653F;}
+  .t5 .ph{background:var(--bg);color:var(--fg);}
+  .t5 .sb{color:var(--dim);}
+  .t5 .hd{padding:6px 17px 12px;display:flex;justify-content:space-between;align-items:center;}
+  .t5 .hd h3{margin:0;font-size:17px;letter-spacing:-.02em;}
+  .t5 .hd .cnt{font-size:11px;color:var(--dim);}
+  .t5 .stack{position:relative;margin:4px 17px 0;}
+  .t5 .peek{position:absolute;left:7px;right:7px;top:-7px;height:22px;background:var(--sf);
+    border:1px solid var(--ln);border-radius:16px;opacity:.55;}
+  .t5 .peek.b2{left:14px;right:14px;top:-13px;opacity:.3;}
+  .t5 .card{position:relative;background:var(--sf);border:1px solid var(--ln);border-radius:16px;
+    padding:15px;box-shadow:0 6px 18px rgba(34,39,42,.07);}
+  .t5 .card .tag{display:inline-block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ac);border:1px solid var(--ac);border-radius:20px;padding:3px 8px;margin-bottom:9px;}
+  .t5 .card .tag.h{color:var(--sg);border-color:var(--sg);}
+  .t5 .card h4{margin:0 0 7px;font-size:15px;line-height:1.32;letter-spacing:-.012em;}
+  .t5 .card .sub{font-size:11px;color:var(--dim);margin:0 0 11px;line-height:1.45;}
+  .t5 .card .why{background:var(--bg);border-radius:10px;padding:9px 10px;margin-bottom:12px;}
+  .t5 .card .why span{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ac);}
+  .t5 .card .why p{margin:4px 0 0;font-size:11px;line-height:1.45;color:var(--dim);}
+  .t5 .btns{display:flex;gap:7px;}
+  .t5 .btns .b{flex:1;text-align:center;border-radius:11px;padding:10px;font-size:11.5px;border:1px solid var(--ln);}
+  .t5 .btns .b.p{background:var(--ac);color:#F3F8F5;border-color:var(--ac);font-weight:600;}
+  .t5 .swipe{text-align:center;font-size:9.5px;color:var(--dim);letter-spacing:.09em;
+    text-transform:uppercase;margin-top:13px;}
+  .t5 .mini{display:flex;gap:8px;padding:13px 17px 0;}
+  .t5 .mini div{flex:1;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:10px;text-align:center;}
+  .t5 .mini .v{font-size:18px;}
+  .t5 .mini .l{font-size:8.5px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
+  .t5 .tb{background:var(--sf);border-top:1px solid var(--ln);color:var(--dim);}
+  .t5 .tb .on{color:var(--ac);}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="pg">
+  <p class="eyebrow">Explorations · 5 themes × 5 screens</p>
+  <h1>Twenty-five ways this app could look.</h1>
+  <p class="lede">Five complete directions, each a distinct palette <em>and</em> a distinct layout
+    structure, drawn across the same five screens. Every screen shows the real interactions the
+    Composio research confirmed we can ship: approve and comment on GitHub, reply and react in Slack,
+    mark read, snooze, open in browser. Pick one row and we unify everything to it.</p>
+
+  <!-- ============================ THEME 1 ============================ -->
+  <section class="thm t1">
+    <div class="thm-h"><span class="no">01</span><h2>Graphite &amp; Gold</h2></div>
+    <p class="d">Inky graphite with restrained metallic gold. Premium through contrast and scarcity of
+      colour, not brightness. <b>Layout: dense list</b>, grouped clusters, hairline rows. The most
+      information per screen, best for power users.</p>
+    <div class="sw"><i style="background:#131315"></i><i style="background:#1B1B1F"></i>
+      <i style="background:#C9A227"></i><i style="background:#D8734A"></i><i style="background:#F2EFE9"></i></div>
+    <div class="tags"><span>dark</span><span>dense list</span><span>gold accent</span><span>power user</span></div>
+
+    <div class="rail">
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><div class="big"><b>7</b> need you</div><div class="sm">Thu 23 Jul · 2 blocking others</div></div>
+        <div class="bd">
+          <div class="sec"><span>Needs decision</span><b>2</b></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">CI failed on your PR: document brand-kit</p>
+            <div class="mt"><span class="k h">Decide</span><span>glued_landing#17</span></div></div></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">Invitation to collaborate on axis_lms</p>
+            <div class="mt"><span class="k h">Decide</span><span>invitation</span></div></div></div>
+          <div class="sec"><span>Needs review</span><b>2</b></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">restore shopify.svg icon for landing grid</p>
+            <div class="mt"><span class="k h">Review</span><span>waiting 4h</span></div></div></div>
+          <div class="sec"><span>Needs reply</span>3</div>
+          <div class="r"><div class="g">SL</div><div><p class="tt">Priya: unblock the staging deploy?</p>
+            <div class="mt"><span class="k">Reply</span><span>#eng-releases</span></div></div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Home</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><div class="big">GitHub</div><div class="sm">Last 24 hours · 3 repos</div></div>
+        <div class="bd">
+          <div class="stat"><div><div class="v">14</div><div class="l">Commits</div></div>
+            <div><div class="v">5</div><div class="l">PRs open</div></div>
+            <div><div class="v" style="color:#D8734A">2</div><div class="l">Await you</div></div></div>
+          <div class="sec"><span>By repository</span>commits</div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">dswh/glued_landing</p>
+            <div class="mt"><span>9 commits</span><span>3 PRs</span><span class="k h">1 CI fail</span></div></div></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">dswh/agentiwise-flow</p>
+            <div class="mt"><span>4 commits</span><span>2 PRs</span></div></div></div>
+          <div class="sec"><span>Awaiting your review</span><b>2</b></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">restore shopify.svg icon</p>
+            <div class="mt"><span class="k h">Review</span><span>+48 −12</span></div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">GitHub</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><div class="big">Slack</div><div class="sm">126 unread · 12 unseen by you</div></div>
+        <div class="bd">
+          <div class="stat"><div><div class="v" style="color:#D8734A">4</div><div class="l">Await reply</div></div>
+            <div><div class="v">11</div><div class="l">Mentions</div></div>
+            <div><div class="v">114</div><div class="l">Seen</div></div></div>
+          <div class="sec"><span>Awaiting your reply</span><b>4</b></div>
+          <div class="r"><div class="g">SL</div><div><p class="tt">Priya: can you unblock the staging deploy?</p>
+            <div class="mt"><span class="k h">Reply</span><span>#eng-releases · 18m</span></div></div></div>
+          <div class="r"><div class="g">SL</div><div><p class="tt">Abdul: shared the LMS migration doc</p>
+            <div class="mt"><span class="k">Reply</span><span>DM · 3h</span></div></div></div>
+          <div class="sec"><span>Where it piled up</span>msgs</div>
+          <div class="r"><div class="g">SL</div><div><p class="tt">#eng-releases</p>
+            <div class="mt"><span>48 messages</span><span>6 mentions</span></div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div class="on"><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Slack</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="hd"><div class="big">Review</div><div class="sm">glued_landing #11 · blocking 2</div></div>
+        <div class="bd">
+          <div class="sum"><h4>What this PR does</h4><p>Restores the Shopify icon in the integrations
+            grid and fixes two broken asset paths. 3 files, low risk.</p></div>
+          <div class="sum"><h4>Why it is top</h4><p>Priya asked 4h ago and the release branch is frozen
+            until it lands.</p></div>
+          <div class="r"><div class="g">GH</div><div><p class="tt">"Can you take a look before the freeze?"</p>
+            <div class="mt"><span>Priya · 4h ago</span></div></div></div>
+          <div class="act"><div class="b p">Approve</div><div class="b">Comment</div></div>
+          <div class="act" style="padding-top:0"><div class="b">Request changes</div><div class="b">Snooze</div></div>
+          <div class="act" style="padding-top:0"><div class="b">Open on GitHub</div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Detail</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><div class="big">Rules</div><div class="sm">What may interrupt you</div></div>
+        <div class="bd">
+          <div class="sec"><span>Push immediately</span><b>2</b></div>
+          <div class="r"><div class="g">!</div><div><p class="tt">Someone is blocked on me</p>
+            <div class="mt"><span class="k h">Push</span><span>review · approve · blocking reply</span></div></div></div>
+          <div class="r"><div class="g">@</div><div><p class="tt">DM from a VIP</p>
+            <div class="mt"><span class="k h">Push</span><span>Priya · Harshit · Abdul</span></div></div></div>
+          <div class="sec"><span>Save for the brief</span>3</div>
+          <div class="r"><div class="g">CI</div><div><p class="tt">CI results and status changes</p>
+            <div class="mt"><span class="k">Brief</span><span>08:30 · 16:30</span></div></div></div>
+          <div class="r"><div class="g">#</div><div><p class="tt">Channel mentions, not directed at me</p>
+            <div class="mt"><span class="k">Brief</span></div></div></div>
+          <div class="sec"><span>Never</span>2</div>
+          <div class="r"><div class="g">Z</div><div><p class="tt">Quiet hours</p>
+            <div class="mt"><span class="k">Off</span><span>21:00–08:00 · weekends</span></div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div class="on"><i></i>Rules</div></div>
+      </div><p class="nm">Rules</p></div>
+    </div>
+  </section>
+
+  <!-- ============================ THEME 2 ============================ -->
+  <section class="thm t2">
+    <div class="thm-h"><span class="no">02</span><h2>Warm Sand</h2></div>
+    <p class="d">Warm off-white and chestnut, the 2026 "brown as a full scheme" direction. Soft and
+      architectural rather than cold. <b>Layout: hero + queue</b>, one big card for the next thing that
+      needs you, everything else a quiet list. The calmest option, and the friendliest to non-developers.</p>
+    <div class="sw"><i style="background:#F5F1EA"></i><i style="background:#FFFDF9"></i>
+      <i style="background:#8A5A3B"></i><i style="background:#C19066"></i><i style="background:#2E2A25"></i></div>
+    <div class="tags"><span>light · warm</span><span>hero + queue</span><span>one thing at a time</span><span>general audience</span></div>
+
+    <div class="rail">
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><p class="t">7 need you</p><p class="s">Thursday, 23 July · 2 people waiting</p></div>
+        <div class="bd">
+          <div class="hero"><p class="lab">Start here</p>
+            <p class="h">Review: restore shopify.svg icon for the landing grid</p>
+            <p class="w">Priya asked 4 hours ago. The release branch is frozen until this lands.</p>
+            <div class="row"><div class="b p">Approve</div><div class="b">Open</div></div></div>
+          <p class="qh">Then these</p>
+          <div class="q"><span class="d"></span><div><p>Unblock the staging deploy?</p><span>Slack · Priya · 18m</span></div></div>
+          <div class="q"><span class="d"></span><div><p>CI failed on document brand-kit</p><span>GitHub · glued_landing#17</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Invitation to collaborate on axis_lms</p><span>GitHub · invitation</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>AGE-214 moved to In Review</p><span>Linear · 2h</span></div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Home</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><p class="t">GitHub</p><p class="s">Last 24 hours</p></div>
+        <div class="bd">
+          <div class="tiles"><div class="tile"><div class="v">14</div><div class="l">Commits</div></div>
+            <div class="tile"><div class="v">5</div><div class="l">PRs open</div></div>
+            <div class="tile"><div class="v" style="color:#B0502F">2</div><div class="l">Await you</div></div></div>
+          <p class="qh">By repository</p>
+          <div class="q"><span class="d"></span><div><p>dswh/glued_landing</p><span>9 commits · 3 PRs · 1 CI failing</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>dswh/agentiwise-flow</p><span>4 commits · 2 PRs</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>agentiwise-lab/productivity-app</p><span>1 commit</span></div></div>
+          <p class="qh">Awaiting your review</p>
+          <div class="q"><span class="d"></span><div><p>restore shopify.svg icon</p><span>+48 −12 · 3 files · waiting 4h</span></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">GitHub</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><p class="t">Slack</p><p class="s">126 unread · 12 you have not seen</p></div>
+        <div class="bd">
+          <div class="hero"><p class="lab">Reply first</p>
+            <p class="h">Priya: can you unblock the staging deploy before standup?</p>
+            <p class="w">#eng-releases · 18 minutes ago · 3 people in thread</p>
+            <div class="row"><div class="b p">Reply</div><div class="b">React</div></div></div>
+          <p class="qh">Also waiting</p>
+          <div class="q"><span class="d"></span><div><p>Abdul: shared the LMS migration doc</p><span>DM · 3h</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Harshit: newsletter draft ready</p><span>DM · 5h</span></div></div>
+          <p class="qh">Where it piled up</p>
+          <div class="q"><span class="d o"></span><div><p>#eng-releases</p><span>48 messages · 6 mentions</span></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div class="on"><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Slack</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="hd"><p class="t">Review</p><p class="s">glued_landing #11</p></div>
+        <div class="bd">
+          <div class="hero"><p class="lab">What this changes</p>
+            <p class="h">Restores the Shopify icon and fixes two broken asset paths</p>
+            <p class="w">3 files, +48 −12, CI passing. Low risk. Priya asked 4h ago and the release
+              branch is frozen until it lands.</p>
+            <div class="row"><div class="b p">Approve</div><div class="b">Comment</div></div></div>
+          <p class="qh">Original request</p>
+          <div class="q"><span class="d o"></span><div><p>"Can you take a look before the freeze?"</p><span>Priya · 4h ago</span></div></div>
+          <p class="qh">More</p>
+          <div class="q"><span class="d o"></span><div><p>Request changes</p><span>Leaves a blocking review</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Snooze until 14:00</p><span>Comes back this afternoon</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Open on GitHub</p><span>Full diff in browser</span></div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Detail</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><p class="t">Rules</p><p class="s">What may interrupt you</p></div>
+        <div class="bd">
+          <p class="qh">Push immediately</p>
+          <div class="q"><span class="d"></span><div><p>Someone is blocked on me</p><span>Review · approve · blocking reply</span></div></div>
+          <div class="q"><span class="d"></span><div><p>Direct message from a VIP</p><span>Priya · Harshit · Abdul</span></div></div>
+          <p class="qh">Save for the brief</p>
+          <div class="q"><span class="d o"></span><div><p>CI results and status changes</p><span>08:30 and 16:30</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Channel mentions not aimed at me</p><span>08:30 and 16:30</span></div></div>
+          <div class="q"><span class="d o"></span><div><p>Merged, closed, released</p><span>08:30 and 16:30</span></div></div>
+          <p class="qh">Never notify</p>
+          <div class="q"><span class="d o"></span><div><p>Quiet hours</p><span>21:00 to 08:00 · weekends</span></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div class="on"><i></i>Rules</div></div>
+      </div><p class="nm">Rules</p></div>
+    </div>
+  </section>
+
+  <!-- ============================ THEME 3 ============================ -->
+  <section class="thm t3">
+    <div class="thm-h"><span class="no">03</span><h2>Prussian</h2></div>
+    <p class="d">Deep Prussian blue with dusty sapphire and amber, the refined jewel-tone direction.
+      Rich without shouting. <b>Layout: bento grid</b>, cards of varying weight, summary before detail.
+      Best when the dashboard matters as much as the list.</p>
+    <div class="sw"><i style="background:#0F1A24"></i><i style="background:#16242F"></i>
+      <i style="background:#5B8FB0"></i><i style="background:#D9A441"></i><i style="background:#E8EEF2"></i></div>
+    <div class="tags"><span>dark · jewel</span><span>bento grid</span><span>dashboard-first</span><span>summary before detail</span></div>
+
+    <div class="rail">
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Today</h3><p>Thu 23 Jul</p></div>
+        <div class="bd">
+          <div class="bento">
+            <div class="c w acc"><p class="lab">Need you</p><p class="big">7 <small>· 2 blocking others</small></p></div>
+            <div class="c"><p class="lab">Decision</p><p class="v hot">2</p></div>
+            <div class="c"><p class="lab">Review</p><p class="v">2</p></div>
+            <div class="c"><p class="lab">Reply</p><p class="v">3</p></div>
+            <div class="c"><p class="lab">Worth knowing</p><p class="v">12</p></div>
+            <div class="c w"><p class="lab">Your brief</p><p class="txt">Two PRs need you before the
+              release freeze. Priya is waiting in #eng-releases. Everything else can wait for 16:30.</p></div>
+            <div class="c w"><p class="lab">Top of the list</p>
+              <div class="li"><div><p>restore shopify.svg icon</p><span>GitHub · waiting 4h</span></div></div>
+              <div class="li"><div><p>Unblock the staging deploy?</p><span>Slack · Priya · 18m</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Home</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>GitHub</h3><p>Last 24 hours</p></div>
+        <div class="bd">
+          <div class="bento">
+            <div class="c"><p class="lab">Commits</p><p class="v">14</p></div>
+            <div class="c"><p class="lab">PRs open</p><p class="v">5</p></div>
+            <div class="c"><p class="lab">Await you</p><p class="v hot">2</p></div>
+            <div class="c"><p class="lab">CI failing</p><p class="v hot">1</p></div>
+            <div class="c w"><p class="lab">By repository</p>
+              <div class="li"><div><p>dswh/glued_landing</p><span>9 commits · 3 PRs · 1 CI fail</span></div></div>
+              <div class="li"><div><p>dswh/agentiwise-flow</p><span>4 commits · 2 PRs</span></div></div>
+              <div class="li"><div><p>agentiwise-lab/productivity-app</p><span>1 commit</span></div></div>
+            </div>
+            <div class="c w"><p class="lab">Awaiting your review</p>
+              <div class="li"><div><p>restore shopify.svg icon</p><span>+48 −12 · 4h</span></div>
+                <span class="pill h">Review</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">GitHub</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Slack</h3><p>Last 24 hours</p></div>
+        <div class="bd">
+          <div class="bento">
+            <div class="c"><p class="lab">Await reply</p><p class="v hot">4</p></div>
+            <div class="c"><p class="lab">Mentions</p><p class="v">11</p></div>
+            <div class="c"><p class="lab">Unread</p><p class="v">126</p></div>
+            <div class="c"><p class="lab">Unseen</p><p class="v">12</p></div>
+            <div class="c w"><p class="lab">Awaiting your reply</p>
+              <div class="li"><div><p>Priya: unblock the staging deploy?</p><span>#eng-releases · 18m</span></div>
+                <span class="pill h">Reply</span></div>
+              <div class="li"><div><p>Abdul: LMS migration doc</p><span>DM · 3h</span></div>
+                <span class="pill">Reply</span></div>
+            </div>
+            <div class="c w"><p class="lab">Where it piled up</p>
+              <div class="li"><div><p>#eng-releases</p><span>48 messages · 6 mentions</span></div></div>
+              <div class="li"><div><p>#glued-dev-updates</p><span>29 messages</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div class="on"><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Slack</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="hd"><h3>Review</h3><p>glued_landing #11</p></div>
+        <div class="bd">
+          <div class="bento">
+            <div class="c w acc"><p class="lab">What this PR does</p><p class="txt">Restores the Shopify
+              icon in the integrations grid and fixes two broken asset paths. Low risk.</p></div>
+            <div class="c"><p class="lab">Files</p><p class="v">3</p></div>
+            <div class="c"><p class="lab">Waiting</p><p class="v hot">4h</p></div>
+            <div class="c w"><p class="lab">Why it is top</p><p class="txt">Priya requested it and the
+              release branch is frozen. Two PRs are stacked behind it.</p></div>
+            <div class="c w"><p class="lab">Original request</p>
+              <div class="li"><div><p>"Can you take a look before the freeze?"</p><span>Priya · 4h ago</span></div></div></div>
+            <div class="b p">Approve</div><div class="b">Comment</div>
+            <div class="b">Request changes</div><div class="b">Snooze</div>
+            <div class="c w" style="padding:0;border:none"><div class="b">Open on GitHub</div></div>
+          </div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Detail</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Rules</h3><p>What may interrupt</p></div>
+        <div class="bd">
+          <div class="bento">
+            <div class="c w"><p class="lab">Push immediately</p>
+              <div class="li"><div><p>Someone is blocked on me</p><span>review · approve · blocking reply</span></div>
+                <span class="pill h">Push</span></div>
+              <div class="li"><div><p>DM from a VIP</p><span>Priya · Harshit · Abdul</span></div>
+                <span class="pill h">Push</span></div></div>
+            <div class="c w"><p class="lab">Save for the brief</p>
+              <div class="li"><div><p>CI and status changes</p><span>08:30 · 16:30</span></div>
+                <span class="pill">Brief</span></div>
+              <div class="li"><div><p>Channel mentions</p><span>08:30 · 16:30</span></div>
+                <span class="pill">Brief</span></div></div>
+            <div class="c"><p class="lab">Muted repos</p><p class="v">3</p></div>
+            <div class="c"><p class="lab">Quiet hours</p><p class="v" style="font-size:13px">21–08</p></div>
+          </div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div class="on"><i></i>Rules</div></div>
+      </div><p class="nm">Rules</p></div>
+    </div>
+  </section>
+
+  <!-- ============================ THEME 4 ============================ -->
+  <section class="thm t4">
+    <div class="thm-h"><span class="no">04</span><h2>Paper &amp; Ink</h2></div>
+    <p class="d">A printed daily briefing. Warm paper, serif headlines, oxblood spot colour, real rules
+      between sections. <b>Layout: editorial</b>, a masthead and a written brief before any list. The
+      most distinctive option and the least like every other dev tool.</p>
+    <div class="sw"><i style="background:#FAF8F4"></i><i style="background:#FFFFFF"></i>
+      <i style="background:#7A2E2E"></i><i style="background:#1C1A17"></i><i style="background:#DDD8CF"></i></div>
+    <div class="tags"><span>light · paper</span><span>editorial</span><span>serif display</span><span>brief-led</span></div>
+
+    <div class="rail">
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="mast"><div class="dt">Thursday 23 July</div><h3>Seven things need you today.</h3></div>
+        <div class="bd">
+          <div class="brief"><p>Two pull requests are waiting before the release freeze, and
+            <b>Priya is blocked</b> in #eng-releases. Everything else, including twelve status
+            updates, is held for the afternoon brief.</p></div>
+          <div class="kick">Needs a decision</div>
+          <div class="art"><h4>CI failed on "document brand-kit"</h4><div class="by">GitHub · glued_landing #17</div></div>
+          <div class="art"><h4>Invitation to collaborate on axis_lms</h4><div class="by">GitHub · invitation</div></div>
+          <div class="kick">Needs your review</div>
+          <div class="art"><h4>Restore shopify.svg icon for the landing grid</h4><div class="by">GitHub · waiting 4 hours</div></div>
+          <div class="kick">Needs a reply</div>
+          <div class="art"><h4>Can you unblock the staging deploy?</h4><div class="by">Slack · Priya · 18 minutes</div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Home</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="mast"><div class="dt">Last 24 hours</div><h3>GitHub</h3></div>
+        <div class="bd">
+          <div class="fig"><div><div class="v">14</div><div class="l">Commits</div></div>
+            <div><div class="v">5</div><div class="l">PRs</div></div>
+            <div><div class="v" style="color:#7A2E2E">2</div><div class="l">Await you</div></div></div>
+          <div class="brief"><p>Most of the movement was in <b>glued_landing</b>: nine commits, three
+            open pull requests and one failing check.</p></div>
+          <div class="kick">By repository</div>
+          <div class="art"><h4>dswh/glued_landing</h4><div class="by">9 commits · 3 PRs · 1 CI failing</div></div>
+          <div class="art"><h4>dswh/agentiwise-flow</h4><div class="by">4 commits · 2 PRs</div></div>
+          <div class="kick">Awaiting your review</div>
+          <div class="art"><h4>Restore shopify.svg icon</h4><div class="by">+48 −12 · 3 files · 4 hours</div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">GitHub</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="mast"><div class="dt">Last 24 hours</div><h3>Slack</h3></div>
+        <div class="bd">
+          <div class="fig"><div><div class="v" style="color:#7A2E2E">4</div><div class="l">Await reply</div></div>
+            <div><div class="v">11</div><div class="l">Mentions</div></div>
+            <div><div class="v">12</div><div class="l">Unseen</div></div></div>
+          <div class="brief"><p>Of 126 messages you have seen 114. The dozen you have not are
+            concentrated in <b>#eng-releases</b>.</p></div>
+          <div class="kick">Awaiting your reply</div>
+          <div class="art"><h4>Priya: can you unblock the staging deploy?</h4><div class="by">#eng-releases · 18 minutes</div></div>
+          <div class="art"><h4>Abdul: shared the LMS migration doc</h4><div class="by">Direct message · 3 hours</div></div>
+          <div class="kick">Where it piled up</div>
+          <div class="art"><h4>#eng-releases</h4><div class="by">48 messages · 6 mentions</div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div class="on"><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Slack</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="mast"><div class="dt">glued_landing #11</div><h3>Restore shopify.svg icon</h3></div>
+        <div class="bd">
+          <div class="brief"><p>Restores the Shopify icon in the integrations grid and fixes two broken
+            asset paths. Three files, <b>low risk</b>, checks passing.</p></div>
+          <div class="fig"><div><div class="v">3</div><div class="l">Files</div></div>
+            <div><div class="v">+48</div><div class="l">Added</div></div>
+            <div><div class="v">4h</div><div class="l">Waiting</div></div></div>
+          <div class="kick">Why it is top</div>
+          <div class="art"><h4>The release branch is frozen until it lands</h4>
+            <div class="by">Priya asked · two PRs stacked behind</div></div>
+          <div class="kick">Original request</div>
+          <div class="art"><h4>"Can you take a look before the freeze?"</h4><div class="by">Priya · 4 hours ago</div></div>
+          <div style="display:flex;gap:6px;padding:12px 17px"><div class="b p" style="flex:1">Approve</div>
+            <div class="b" style="flex:1">Comment</div></div>
+          <div style="display:flex;gap:6px;padding:0 17px 12px"><div class="b" style="flex:1">Changes</div>
+            <div class="b" style="flex:1">Snooze</div><div class="b" style="flex:1">Open</div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Detail</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="mast"><div class="dt">Notifications</div><h3>What may interrupt you</h3></div>
+        <div class="bd">
+          <div class="kick">Push immediately</div>
+          <div class="art"><h4>Someone is blocked on me</h4><div class="by">Review · approve · blocking reply</div></div>
+          <div class="art"><h4>Direct message from a VIP</h4><div class="by">Priya · Harshit · Abdul</div></div>
+          <div class="kick">Save for the brief</div>
+          <div class="art"><h4>CI results and status changes</h4><div class="by">08:30 and 16:30</div></div>
+          <div class="art"><h4>Channel mentions not aimed at me</h4><div class="by">08:30 and 16:30</div></div>
+          <div class="art"><h4>Merged, closed and released</h4><div class="by">08:30 and 16:30</div></div>
+          <div class="kick">Never notify</div>
+          <div class="art"><h4>Quiet hours</h4><div class="by">21:00 to 08:00 · weekends</div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div class="on"><i></i>Rules</div></div>
+      </div><p class="nm">Rules</p></div>
+    </div>
+  </section>
+
+  <!-- ============================ THEME 5 ============================ -->
+  <section class="thm t5">
+    <div class="thm-h"><span class="no">05</span><h2>Slate &amp; Sage</h2></div>
+    <p class="d">Cool slate with a muted sage accent and clay for urgency. Quiet, modern, unfussy.
+      <b>Layout: card stack</b>, one item at a time with the next peeking behind, swipe to clear.
+      The lowest-anxiety option: you cannot see the size of the pile, only the next thing.</p>
+    <div class="sw"><i style="background:#EEF0EC"></i><i style="background:#FFFFFF"></i>
+      <i style="background:#4F7362"></i><i style="background:#B4653F"></i><i style="background:#22272A"></i></div>
+    <div class="tags"><span>light · cool</span><span>card stack</span><span>swipe to triage</span><span>lowest anxiety</span></div>
+
+    <div class="rail">
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Today</h3><span class="cnt">1 of 7</span></div>
+        <div class="bd">
+          <div class="stack"><span class="peek b2"></span><span class="peek"></span>
+            <div class="card"><span class="tag h">Needs review</span>
+              <h4>Restore shopify.svg icon for the landing grid</h4>
+              <p class="sub">GitHub · glued_landing #11 · Priya · 4h</p>
+              <div class="why"><span>Why now</span><p>The release branch is frozen until this lands.
+                Two PRs are stacked behind it.</p></div>
+              <div class="btns"><div class="b p">Approve</div><div class="b">Comment</div></div>
+              <p class="swipe">Swipe left to snooze · right to clear</p>
+            </div></div>
+          <div class="mini"><div><div class="v">2</div><div class="l">Decision</div></div>
+            <div><div class="v">2</div><div class="l">Review</div></div>
+            <div><div class="v">3</div><div class="l">Reply</div></div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Home</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>GitHub</h3><span class="cnt">24 hours</span></div>
+        <div class="bd">
+          <div class="mini"><div><div class="v">14</div><div class="l">Commits</div></div>
+            <div><div class="v">5</div><div class="l">PRs</div></div>
+            <div><div class="v" style="color:#B4653F">2</div><div class="l">Await you</div></div></div>
+          <div class="stack" style="margin-top:15px"><span class="peek"></span>
+            <div class="card"><span class="tag">Repository</span>
+              <h4>dswh/glued_landing</h4>
+              <p class="sub">9 commits · 3 pull requests · 1 check failing</p>
+              <div class="why"><span>Needs you here</span><p>One PR is awaiting your review and one
+                check is red on your own branch.</p></div>
+              <div class="btns"><div class="b p">Open repo</div><div class="b">Mute</div></div>
+              <p class="swipe">Swipe for agentiwise-flow</p>
+            </div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div class="on"><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">GitHub</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Slack</h3><span class="cnt">4 waiting</span></div>
+        <div class="bd">
+          <div class="mini"><div><div class="v" style="color:#B4653F">4</div><div class="l">Reply</div></div>
+            <div><div class="v">11</div><div class="l">Mentions</div></div>
+            <div><div class="v">12</div><div class="l">Unseen</div></div></div>
+          <div class="stack" style="margin-top:15px"><span class="peek b2"></span><span class="peek"></span>
+            <div class="card"><span class="tag h">Needs reply</span>
+              <h4>Can you unblock the staging deploy before standup?</h4>
+              <p class="sub">Priya · #eng-releases · 18 minutes</p>
+              <div class="why"><span>Thread</span><p>3 people, and the deploy has been blocked since
+                07:40. Priya asked you directly.</p></div>
+              <div class="btns"><div class="b p">Reply</div><div class="b">React</div></div>
+              <p class="swipe">Swipe left to snooze · right to mark read</p>
+            </div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div class="on"><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Slack</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:42</span><span>82%</span></div>
+        <div class="hd"><h3>Review</h3><span class="cnt">#11</span></div>
+        <div class="bd">
+          <div class="stack">
+            <div class="card"><span class="tag h">Blocking 2 people</span>
+              <h4>Restore shopify.svg icon for the landing grid</h4>
+              <p class="sub">3 files · +48 −12 · checks passing</p>
+              <div class="why"><span>What it does</span><p>Restores the Shopify icon in the
+                integrations grid and fixes two broken asset paths. Low risk.</p></div>
+              <div class="why"><span>Priya asked, 4h ago</span><p>"Can you take a look before the
+                freeze?"</p></div>
+              <div class="btns"><div class="b p">Approve</div><div class="b">Comment</div></div>
+            </div></div>
+          <div class="mini" style="padding-top:9px"><div><div class="l">Changes</div></div>
+            <div><div class="l">Snooze</div></div><div><div class="l">Open</div></div></div>
+        </div>
+        <div class="tb"><div class="on"><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div><i></i>Rules</div></div>
+      </div><p class="nm">Detail</p></div>
+
+      <div class="cell"><div class="ph">
+        <div class="sb"><span>9:41</span><span>82%</span></div>
+        <div class="hd"><h3>Rules</h3><span class="cnt">7 active</span></div>
+        <div class="bd">
+          <div class="stack"><span class="peek"></span>
+            <div class="card"><span class="tag h">Push</span>
+              <h4>Someone is blocked on me</h4>
+              <p class="sub">Review · approve · blocking reply</p>
+              <div class="why"><span>Effect</span><p>The only rule allowed to buzz your phone. Two
+                items matched it today.</p></div>
+              <div class="btns"><div class="b p">Push</div><div class="b">Brief</div><div class="b">Off</div></div>
+              <p class="swipe">Swipe for the next rule</p>
+            </div></div>
+          <div class="mini"><div><div class="v">2</div><div class="l">Push</div></div>
+            <div><div class="v">3</div><div class="l">Brief</div></div>
+            <div><div class="v">2</div><div class="l">Off</div></div></div>
+        </div>
+        <div class="tb"><div><i></i>Home</div><div><i></i>GitHub</div><div><i></i>Slack</div><div class="on"><i></i>Rules</div></div>
+      </div><p class="nm">Rules</p></div>
+    </div>
+  </section>
+
+  <p class="lede" style="margin-top:64px;padding-top:24px;border-top:1px solid var(--pline)">
+    <strong style="color:var(--pfg)">How to choose.</strong> Pick the palette and the layout separately
+    if you like: any of the five palettes can carry any of the five layouts. My read is that
+    <strong style="color:var(--pfg)">Warm Sand</strong> is the safest for a general audience,
+    <strong style="color:var(--pfg)">Graphite &amp; Gold</strong> is the strongest for developers,
+    and <strong style="color:var(--pfg)">Paper &amp; Ink</strong> is the one nobody else looks like.
+  </p>
+</div>
