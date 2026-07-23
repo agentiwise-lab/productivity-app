@@ -72,6 +72,8 @@ class SourceStatsService:
         self._github = github
         self._linear = linear
         self._calendar = calendar
+        self._gmail = gmail
+        self._slack = slack
 
     def dashboard(
         self, source: Source, items: list[FeedItem], now: datetime | None = None
@@ -120,18 +122,22 @@ class SourceStatsService:
             for repo, count in repos.most_common(10)
         ]
 
-        # Open pull requests the user raised, per repo. One call, and it is the
-        # figure that actually answers "what have I got in flight".
         if self._github is not None:
             try:
-                open_prs = self._github.open_pull_request_count()
-                if open_prs is not None:
-                    board.headline.append(
-                        StatLine(label="Open PRs", value=open_prs, detail="yours")
+                activity = self._github.activity_summary()
+                board.headline.append(
+                    StatLine(label="Open PRs", value=activity.get("open_prs", 0), detail="yours")
+                )
+                board.headline.append(
+                    StatLine(
+                        label="Merged",
+                        value=activity.get("merged_prs", 0),
+                        detail="last 30 days",
                     )
+                )
             except Exception:
-                log.warning("could not count pull requests", exc_info=True)
-                board.unavailable.append("open pull requests")
+                log.warning("could not summarise GitHub activity", exc_info=True)
+                board.unavailable.append("pull request counts")
 
     def _linear_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
         due = sum(1 for i in items if i.deadline is not None)
@@ -160,9 +166,17 @@ class SourceStatsService:
             (m.end - m.start).total_seconds() / 3600 for m in meetings
         )
         board.headline += [
-            StatLine(label="Meetings today", value=len(meetings)),
-            StatLine(label="Hours booked", value=round(booked), detail="today"),
+            StatLine(label="Today", value=len(meetings), detail="meetings"),
+            StatLine(label="Booked", value=round(booked), detail="hours today"),
         ]
+        try:
+            count, hours = self._calendar.window_summary(now=now)
+            board.headline.append(
+                StatLine(label="Last 30 days", value=count, detail=f"{round(hours)}h total")
+            )
+        except Exception:
+            log.warning("could not summarise the calendar window", exc_info=True)
+            board.unavailable.append("30-day totals")
         board.breakdown = [
             StatLine(
                 label=m.title,

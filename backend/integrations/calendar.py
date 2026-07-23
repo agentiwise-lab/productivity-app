@@ -173,6 +173,16 @@ class ComposioCalendarService:
             key=lambda m: m.start,
         )
 
+    def window_summary(
+        self, now: datetime | None = None
+    ) -> tuple[int, float]:
+        """(meetings, hours) attended in the last 30 days, for the dashboard."""
+        now = now or datetime.now(timezone.utc)
+        events = self._events(now - timedelta(days=30), now)
+        meetings = [m for m in (event_to_meeting(e) for e in events) if m is not None]
+        hours = sum((m.end - m.start).total_seconds() / 3600 for m in meetings)
+        return len(meetings), hours
+
     def pending(
         self, email: str | None = None, now: datetime | None = None
     ) -> list[RawEvent]:

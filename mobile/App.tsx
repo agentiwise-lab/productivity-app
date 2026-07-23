@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, StatusBar, StyleSheet } from 'react-native';
+import { Alert, Linking, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -274,11 +274,13 @@ export default function App() {
         </Tab.Navigator>
 
         {dashboard ? (
-          <SourceDetailScreen
-            dashboard={dashboard}
-            loading={dashboardLoading}
-            onBack={() => setDashboard(null)}
-          />
+          <View style={styles.fullScreen}>
+            <SourceDetailScreen
+              dashboard={dashboard}
+              loading={dashboardLoading}
+              onBack={() => setDashboard(null)}
+            />
+          </View>
         ) : null}
 
         <DetailSheet
@@ -301,9 +303,12 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     // Icon, label and the home indicator all need room. Too short and the
     // labels are clipped away entirely, leaving four unexplained glyphs.
-    height: s(58),
-    paddingTop: s(6),
-    paddingBottom: s(12),
+    height: s(50),
+    paddingTop: s(5),
+    paddingBottom: s(8),
   },
-  tabLabel: { ...type.tabLabel, marginTop: s(3), paddingBottom: s(2) },
+  tabLabel: { ...type.tabLabel, marginTop: s(2) },
+  // Covers the tab bar too: a source dashboard is a place you go, not a
+  // panel that shares the screen with the thing you left.
+  fullScreen: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, zIndex: 20 },
 });

@@ -131,21 +131,21 @@ export function FeedCard({
         <Text style={styles.ago}>{when}</Text>
       </View>
 
-      <Text style={styles.heading} numberOfLines={2}>
-        {row.sender_name ? `${row.sender_name}: ` : ''}
-        {row.title}
-      </Text>
-
-      {/* The AI one-liner. Absent while classification is still pending, and
-          omitted rather than replaced with a placeholder that would read like
-          a summary the model never wrote. */}
-      {row.summary ? (
-        <Text style={styles.why} numberOfLines={2}>
-          {row.summary}
+      <View style={styles.content}>
+        <Text style={styles.heading} numberOfLines={2} ellipsizeMode="tail">
+          {row.sender_name ? `${row.sender_name}: ` : ''}
+          {row.title}
         </Text>
-      ) : null}
 
-      <View style={styles.spacer} />
+        {/* The AI one-liner. Absent while classification is still pending, and
+            omitted rather than replaced with a placeholder that would read like
+            a summary the model never wrote. */}
+        {row.summary ? (
+          <Text style={styles.why} numberOfLines={2} ellipsizeMode="tail">
+            {row.summary}
+          </Text>
+        ) : null}
+      </View>
 
       <View style={styles.buttons}>
         <Pressable
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   cardHeight: {},
   card: {
     width: CARD_WIDTH,
-    height: s(132),
+    minHeight: s(150),
     justifyContent: 'flex-start',
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
@@ -209,10 +209,10 @@ const styles = StyleSheet.create({
   tagTextUrgent: { color: colors.urgent },
   tagTextToday: { color: colors.accent },
   ago: { ...type.ago, marginLeft: 'auto' },
-  heading: { ...type.cardHeading, color: colors.fg, marginBottom: s(6) },
+  heading: { ...type.cardHeading, color: colors.fg },
   why: { ...type.why },
-  spacer: { flex: 1 },
-  buttons: { flexDirection: 'row', gap: s(6) },
+  content: { flex: 1, gap: s(5) },
+  buttons: { flexDirection: 'row', gap: s(6), marginTop: s(10) },
   button: {
     flex: 1,
     alignItems: 'center',

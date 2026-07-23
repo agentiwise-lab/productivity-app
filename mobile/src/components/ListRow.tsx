@@ -1,11 +1,11 @@
 /**
- * The grouped list under the card feed, matching .lsthd and .row.
+ * The grouped list under the card feed, and the same row shape everywhere it
+ * appears: Home, Later, and a source dashboard.
  *
- * This is the half of Home that stops the filter from hiding anything: the
- * cards are the queue you work, the list is the whole picture, and every tier
- * is present in order whether or not it is filtered above. Each group carries a
- * coloured pip and a count, so the shape of the day is readable without
- * counting rows.
+ * Each row is a bordered card with its own padding rather than a line in a
+ * table, so the list reads as a set of things rather than a grid. The one shape
+ * is reused deliberately: three screens listing feed items in three different
+ * styles is what made the app feel unfinished.
  */
 
 import React from 'react';
@@ -33,22 +33,31 @@ export function ListRow({
   onPress: (row: FeedRow) => void;
 }) {
   const meta = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
+  const urgent = row.tier === 'urgent';
   return (
-    <Pressable onPress={() => onPress(row)} style={styles.row}>
+    <Pressable
+      onPress={() => onPress(row)}
+      style={({ pressed }) => [
+        styles.row,
+        urgent && styles.rowUrgent,
+        pressed && styles.rowPressed,
+      ]}
+    >
       <BrandMark source={row.source} size={s(24)} radius={s(7)} />
       <View style={styles.rowBody}>
-        <Text style={styles.rowTitle} numberOfLines={2}>
+        <Text style={styles.rowTitle} numberOfLines={1} ellipsizeMode="tail">
+          {row.sender_name ? `${row.sender_name}: ` : ''}
           {row.title}
         </Text>
-        {/* The reason this row exists at all. Without it a list of titles is
-            just an inbox, which is the thing this product replaces. */}
+        {/* Why this row exists. Without it a list of titles is just an inbox,
+            which is the thing this product replaces. */}
         {row.summary ? (
-          <Text style={styles.rowSub} numberOfLines={1}>
+          <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">
             {row.summary}
           </Text>
         ) : null}
       </View>
-      <Text style={styles.rowMeta}>{meta}</Text>
+      <Text style={[styles.rowMeta, urgent && styles.rowMetaUrgent]}>{meta}</Text>
     </Pressable>
   );
 }
@@ -63,30 +72,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: s(7),
     paddingHorizontal: s(16),
-    paddingTop: s(12),
-    paddingBottom: s(5),
+    paddingTop: s(14),
+    paddingBottom: s(6),
   },
-  pip: { width: s(6), height: s(6), borderRadius: s(3) },
+  pip: { width: s(7), height: s(7), borderRadius: s(3.5) },
   groupLabel: { ...type.groupLabel, color: colors.fg },
   groupCount: { ...type.groupCount, marginLeft: 'auto' },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: s(9),
-    paddingHorizontal: s(16),
-    paddingTop: s(8),
-    paddingBottom: s(9),
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.line,
+    alignItems: 'center',
+    gap: s(10),
+    marginHorizontal: s(13),
+    marginBottom: s(7),
+    paddingHorizontal: s(12),
+    paddingVertical: s(11),
+    backgroundColor: colors.surface,
+    borderRadius: s(12),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
   },
-  rowBody: { flex: 1 },
-  rowTitle: { ...type.rowTitle, color: colors.fg, marginBottom: s(3) },
+  rowUrgent: { borderColor: '#E7C6AE', backgroundColor: colors.urgentSoft },
+  rowPressed: { opacity: 0.6 },
+  rowBody: { flex: 1, gap: s(2) },
+  rowTitle: { ...type.rowTitle, fontWeight: '600', color: colors.fg },
   rowSub: { ...type.rowSub },
-  rowMeta: { ...type.ago, marginTop: s(2) },
+  rowMeta: { ...type.ago },
+  rowMetaUrgent: { color: colors.urgent },
   divider: {
     ...type.divider,
     paddingHorizontal: s(16),
-    paddingTop: s(12),
-    paddingBottom: s(2),
+    paddingTop: s(16),
+    paddingBottom: s(6),
   },
 });

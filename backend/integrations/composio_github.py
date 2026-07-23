@@ -49,6 +49,12 @@ _REASON_TEXT = {
 }
 
 
+def _days_ago(days: int) -> str:
+    from datetime import datetime, timedelta, timezone
+
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+
 def _describe(reason: str, subject_type: str, repo: str, number: int | None) -> str:
     what = _REASON_TEXT.get(reason, f"GitHub notification ({reason or 'unknown'}).")
     where = f"{subject_type or 'Item'}"
@@ -190,6 +196,23 @@ class ComposioGitHubService:
         return Comment(
             id=str(data.get("id", "")), url=data.get("html_url") or "", body=body
         )
+
+    def activity_summary(self) -> dict[str, int]:
+        """Cheap counts for the dashboard: PRs open and merged recently. Each is
+        one search call."""
+        return {
+            "open_prs": self._search_count("is:pr is:open author:@me"),
+            "merged_prs": self._search_count(
+                "is:pr is:merged author:@me merged:>=" + _days_ago(30)
+            ),
+        }
+
+    def _search_count(self, query: str) -> int:
+        data = self._execute("GITHUB_FIND_PULL_REQUESTS", {"query": query})
+        total = data.get("total_count")
+        if isinstance(total, int):
+            return total
+        return len(data.get("items") or data.get("pull_requests") or [])
 
     def open_pull_request_count(self) -> int | None:
         """Pull requests this user has open, across every repository."""

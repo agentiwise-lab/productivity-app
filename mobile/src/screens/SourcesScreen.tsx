@@ -103,7 +103,7 @@ export function SourcesScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  body: { paddingBottom: s(30) },
+  body: { paddingTop: s(4), paddingBottom: s(30) },
   /** Green when live, ochre when broken, hollow when never connected. */
   dot: {
     width: s(6),
@@ -118,12 +118,15 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: s(9),
-    paddingHorizontal: s(16),
-    paddingTop: s(11),
-    paddingBottom: s(12),
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.line,
+    gap: s(10),
+    marginHorizontal: s(13),
+    marginTop: s(7),
+    paddingHorizontal: s(12),
+    paddingVertical: s(11),
+    backgroundColor: colors.surface,
+    borderRadius: s(12),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
   },
   rowBody: { flex: 1 },
   rowTitle: { ...type.rowTitle, fontWeight: '600', color: colors.fg },
