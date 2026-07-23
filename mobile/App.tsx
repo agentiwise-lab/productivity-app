@@ -16,17 +16,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-import { colors, type } from './src/theme';
+import { colors, s, type } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
-import type { FeedRow, Source } from './src/api/types';
+import type { FeedRow, MeetingOut, Source, SourceInfo } from './src/api/types';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { SourcesScreen, type Connection } from './src/screens/SourcesScreen';
+import { SourcesScreen } from './src/screens/SourcesScreen';
 import { LaterScreen } from './src/screens/LaterScreen';
 import { YouScreen, type NotifyLevel } from './src/screens/YouScreen';
 import { DetailSheet } from './src/components/DetailSheet';
-import { TabIcon } from './src/components/TabIcon';
-import type { Meeting } from './src/components/YourDay';
+import { TabIcon } from './src/components/Chrome';
+import type { Meeting } from './src/components/YourDayCard';
 
 const Tab = createBottomTabNavigator();
 
@@ -58,18 +58,40 @@ export default function App() {
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
   const [aiOptOut, setAiOptOut] = useState<Partial<Record<Source, boolean>>>({});
 
-  // Calendar is phase 5. Until then Your day shows an honestly empty schedule
-  // rather than invented meetings, so the free-time figure stays truthful.
-  const meetings: Meeting[] = useMemo(() => [], []);
+  const [sources, setSources] = useState<SourceInfo[]>([]);
+  const [loadingSources, setLoadingSources] = useState(true);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
-  const connections: Connection[] = useMemo(() => {
-    const seen = new Set(rows.map((row) => row.source));
-    return Array.from(seen).map((provider) => ({
-      provider,
-      label: SOURCE_LABELS[provider] ?? provider,
-      status: 'active' as const,
-    }));
-  }, [rows]);
+  const connectedCount = useMemo(
+    () => sources.filter((info) => info.status === 'connected').length,
+    [sources],
+  );
+
+  const loadSources = useCallback(async () => {
+    try {
+      setSources(await api.connections());
+    } catch {
+      // Sources still renders its full skeleton; only the statuses are missing.
+    } finally {
+      setLoadingSources(false);
+    }
+  }, []);
+
+  const loadDay = useCallback(async () => {
+    try {
+      const day: MeetingOut[] = await api.day();
+      setMeetings(
+        day.map((m) => ({
+          title: m.title,
+          start: new Date(m.start),
+          end: new Date(m.end),
+        })),
+      );
+    } catch {
+      // An unreadable calendar leaves the ruler empty rather than inventing a
+      // schedule, which would make the free-time figure a lie.
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -93,8 +115,8 @@ export default function App() {
       // A failed pull is not a failed screen. Fall through to load(), which
       // serves the cache when the network is the thing that broke.
     }
-    await load();
-  }, [load]);
+    await Promise.all([load(), loadSources(), loadDay()]);
+  }, [load, loadSources, loadDay]);
 
   useEffect(() => {
     void refresh();
@@ -132,6 +154,22 @@ export default function App() {
     [rows],
   );
 
+  const connectSource = useCallback(async (info: SourceInfo) => {
+    try {
+      const { url } = await api.connectUrl(info.source);
+      if (url) {
+        void Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // fall through to the explanation below
+    }
+    Alert.alert(
+      `Connect ${info.label}`,
+      'Managed sign-in is not wired up in this build. The accounts in this demo were connected in Composio directly.',
+    );
+  }, []);
+
   const notImplemented = useCallback(() => {
     Alert.alert('Not yet', 'Connecting new tools lands with the next phase.');
   }, []);
@@ -147,8 +185,8 @@ export default function App() {
             tabBarInactiveTintColor: colors.dim,
             tabBarStyle: styles.tabBar,
             tabBarLabelStyle: styles.tabLabel,
-            tabBarIcon: ({ color }) => (
-              <TabIcon name={route.name.toLowerCase() as never} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name={route.name} color={color} focused={focused} />
             ),
           })}
         >
@@ -160,7 +198,7 @@ export default function App() {
                 stale={stale}
                 fetchedAt={fetchedAt}
                 meetings={meetings}
-                connected={connections.length > 0 || rows.length > 0}
+                connectedCount={connectedCount}
                 onRefresh={refresh}
                 onOpen={setSelected}
                 onAction={act}
@@ -171,23 +209,22 @@ export default function App() {
           <Tab.Screen name="Sources">
             {() => (
               <SourcesScreen
-                rows={rows}
-                connections={connections}
-                onOpen={setSelected}
-                onAction={act}
-                onReconnect={notImplemented}
+                sources={sources}
+                loadingStatus={loadingSources}
+                onOpen={() => notImplemented()}
+                onConnect={connectSource}
               />
             )}
           </Tab.Screen>
           <Tab.Screen name="Later">
-            {() => <LaterScreen rows={rows} onOpen={setSelected} onAction={act} />}
+            {() => <LaterScreen rows={rows} onOpen={setSelected} />}
           </Tab.Screen>
           <Tab.Screen name="You">
             {() => (
               <YouScreen
                 email={DEV_USER_ID}
                 notifyLevel={notifyLevel}
-                connections={connections}
+                connections={sources}
                 aiOptOut={aiOptOut}
                 onSetNotifyLevel={setNotifyLevel}
                 onToggleAi={(provider, optOut) =>
@@ -217,9 +254,10 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
     // Tall enough for icon plus label plus the home indicator. At 62 the
     // labels were clipped by the bar's own bottom edge.
-    height: 76,
-    paddingTop: 8,
-    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    height: s(52),
+    paddingTop: s(5),
+    paddingBottom: s(16),
   },
-  tabLabel: { ...type.small, fontSize: 10, fontWeight: '600', marginTop: 2 },
+  tabLabel: { ...type.tabLabel, marginTop: s(2) },
 });

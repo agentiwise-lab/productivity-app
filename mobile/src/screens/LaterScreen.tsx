@@ -1,20 +1,25 @@
 /**
- * Later: everything unactioned across every source, inside the 30-day window.
+ * Later: everything unactioned, every source, inside the 30-day window.
  *
- * This is where Noise lives. That is the whole reason the app can afford to
- * hide things from Home: nothing is deleted, it is just not shouted about, and
- * the user can always come here and check what was held back. A filter that
- * silently discards is a filter nobody trusts.
+ * This is what earns the right to hide things from Home. Nothing is deleted, it
+ * is only not shouted about, and the user can always come here and see exactly
+ * what was held back and why. A filter that discards silently is a filter
+ * nobody trusts.
+ *
+ * Rows carry the reason they are here, and an empty bucket explains what would
+ * land in it rather than saying "Nothing here" and stopping.
  */
 
 import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, SectionList, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, space, radius, type } from '../theme';
-import { FeedCard } from '../components/FeedCard';
-import type { FeedRow } from '../api/types';
+import { colors, s, type } from '../theme';
+import { Header } from '../components/Chrome';
+import { GroupHeader, ListRow } from '../components/ListRow';
+import { EmptyBucket } from '../components/states';
+import type { FeedRow, Tier } from '../api/types';
 
-type Bucket = 'needs_you' | 'noise' | 'snoozed';
+type Bucket = 'needs_you' | 'snoozed' | 'noise';
 
 const TABS: { id: Bucket; label: string }[] = [
   { id: 'needs_you', label: 'Needs you' },
@@ -22,13 +27,36 @@ const TABS: { id: Bucket; label: string }[] = [
   { id: 'noise', label: 'Held back' },
 ];
 
-interface Props {
+const EMPTY: Record<Bucket, { title: string; explains: string; hint: string }> = {
+  needs_you: {
+    title: 'Nothing waiting',
+    explains:
+      'Anything you have not replied to, approved or answered collects here from every source, and stays for 30 days.',
+    hint: 'Pull down on Home to fetch again.',
+  },
+  snoozed: {
+    title: 'Nothing snoozed',
+    explains:
+      'Snooze an item from its card and it waits here until the time you chose, instead of sitting in your feed.',
+    hint: 'Try Snooze on any card in Home.',
+  },
+  noise: {
+    title: 'Nothing held back',
+    explains:
+      'Status updates, your own pull requests, bulk email and chatter you were not addressed in are filed here rather than shown on Home.',
+    hint: 'Everything filtered out stays visible here, never deleted.',
+  },
+};
+
+const TIER_ORDER: Tier[] = ['urgent', 'today', 'can_wait', 'noise'];
+
+export function LaterScreen({
+  rows,
+  onOpen,
+}: {
   rows: FeedRow[];
   onOpen: (row: FeedRow) => void;
-  onAction: (row: FeedRow, action: string) => void;
-}
-
-export function LaterScreen({ rows, onOpen, onAction }: Props) {
+}) {
   const [bucket, setBucket] = useState<Bucket>('needs_you');
 
   const shown = useMemo(() => {
@@ -42,11 +70,30 @@ export function LaterScreen({ rows, onOpen, onAction }: Props) {
     });
   }, [rows, bucket]);
 
-  const sections = useMemo(() => groupByDay(shown), [shown]);
+  const groups = useMemo(
+    () =>
+      TIER_ORDER.map((tier) => ({
+        tier,
+        rows: shown.filter((row) => row.tier === tier),
+      })).filter((group) => group.rows.length > 0),
+    [shown],
+  );
+
+  const counts = useMemo(() => {
+    const now = Date.now();
+    const snoozed = rows.filter(
+      (r) => r.snoozed_until !== null && new Date(r.snoozed_until).getTime() > now,
+    ).length;
+    return {
+      needs_you: rows.filter((r) => r.tier !== 'noise').length - snoozed,
+      snoozed,
+      noise: rows.filter((r) => r.tier === 'noise').length,
+    };
+  }, [rows]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Text style={styles.title}>Later</Text>
+      <Header title="Later" subtitle="30-day window" rightGlyph=" " />
 
       <View style={styles.tabs}>
         {TABS.map((tab) => {
@@ -60,103 +107,58 @@ export function LaterScreen({ rows, onOpen, onAction }: Props) {
               <Text style={[styles.tabText, active && styles.tabTextActive]}>
                 {tab.label}
               </Text>
+              <Text style={[styles.tabCount, active && styles.tabTextActive]}>
+                {counts[tab.id]}
+              </Text>
             </Pressable>
           );
         })}
       </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(row) => row.id}
-        contentContainerStyle={styles.body}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => (
-          <Text style={styles.day}>{section.title}</Text>
+      <ScrollView contentContainerStyle={styles.body}>
+        {shown.length === 0 ? (
+          <EmptyBucket {...EMPTY[bucket]} />
+        ) : (
+          groups.map((group) => (
+            <View key={group.tier}>
+              <GroupHeader tier={group.tier} count={group.rows.length} />
+              {group.rows.map((row) => (
+                <ListRow key={row.id} row={row} onPress={onOpen} />
+              ))}
+            </View>
+          ))
         )}
-        renderItem={({ item }) => (
-          <View style={styles.row}>
-            <FeedCard row={item} onPress={onOpen} onAction={onAction} />
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.quiet}>Nothing here.</Text>}
-        ListFooterComponent={
-          shown.length > 0 ? (
-            <Text style={styles.footer}>
-              Items are kept for 30 days, then removed.
-            </Text>
-          ) : null
-        }
-      />
+        {shown.length > 0 ? (
+          <Text style={styles.footnote}>Kept for 30 days, then removed.</Text>
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-function groupByDay(rows: FeedRow[]) {
-  const buckets = new Map<string, FeedRow[]>();
-  rows.forEach((row) => {
-    const key = dayLabel(row.occurred_at);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key)!.push(row);
-  });
-  return Array.from(buckets, ([title, data]) => ({ title, data }));
-}
-
-function dayLabel(iso: string | null): string {
-  if (!iso) return 'Undated';
-  const date = new Date(iso);
-  const today = new Date();
-  const days = Math.floor(
-    (new Date(today.toDateString()).getTime() - new Date(date.toDateString()).getTime()) /
-      86400000,
-  );
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  title: {
-    ...type.h1,
-    color: colors.fg,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingBottom: space.md,
-  },
+  tabs: { flexDirection: 'row', gap: s(6), paddingHorizontal: s(13), paddingTop: s(10) },
   tab: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm - 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: s(5),
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
+    borderRadius: s(9),
+    backgroundColor: colors.surface,
+    paddingVertical: s(7),
   },
   tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  tabText: { ...type.small, fontWeight: '600', color: colors.dim },
-  tabTextActive: { color: '#FFFFFF' },
-  body: { paddingBottom: space.xxl },
-  day: {
-    ...type.small,
-    fontWeight: '600',
-    color: colors.dim,
-    paddingHorizontal: space.lg,
-    paddingTop: space.lg,
-    paddingBottom: space.sm,
-  },
-  row: { paddingHorizontal: space.lg, paddingBottom: space.md },
-  quiet: { ...type.small, color: colors.dim, padding: space.lg },
-  footer: {
-    ...type.small,
-    fontSize: 11,
-    color: colors.dim,
+  tabText: { ...type.chipLabel, color: colors.dim },
+  tabCount: { fontFamily: 'Menlo', fontSize: s(9), color: colors.dim },
+  tabTextActive: { color: colors.onAccent },
+  body: { paddingBottom: s(30) },
+  footnote: {
+    ...type.rowSub,
     textAlign: 'center',
-    paddingTop: space.lg,
+    paddingTop: s(16),
   },
 });

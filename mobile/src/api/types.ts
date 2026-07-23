@@ -62,3 +62,21 @@ export interface RefreshResult {
   ingested: number;
   classified: number;
 }
+
+export type ConnectionStatus = 'connected' | 'disconnected' | 'expired' | 'error';
+
+export interface SourceInfo {
+  source: Source;
+  label: string;
+  status: ConnectionStatus;
+  count: number;
+  urgent: number;
+  connected_account_id: string | null;
+}
+
+export interface MeetingOut {
+  title: string;
+  start: string;
+  end: string;
+  conference_url: string | null;
+}

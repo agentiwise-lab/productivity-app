@@ -60,6 +60,21 @@ _TERMINAL: dict[str, tuple[Tier, TypeTag]] = {
     "author": (Tier.NOISE, TypeTag.FYI),
     "manual": (Tier.NOISE, TypeTag.FYI),
     "slack_bot_noise": (Tier.NOISE, TypeTag.FYI),
+    # Calendar (3.3). Both are stated by the source outright.
+    "calendar_starting": (Tier.URGENT, TypeTag.FYI),
+    "calendar_invite": (Tier.TODAY, TypeTag.RSVP),
+    "calendar_changed": (Tier.TODAY, TypeTag.FYI),
+    "calendar_cancelled": (Tier.NOISE, TypeTag.FYI),
+    # Linear (3.5). A native priority field is a stated urgency, so no model.
+    "linear_urgent": (Tier.URGENT, TypeTag.ASSIGNED),
+    "linear_high": (Tier.TODAY, TypeTag.ASSIGNED),
+    # A due date settles it by itself: read-time ranking promotes it as the
+    # deadline approaches and once it passes (3.8).
+    "linear_due": (Tier.TODAY, TypeTag.ASSIGNED),
+    # Filtered by Gmail's own category labels before the model, so we never pay
+    # to classify a newsletter.
+    "gmail_bulk": (Tier.NOISE, TypeTag.FYI),
+    "docs_edited": (Tier.NOISE, TypeTag.FYI),
 }
 
 # Reasons whose urgency lives in human language. The tag and the floor are
@@ -82,6 +97,14 @@ _DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
     # Automation reporting that the user's own work broke is the one bot case
     # that can matter, so it is judged rather than dropped.
     "slack_bot_failure": (Tier.TODAY, TypeTag.ALERT),
+    # Linear with no priority and no due date (3.5). Everything else about
+    # Linear is stated outright and settled below without a model.
+    "linear_assigned": (Tier.TODAY, TypeTag.ASSIGNED),
+    # Gmail (3.6). An email has no type, so the tier is always a judgement.
+    "gmail_message": (Tier.TODAY, TypeTag.REPLY),
+    # A doc comment naming you is a question until the model says otherwise.
+    "docs_mention": (Tier.TODAY, TypeTag.COMMENT),
+    "docs_comment": (Tier.CAN_WAIT, TypeTag.COMMENT),
 }
 
 

@@ -10,10 +10,11 @@
 import React from 'react';
 import { View, Text, Pressable, ScrollView, Switch, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, space, radius, type } from '../theme';
+import { colors, s, space, radius, text, type } from '../theme';
+import { Header } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import type { Source } from '../api/types';
-import type { Connection } from './SourcesScreen';
+import type { SourceInfo } from '../api/types';
 
 export type NotifyLevel = 'urgent' | 'urgent_today' | 'off';
 
@@ -26,7 +27,7 @@ const LEVELS: { id: NotifyLevel; label: string; detail: string }[] = [
 interface Props {
   email: string;
   notifyLevel: NotifyLevel;
-  connections: Connection[];
+  connections: SourceInfo[];
   aiOptOut: Partial<Record<Source, boolean>>;
   onSetNotifyLevel: (level: NotifyLevel) => void;
   onToggleAi: (provider: Source, optOut: boolean) => void;
@@ -46,7 +47,7 @@ export function YouScreen({
 }: Props) {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Text style={styles.title}>You</Text>
+      <Header title="You" subtitle="Settings and connections" rightGlyph=" " />
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.email}>{email}</Text>
 
@@ -73,27 +74,6 @@ export function YouScreen({
           })}
         </Section>
 
-        <Section title="Connected">
-          {connections.map((connection) => (
-            <Pressable
-              key={connection.provider}
-              onPress={() => onReconnect(connection.provider)}
-              style={styles.connection}
-            >
-              <BrandMark source={connection.provider} size={24} />
-              <Text style={styles.connectionLabel}>{connection.label}</Text>
-              <View style={styles.spacer} />
-              <Text
-                style={
-                  connection.status === 'active' ? styles.ok : styles.bad
-                }
-              >
-                {connection.status === 'active' ? 'Connected' : 'Reconnect'}
-              </Text>
-            </Pressable>
-          ))}
-        </Section>
-
         <Section title="AI summaries">
           <Text style={styles.disclosure}>
             To decide what is urgent, message text is sent to OpenRouter, a
@@ -101,13 +81,13 @@ export function YouScreen({
             source falls back to rules only, which still works but is blunter.
           </Text>
           {connections.map((connection) => (
-            <View key={connection.provider} style={styles.connection}>
-              <BrandMark source={connection.provider} size={24} />
+            <View key={connection.source} style={styles.connection}>
+              <BrandMark source={connection.source} size={24} />
               <Text style={styles.connectionLabel}>{connection.label}</Text>
               <View style={styles.spacer} />
               <Switch
-                value={!aiOptOut[connection.provider]}
-                onValueChange={(on) => onToggleAi(connection.provider, !on)}
+                value={!aiOptOut[connection.source]}
+                onValueChange={(on) => onToggleAi(connection.source, !on)}
                 trackColor={{ true: colors.accent, false: colors.line }}
                 // Left to the platform, the thumb comes out green and is the
                 // only colour on screen that belongs to no part of the palette.
@@ -137,17 +117,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  title: {
-    ...type.h1,
-    color: colors.fg,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-  },
+
   body: { padding: space.lg, paddingBottom: space.xxl, gap: space.xl },
-  email: { ...type.body, color: colors.dim },
+  email: { ...text.body, color: colors.dim },
   section: { gap: space.sm },
-  sectionTitle: { ...type.small, fontWeight: '600', color: colors.dim, letterSpacing: 0.4 },
+  sectionTitle: { ...text.small, fontWeight: '600', color: colors.dim, letterSpacing: 0.4 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -164,9 +138,9 @@ const styles = StyleSheet.create({
   },
   optionActive: { backgroundColor: colors.accentSoft },
   optionText: { flex: 1, gap: 2 },
-  optionLabel: { ...type.body, fontWeight: '600', color: colors.fg },
+  optionLabel: { ...text.body, fontWeight: '600', color: colors.fg },
   optionLabelActive: { color: colors.accent },
-  optionDetail: { ...type.small, color: colors.dim },
+  optionDetail: { ...text.small, color: colors.dim },
   optionDetailActive: { color: colors.accent },
   tick: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
   connection: {
@@ -177,12 +151,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  connectionLabel: { ...type.body, color: colors.fg },
+  connectionLabel: { ...text.body, color: colors.fg },
   spacer: { flex: 1 },
-  ok: { ...type.small, color: colors.dim },
-  bad: { ...type.small, fontWeight: '600', color: colors.urgent },
+  ok: { ...text.small, color: colors.dim },
+  bad: { ...text.small, fontWeight: '600', color: colors.urgent },
   disclosure: {
-    ...type.small,
+    ...text.small,
     color: colors.dim,
     padding: space.lg,
     borderBottomWidth: 1,
@@ -192,5 +166,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: space.lg,
   },
-  signOutText: { ...type.body, fontWeight: '600', color: colors.urgent },
+  signOutText: { ...text.body, fontWeight: '600', color: colors.urgent },
 });

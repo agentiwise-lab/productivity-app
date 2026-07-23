@@ -1,169 +1,164 @@
 /**
- * The card. Plan 6.1 lists nine elements and calls none of them optional, so
- * none of them are conditional on space here either.
+ * The swipeable feed card, matching the mockup's .fcard.
  *
- * The urgency treatment is a tinted ground and a left rail rather than a red
- * badge: on a screen where three or four things are urgent, a badge on each
- * stops meaning anything, while a change of ground still reads at a glance.
+ * Every element in plan 6.1 is here and none is conditional on space: source
+ * roundel, type tag, urgency styling, time, sender, title, the AI one-liner,
+ * and two actions. The card is 216 of a 272pt phone, about four fifths, so the
+ * next one always peeks and the swipe is obvious without being explained.
  */
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { colors, space, radius, type } from '../theme';
+import { colors, s, type, roundel } from '../theme';
 import { ago, deadlineLabel } from '../lib/time';
 import { BrandMark } from './BrandMark';
 import { actionsFor } from '../lib/actions';
 import type { FeedRow } from '../api/types';
 
+export const CARD_WIDTH = s(216);
+export const CARD_GAP = s(9);
+
 const TAG_LABEL: Record<string, string> = {
-  review: 'REVIEW',
-  approve: 'APPROVE',
-  reply: 'REPLY',
-  assigned: 'ASSIGNED',
-  comment: 'COMMENT',
-  decide: 'DECIDE',
+  review: 'Review',
+  approve: 'Approve',
+  reply: 'Reply',
+  assigned: 'Assigned',
+  comment: 'Comment',
+  decide: 'Decide',
   rsvp: 'RSVP',
-  alert: 'ALERT',
+  alert: 'Alert',
   fyi: 'FYI',
 };
 
-interface Props {
+export function FeedCard({
+  row,
+  onPress,
+  onAction,
+  dimmed = false,
+}: {
   row: FeedRow;
   onPress: (row: FeedRow) => void;
   onAction: (row: FeedRow, action: string) => void;
-  /** Cards in the horizontal feed are fixed width; list rows are not. */
-  width?: number;
-}
-
-export function FeedCard({ row, onPress, onAction, width }: Props) {
+  dimmed?: boolean;
+}) {
   const urgent = row.tier === 'urgent';
-  const deadline = deadlineLabel(row.deadline);
+  const today = row.tier === 'today';
   const [primary, secondary] = actionsFor(row);
+  const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
 
   return (
     <Pressable
       onPress={() => onPress(row)}
-      style={[
-        styles.card,
-        width ? { width } : undefined,
-        urgent && styles.cardUrgent,
-      ]}
+      style={[styles.card, dimmed && styles.dimmed]}
     >
-      {urgent && <View style={styles.rail} />}
-
-      <View style={styles.head}>
-        <BrandMark source={row.source} size={26} />
-        <Text style={[styles.tag, urgent && styles.tagUrgent]}>
-          {TAG_LABEL[row.type_tag] ?? row.type_tag.toUpperCase()}
-        </Text>
-        <View style={styles.spacer} />
-        <Text style={[styles.time, urgent && styles.timeUrgent]}>
-          {deadline ?? ago(row.occurred_at)}
-        </Text>
+      <View style={styles.top}>
+        <BrandMark source={row.source} size={s(24)} radius={s(7)} />
+        <View
+          style={[styles.tag, urgent && styles.tagUrgent, today && styles.tagToday]}
+        >
+          <Text
+            style={[
+              styles.tagText,
+              urgent && styles.tagTextUrgent,
+              today && styles.tagTextToday,
+            ]}
+          >
+            {TAG_LABEL[row.type_tag] ?? row.type_tag}
+          </Text>
+        </View>
+        <Text style={styles.ago}>{when}</Text>
       </View>
 
-      <Text style={styles.title} numberOfLines={2}>
-        {row.sender_name ? (
-          <>
-            <Text style={styles.sender}>{row.sender_name}</Text>
-            <Text>{'  '}</Text>
-          </>
-        ) : null}
+      <Text style={styles.heading} numberOfLines={2}>
+        {row.sender_name ? `${row.sender_name}: ` : ''}
         {row.title}
       </Text>
 
-      {/* The AI one-liner. While classification is pending there is nothing
-          honest to say, so the row simply omits it rather than showing a
-          placeholder that looks like a summary. */}
+      {/* The AI one-liner. Absent while classification is still pending, and
+          omitted rather than replaced with a placeholder that would read like
+          a summary the model never wrote. */}
       {row.summary ? (
-        <Text style={styles.summary} numberOfLines={1}>
+        <Text style={styles.why} numberOfLines={2}>
           {row.summary}
         </Text>
       ) : null}
 
-      <View style={styles.foot}>
-        {row.context_chip ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText} numberOfLines={1}>
-              {row.context_chip}
-            </Text>
-          </View>
-        ) : null}
-        <View style={styles.spacer} />
-        <Pressable
-          onPress={() => onAction(row, secondary.id)}
-          style={styles.secondaryBtn}
-          hitSlop={6}
-        >
-          <Text style={styles.secondaryText}>{secondary.label}</Text>
-        </Pressable>
+      <View style={styles.buttons}>
         <Pressable
           onPress={() => onAction(row, primary.id)}
-          style={[styles.primaryBtn, urgent && styles.primaryBtnUrgent]}
-          hitSlop={6}
+          style={[styles.button, styles.buttonPrimary]}
         >
-          <Text style={styles.primaryText}>{primary.label}</Text>
+          <Text style={styles.buttonPrimaryText}>{primary.label}</Text>
+        </Pressable>
+        <Pressable onPress={() => onAction(row, secondary.id)} style={styles.button}>
+          <Text style={styles.buttonText}>{secondary.label}</Text>
         </Pressable>
       </View>
     </Pressable>
   );
 }
 
+/** The pagination dots under the card strip. */
+export function Dots({ count, active }: { count: number; active: number }) {
+  return (
+    <View style={styles.dots}>
+      {Array.from({ length: Math.min(count, 8) }, (_, index) => (
+        <View key={index} style={[styles.dot, index === active && styles.dotOn]} />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
+    width: CARD_WIDTH,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    padding: space.lg,
-    gap: space.sm,
-    overflow: 'hidden',
+    borderRadius: s(15),
+    padding: s(12),
+    shadowColor: '#20242B',
+    shadowOpacity: 0.05,
+    shadowRadius: s(10),
+    shadowOffset: { width: 0, height: s(3) },
+    elevation: 1,
   },
-  cardUrgent: {
-    backgroundColor: colors.urgentSoft,
-    borderColor: '#E7C6AE',
-  },
-  rail: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.urgent,
-  },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  spacer: { flex: 1 },
+  dimmed: { opacity: 0.5 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: s(7), marginBottom: s(8) },
   tag: {
-    ...type.mono,
-    color: colors.dim,
+    borderRadius: s(4),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    paddingHorizontal: s(5),
+    paddingVertical: s(2),
   },
-  tagUrgent: { color: colors.urgent },
-  time: { ...type.mono, color: colors.dim, letterSpacing: 0 },
-  timeUrgent: { color: colors.urgent },
-  title: { ...type.title, color: colors.fg },
-  sender: { fontWeight: '700', color: colors.fg },
-  summary: { ...type.small, color: colors.dim },
-  foot: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  chip: {
-    backgroundColor: colors.bg,
-    borderRadius: radius.sm,
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    maxWidth: 140,
+  tagUrgent: { borderColor: colors.urgent, backgroundColor: colors.urgentSoft },
+  tagToday: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  tagText: { ...type.tag, color: colors.dim },
+  tagTextUrgent: { color: colors.urgent },
+  tagTextToday: { color: colors.accent },
+  ago: { ...type.ago, marginLeft: 'auto' },
+  heading: { ...type.cardHeading, color: colors.fg, marginBottom: s(6) },
+  why: { ...type.why, marginBottom: s(10) },
+  buttons: { flexDirection: 'row', gap: s(6) },
+  button: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: s(9),
+    paddingVertical: s(7),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
   },
-  chipText: { ...type.small, fontSize: 11, color: colors.dim },
-  secondaryBtn: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm - 2,
-    borderRadius: radius.sm,
+  buttonPrimary: { backgroundColor: colors.accent, borderColor: colors.accent },
+  buttonText: { ...type.button, color: colors.fg },
+  buttonPrimaryText: { ...type.button, color: colors.onAccent, fontWeight: '600' },
+  dots: {
+    flexDirection: 'row',
+    gap: s(4),
+    justifyContent: 'center',
+    paddingTop: s(9),
+    paddingBottom: s(2),
   },
-  secondaryText: { ...type.small, fontWeight: '600', color: colors.accent },
-  primaryBtn: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm - 2,
-    borderRadius: radius.sm,
-  },
-  primaryBtnUrgent: { backgroundColor: colors.urgent },
-  primaryText: { ...type.small, fontWeight: '600', color: '#FFFFFF' },
+  dot: { width: s(5), height: s(5), borderRadius: s(2.5), backgroundColor: colors.line },
+  dotOn: { width: s(14), borderRadius: s(3), backgroundColor: colors.accent },
 });

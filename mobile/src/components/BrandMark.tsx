@@ -11,7 +11,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { colors, radius } from '../theme';
+import { colors } from '../theme';
 import type { Source } from '../api/types';
 
 const SIZE = 28;
@@ -124,7 +124,15 @@ const TINT: Record<Source, string> = {
  * whose mark has not been vendored yet, which keeps the layout correct rather
  * than leaving a hole.
  */
-export function BrandMark({ source, size = SIZE }: { source: Source; size?: number }) {
+export function BrandMark({
+  source,
+  size = SIZE,
+  radius: r,
+}: {
+  source: Source;
+  size?: number;
+  radius?: number;
+}) {
   const Mark = MARKS[source];
   const tint = TINT[source] ?? colors.accentSoft;
 
@@ -132,7 +140,7 @@ export function BrandMark({ source, size = SIZE }: { source: Source; size?: numb
     <View
       style={[
         styles.roundel,
-        { width: size, height: size, borderRadius: radius.sm, backgroundColor: tint },
+        { width: size, height: size, borderRadius: r ?? size * 0.28, backgroundColor: tint },
       ]}
     >
       {Mark ? (

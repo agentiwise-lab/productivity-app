@@ -9,7 +9,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { FeedRow, RefreshResult } from './types';
+import type { FeedRow, MeetingOut, RefreshResult, SourceInfo } from './types';
 
 const CACHE_KEY = 'feed.cache.v1';
 const CACHE_AT_KEY = 'feed.cache.at.v1';
@@ -105,6 +105,23 @@ export class ApiClient {
     } catch {
       return null;
     }
+  }
+
+  /** Every supported source with its live status. Never inferred from feed
+   *  rows: that could not tell a quiet integration from an absent one. */
+  connections(): Promise<SourceInfo[]> {
+    return this.request<SourceInfo[]>('/connections');
+  }
+
+  /** Read live on every open. A cached schedule eventually becomes a lie. */
+  day(): Promise<MeetingOut[]> {
+    return this.request<MeetingOut[]>('/day');
+  }
+
+  connectUrl(provider: string): Promise<{ url: string }> {
+    return this.request<{ url: string }>(`/connections/${provider}/link`, {
+      method: 'POST',
+    });
   }
 
   refresh(): Promise<RefreshResult> {

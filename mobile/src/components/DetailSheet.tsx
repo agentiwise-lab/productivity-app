@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { colors, space, radius, type, tierLabel } from '../theme';
+import { colors, space, radius, text, tierLabel } from '../theme';
 import { BrandMark } from '../components/BrandMark';
 import { ago, deadlineLabel } from '../lib/time';
 import { actionsFor, overflowFor } from '../lib/actions';
@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
   body: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   headText: { flex: 1, gap: 2 },
-  sender: { ...type.h2, color: colors.fg },
-  meta: { ...type.small, color: colors.dim },
+  sender: { ...text.h2, color: colors.fg },
+  meta: { ...text.small, color: colors.dim },
   tierPill: {
     backgroundColor: colors.accentSoft,
     borderRadius: radius.pill,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tierPillUrgent: { backgroundColor: colors.urgentSoft },
-  tierText: { ...type.small, fontWeight: '700', color: colors.accent },
+  tierText: { ...text.small, fontWeight: '700', color: colors.accent },
   tierTextUrgent: { color: colors.urgent },
   quote: {
     backgroundColor: colors.surface,
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.line,
     padding: space.lg,
   },
-  quoteText: { ...type.body, color: colors.fg },
+  quoteText: { ...text.body, color: colors.fg },
   why: {
     backgroundColor: colors.accentSoft,
     borderRadius: radius.md,
@@ -187,9 +187,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   whyUrgent: { backgroundColor: colors.urgentSoft },
-  whyLabel: { ...type.mono, color: colors.accent },
+  whyLabel: { ...text.monoLabel, color: colors.accent },
   whyLabelUrgent: { color: colors.urgent },
-  whyText: { ...type.body, color: colors.accent },
+  whyText: { ...text.body, color: colors.accent },
   whyTextUrgent: { color: colors.urgent },
   input: {
     backgroundColor: colors.surface,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     padding: space.md,
     minHeight: 76,
-    ...type.body,
+    ...text.body,
     color: colors.fg,
   },
   actions: { flexDirection: 'row', gap: space.sm },
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   primaryUrgent: { backgroundColor: colors.urgent },
   busy: { opacity: 0.6 },
-  primaryText: { ...type.body, fontWeight: '600', color: '#FFFFFF' },
+  primaryText: { ...text.body, fontWeight: '600', color: '#FFFFFF' },
   secondary: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     alignItems: 'center',
   },
-  secondaryText: { ...type.body, fontWeight: '600', color: colors.accent },
+  secondaryText: { ...text.body, fontWeight: '600', color: colors.accent },
   overflow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   overflowBtn: {
     paddingHorizontal: space.md,
@@ -231,5 +231,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  overflowText: { ...type.small, fontWeight: '600', color: colors.dim },
+  overflowText: { ...text.small, fontWeight: '600', color: colors.dim },
 });

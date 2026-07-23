@@ -23,6 +23,7 @@ from backend.auth import AuthMode, build_current_user
 from backend.integrations.github import Comment, GitHubService, PRRef, PullRequest
 from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
+from backend.models.sources import CATALOGUE, Source, SourceInfo
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
 from backend.services.actions import (
     ActionFailed,
@@ -92,6 +93,15 @@ class SnoozeBody(BaseModel):
 class RefreshResult(BaseModel):
     ingested: int
     classified: int
+    per_source: dict[str, int] = {}
+    failed: dict[str, str] = {}
+
+
+class MeetingOut(BaseModel):
+    title: str
+    start: datetime
+    end: datetime
+    conference_url: str | None = None
 
 
 def create_app(
@@ -103,6 +113,9 @@ def create_app(
     jwt_secret: str | None = None,
     connections: Any | None = None,
     classifier: DefaultClassificationService | None = None,
+    connection_service: Any | None = None,
+    calendar: Any | None = None,
+    sync: Any | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
     cors_origins: list[str] | None = None,
 ) -> FastAPI:
@@ -145,17 +158,70 @@ def create_app(
 
     @app.post("/feed/refresh", response_model=RefreshResult)
     def refresh(user_id: str = Depends(current_user)) -> RefreshResult:
-        """Fetch on open. GitHub's account-wide triggers cannot carry the urgent
-        tier, so this poll is the primary GitHub path rather than a fallback."""
+        """Fetch on open, across every polled source.
+
+        GitHub, Linear, Gmail and Calendar are pulled here because their
+        triggers either cannot carry the urgent tier or do not exist
+        account-wide. Slack arrives by push and is not polled.
+        """
         prefs = UserPreferences(user_id=user_id)
+        if sync is not None:
+            report = sync.refresh(user_id, prefs)
+            return RefreshResult(
+                ingested=report.ingested,
+                classified=report.classified,
+                per_source=report.per_source,
+                failed=report.failed,
+            )
+
         events = github.list_notifications()
         for event in events:
             feed_service.ingest(user_id, event, prefs)
-
         classified = 0
         if classifier is not None:
             classified = classifier.classify_pending(user_id).classified
         return RefreshResult(ingested=len(events), classified=classified)
+
+    @app.get("/connections", response_model=list[SourceInfo])
+    def get_connections(user_id: str = Depends(current_user)) -> list[SourceInfo]:
+        """Every supported source, always, with its live status.
+
+        Sources is a menu rather than a report, so an integration the user has
+        not connected still has a row telling them it exists.
+        """
+        items = repo.list_by_user(user_id)
+        if connection_service is None:
+            return [
+                SourceInfo(source=source, label=label)
+                for source, label, _ in CATALOGUE
+            ]
+        return connection_service.list_sources(user_id, items)
+
+    @app.post("/connections/{provider}/link")
+    def post_link(provider: Source, user_id: str = Depends(current_user)) -> dict:
+        if connection_service is None:
+            raise HTTPException(status_code=503, detail="connections not configured")
+        return {"url": connection_service.link_url(user_id, provider)}
+
+    @app.get("/day", response_model=list[MeetingOut])
+    def get_day(user_id: str = Depends(current_user)) -> list[MeetingOut]:
+        """Read live on every open. A cached schedule is one that will
+        eventually be shown after it stopped being true."""
+        if calendar is None:
+            return []
+        try:
+            return [
+                MeetingOut(
+                    title=m.title,
+                    start=m.start,
+                    end=m.end,
+                    conference_url=m.conference_url,
+                )
+                for m in calendar.today()
+            ]
+        except Exception:
+            log.warning("could not read the calendar", exc_info=True)
+            return []
 
     @app.post("/feed/{item_id}/actions", response_model=FeedItem)
     def post_action(

@@ -94,6 +94,7 @@ def build_feed_service(repo=None, github=None) -> DefaultFeedService:
 
 def make_event(**overrides) -> RawEvent:
     defaults = dict(
+        source="github",
         source_ref="octo/repo#1",
         reason="review_requested",
         subject_type="PullRequest",

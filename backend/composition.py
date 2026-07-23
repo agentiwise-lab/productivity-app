@@ -16,10 +16,17 @@ from fastapi import FastAPI
 
 from backend.integrations.composio_github import ComposioGitHubService
 from backend.integrations.openrouter import DefaultTriageModel
+from backend.integrations.calendar import ComposioCalendarService
+from backend.integrations.gmail import ComposioGmailService
+from backend.integrations.linear import ComposioLinearService
 from backend.integrations.slack_service import ComposioSlackService
 from backend.main import create_app
 from backend.repositories.connections import InMemoryConnectionRepository
 from backend.repositories.feed_repository import InMemoryFeedRepository
+from backend.services.connections import DefaultConnectionService
+from backend.services.sync import SourceSync
+from backend.services.feed import DefaultFeedService
+from backend.services.rules import DefaultRuleClassifier
 from backend.services.classifier import (
     DefaultClassificationService,
     InMemoryClassificationCache,
@@ -44,6 +51,9 @@ def build_app() -> FastAPI:
     composio_user = _require("COMPOSIO_USER_ID")
     github = ComposioGitHubService(composio, user_id=composio_user)
     slack = ComposioSlackService(composio, user_id=composio_user)
+    linear = ComposioLinearService(composio, user_id=composio_user)
+    gmail = ComposioGmailService(composio, user_id=composio_user)
+    calendar = ComposioCalendarService(composio, user_id=composio_user)
 
     # Without this, identity is never resolved and every Slack channel message
     # is silently dropped for want of a user id to match mentions against.
@@ -58,6 +68,23 @@ def build_app() -> FastAPI:
         cache=InMemoryClassificationCache(),
         daily_budget=int(os.environ.get("LLM_DAILY_BUDGET", "200")),
         model_name=os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash"),
+    )
+
+    connection_service = DefaultConnectionService(
+        composio=composio, composio_user_id=composio_user
+    )
+    # The sync needs a feed service of its own, built on the same repository
+    # and rules the API uses, so both paths write identical rows.
+    sync = SourceSync(
+        feed=DefaultFeedService(
+            repo=repo, rules=DefaultRuleClassifier(), github=github
+        ),
+        github=github,
+        linear=linear,
+        gmail=gmail,
+        calendar=calendar,
+        classifier=classifier,
+        identity_for=connections.identity_for,
     )
 
     webhook_secret = os.environ.get("COMPOSIO_WEBHOOK_SECRET")
@@ -89,6 +116,9 @@ def build_app() -> FastAPI:
         auth_mode=auth_mode,
         jwt_secret=os.environ.get("SUPABASE_JWT_SECRET"),
         classifier=classifier,
+        connection_service=connection_service,
+        calendar=calendar,
+        sync=sync,
         verify_webhook=verify_webhook,
         cors_origins=[
             origin.strip()

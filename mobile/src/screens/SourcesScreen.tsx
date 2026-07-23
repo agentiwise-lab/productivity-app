@@ -1,140 +1,146 @@
 /**
- * Sources: one row per connected tool, with what it is currently asking of you.
+ * Sources: a menu of every integration, matching the mockup's Sources screen.
  *
- * A broken connection gets a red dot and a reconnect prompt rather than being
- * left to look like a quiet source. Plan 6.4 is explicit that a source going
- * silent because we lost access must never be indistinguishable from a source
- * with nothing to say.
+ * Every supported source has a row whether or not it is connected. A list built
+ * from whatever is in the feed cannot tell a quiet integration from one that
+ * was never set up, and cannot show the user what they are missing.
+ *
+ * Status and counts are separate concerns: the skeleton renders immediately
+ * with all six rows, and each row's status fills in when the connection check
+ * returns. The list never appears empty while it is loading.
  */
 
-import React, { useMemo } from 'react';
-import { View, Text, Pressable, SectionList, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, space, radius, type } from '../theme';
+import { colors, s, type } from '../theme';
+import { Header } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
-import { FeedCard } from '../components/FeedCard';
-import type { FeedRow, Source } from '../api/types';
-
-export interface Connection {
-  provider: Source;
-  label: string;
-  status: 'active' | 'expired' | 'revoked' | 'error';
-}
+import type { SourceInfo } from '../api/types';
 
 interface Props {
-  rows: FeedRow[];
-  connections: Connection[];
-  onOpen: (row: FeedRow) => void;
-  onAction: (row: FeedRow, action: string) => void;
-  onReconnect: (provider: Source) => void;
+  sources: SourceInfo[];
+  loadingStatus: boolean;
+  onOpen: (source: SourceInfo) => void;
+  onConnect: (source: SourceInfo) => void;
+}
+
+/** What this source is currently asking of you, in the source's own terms. */
+function describe(info: SourceInfo, loading: boolean): string {
+  if (loading) return 'Checking connection...';
+  if (info.status === 'disconnected') return 'Not connected yet';
+  if (info.status === 'expired') return 'Access expired, tap to reconnect';
+  if (info.status === 'error') return "Couldn't check this connection";
+  if (info.count === 0) return 'Nothing needs you';
+  const parts = [`${info.count} need${info.count === 1 ? 's' : ''} you`];
+  if (info.urgent > 0) parts.push(`${info.urgent} urgent`);
+  return parts.join(' · ');
 }
 
 export function SourcesScreen({
-  rows,
-  connections,
+  sources,
+  loadingStatus,
   onOpen,
-  onAction,
-  onReconnect,
+  onConnect,
 }: Props) {
-  const sections = useMemo(
-    () =>
-      connections.map((connection) => {
-        const mine = rows.filter(
-          (row) => row.source === connection.provider && row.tier !== 'noise',
-        );
-        return { connection, title: connection.label, data: mine };
-      }),
-    [rows, connections],
-  );
+  const total = sources.reduce((sum, info) => sum + info.count, 0);
+  const connected = sources.filter((info) => info.status === 'connected').length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <Text style={styles.title}>Sources</Text>
-      <SectionList
-        sections={sections}
-        keyExtractor={(row) => row.id}
-        contentContainerStyle={styles.body}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => (
-          <SourceHeader
-            connection={section.connection}
-            count={section.data.length}
-            onReconnect={onReconnect}
-          />
-        )}
-        renderSectionFooter={({ section }) =>
-          section.data.length === 0 && section.connection.status === 'active' ? (
-            <Text style={styles.quiet}>Nothing needs you here.</Text>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <View style={styles.row}>
-            <FeedCard row={item} onPress={onOpen} onAction={onAction} />
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.quiet}>No tools connected yet.</Text>
-        }
-      />
-    </SafeAreaView>
-  );
-}
+      <Header title="Sources" subtitle="Tap one to go deeper" rightGlyph="+" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.summary}>
+          <Text style={styles.summaryValue}>{total}</Text>
+          <Text style={styles.summaryLabel}>
+            need you, across {connected} connected{' '}
+            {connected === 1 ? 'source' : 'sources'}
+          </Text>
+        </View>
 
-function SourceHeader({
-  connection,
-  count,
-  onReconnect,
-}: {
-  connection: Connection;
-  count: number;
-  onReconnect: (provider: Source) => void;
-}) {
-  const broken = connection.status !== 'active';
-  return (
-    <Pressable
-      disabled={!broken}
-      onPress={() => onReconnect(connection.provider)}
-      style={styles.header}
-    >
-      <BrandMark source={connection.provider} size={24} />
-      <Text style={styles.headerLabel}>{connection.label}</Text>
-      {broken ? <View style={styles.dot} /> : null}
-      <View style={styles.spacer} />
-      <Text style={broken ? styles.headerBad : styles.headerCount}>
-        {broken ? 'Reconnect' : count}
-      </Text>
-    </Pressable>
+        {sources.map((info) => {
+          const broken = info.status === 'expired' || info.status === 'error';
+          const off = info.status === 'disconnected';
+          return (
+            <Pressable
+              key={info.source}
+              onPress={() => (off || broken ? onConnect(info) : onOpen(info))}
+              style={styles.row}
+            >
+              <BrandMark source={info.source} size={s(24)} radius={s(7)} />
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, off && styles.rowTitleOff]}>
+                  {info.label}
+                </Text>
+                <Text style={[styles.rowSub, broken && styles.rowSubBad]}>
+                  {describe(info, loadingStatus)}
+                </Text>
+              </View>
+              {loadingStatus ? (
+                <View style={styles.skeletonPill} />
+              ) : off || broken ? (
+                <Text style={[styles.action, broken && styles.actionBad]}>
+                  {off ? 'Connect' : 'Fix'}
+                </Text>
+              ) : (
+                <Text style={styles.count}>{info.count}</Text>
+              )}
+            </Pressable>
+          );
+        })}
+
+        <Text style={styles.footnote}>
+          Connecting an account opens the provider's own sign-in. Nothing is
+          stored here beyond the connection itself.
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  title: {
-    ...type.h1,
-    color: colors.fg,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
+  body: { paddingBottom: s(30) },
+  summary: {
+    marginHorizontal: s(13),
+    marginTop: s(11),
+    marginBottom: s(6),
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    borderRadius: s(14),
+    paddingHorizontal: s(12),
+    paddingVertical: s(11),
   },
-  body: { paddingBottom: space.xxl },
-  header: {
+  summaryValue: { fontFamily: 'Menlo', fontSize: s(22), fontWeight: '600', color: colors.fg },
+  summaryLabel: { ...type.rowSub, marginTop: s(2) },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingTop: space.xl,
-    paddingBottom: space.sm,
+    gap: s(9),
+    paddingHorizontal: s(16),
+    paddingTop: s(9),
+    paddingBottom: s(10),
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
   },
-  headerLabel: { ...type.h2, color: colors.fg },
-  headerCount: { ...type.body, color: colors.dim },
-  headerBad: { ...type.small, fontWeight: '600', color: colors.urgent },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.urgent },
-  spacer: { flex: 1 },
-  row: { paddingHorizontal: space.lg, paddingBottom: space.md },
-  quiet: {
-    ...type.small,
-    color: colors.dim,
-    paddingHorizontal: space.lg,
-    paddingBottom: space.md,
+  rowBody: { flex: 1 },
+  rowTitle: { ...type.rowTitle, fontWeight: '600', color: colors.fg },
+  rowTitleOff: { color: colors.dim },
+  rowSub: { ...type.rowSub, marginTop: s(1) },
+  rowSubBad: { color: colors.urgent },
+  count: { ...type.groupCount, color: colors.fg },
+  action: { ...type.rowSub, fontWeight: '600', color: colors.accent },
+  actionBad: { color: colors.urgent },
+  skeletonPill: {
+    width: s(34),
+    height: s(11),
+    borderRadius: s(6),
+    backgroundColor: colors.line,
+  },
+  footnote: {
+    ...type.rowSub,
+    paddingHorizontal: s(16),
+    paddingTop: s(16),
   },
 });
