@@ -154,7 +154,7 @@ function SourceCard({
         {
           marginHorizontal: space.md,
           marginBottom: space.sm,
-          padding: space.md,
+          padding: space.sm,
           borderRadius: radius.lg,
           backgroundColor: c.surface,
           borderWidth: 1,
@@ -166,7 +166,7 @@ function SourceCard({
     >
       {/* A board is a summary rather than a category, so it takes the summary
           hue, which never shares a screen with a tier. */}
-      <TopTint category="summary" width={361} height={120} />
+      <TopTint category="summary" width={361} height={88} />
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <BrandMark source={info.source} size={32} />
@@ -193,7 +193,7 @@ function SourceCard({
         // up: each takes a third of the row, its number and its label sharing a
         // left edge. They were a larger "hero" beside two smaller ones before,
         // which left the numbers on different baselines and the labels adrift.
-        <View style={{ flexDirection: 'row', marginTop: space.md }}>
+        <View style={{ flexDirection: 'row', marginTop: space.xs }}>
           {stats.map((stat) => (
             <Stat
               key={stat.label}
@@ -226,8 +226,11 @@ function summarise(board: Board): StatLine[] {
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={{ flex: 1, minWidth: 0, paddingRight: space.sm }}>
-      {/* Every figure the same size, so a 1 and a 5984 sit on one baseline. */}
-      <T role="title" numeric tone="high" lines={1}>
+      {/* The number is the highlight and the label its subtext, in a compact
+          pair: a 17pt figure over an 11pt label rather than a 22pt figure that
+          spent a whole extra row of height on every card. Same size across all
+          three, so a 1 and a 5984 still sit on one baseline. */}
+      <T role="heading" numeric tone="high" lines={1}>
         {value}
       </T>
       <T role="label" tone="low" lines={1}>
