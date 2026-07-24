@@ -26,8 +26,9 @@ import Svg, {
   Rect,
   Stop,
   G,
+  Text as SvgText,
 } from 'react-native-svg';
-import { space, useTheme, type Category } from '../theme';
+import { fonts, space, useTheme, type Category } from '../theme';
 import { T } from './ui';
 
 export interface Meeting {
@@ -52,8 +53,26 @@ const at = (hour: number) => clamp(hour / 24);
 
 const R_TIME = 104;
 const R_WORK = 80;
-const BOX = 224;
+// The canvas is wider than the time ring so the hour labels sit outside it,
+// clear of the inner work ring by the whole width of the outer one, and with
+// enough room at every edge that a two-glyph label is never clipped.
+const BOX = 300;
 const CENTRE = BOX / 2;
+const R_LABEL = R_TIME + 18;
+
+/**
+ * The four quarter-days that anchor a 24-hour dial, labelled 00/06/12/18.
+ *
+ * Not "6a/6p": the am/pm abbreviation read as a clipped word (a "6a" looks like
+ * a "6am" with the end cut off), and two-digit 24-hour numerals are both
+ * unambiguous and visibly whole.
+ */
+const HOURS = [
+  { hour: 0, label: '00' },
+  { hour: 6, label: '06' },
+  { hour: 12, label: '12' },
+  { hour: 18, label: '18' },
+];
 
 /** A 2pt gap between category arcs, so three of them are countable rather than
  *  merely proportional. */
@@ -79,7 +98,7 @@ export function DayRing({
   const workC = 2 * Math.PI * R_WORK;
 
   return (
-    <View style={{ height: 284, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
+    <View style={{ height: 300, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
       <View style={{ position: 'absolute', width: 300, height: 300 }}>
         <Svg width={300} height={300}>
           <Defs>
@@ -106,12 +125,27 @@ export function DayRing({
           stroke={c.hairline}
           strokeWidth={5}
         />
-        {/* Four ticks at the quarter-days, so the ring reads as a clock rather
-            than a progress bar: midnight up, noon down, six and eighteen on the
-            sides. */}
-        {[0, 6, 12, 18].map((hour) => (
-          <Tick key={hour} frac={at(hour)} colour={c.border} />
-        ))}
+        {/* The four quarter-days, labelled, so the dial reads as a 24-hour
+            clock rather than a progress bar: midnight up, noon down, and the
+            two sixes on the sides. The labels sit outside the time ring, so
+            they never crowd the work ring inside it. */}
+        {HOURS.map(({ hour, label }) => {
+          const angle = at(hour) * 2 * Math.PI - Math.PI / 2;
+          return (
+            <SvgText
+              key={hour}
+              x={CENTRE + Math.cos(angle) * R_LABEL}
+              y={CENTRE + Math.sin(angle) * R_LABEL}
+              fill={c.low}
+              fontSize={11}
+              fontFamily={fonts.mono}
+              textAnchor="middle"
+              alignmentBaseline="central"
+            >
+              {label}
+            </SvgText>
+          );
+        })}
         <Arc r={R_TIME} c={timeC} from={0} to={nowFrac} colour={c.border} width={5} />
         {meetings.map((meeting, index) => {
           const from = at(hoursOf(meeting.start));
@@ -132,7 +166,9 @@ export function DayRing({
         <G
           transform={`rotate(${nowFrac * 360} ${CENTRE} ${CENTRE})`}
         >
-          <Circle cx={CENTRE} cy={8} r={5} fill={c.high} />
+          {/* Seated on the time ring itself, so it never drifts out among the
+              hour labels. */}
+          <Circle cx={CENTRE} cy={CENTRE - R_TIME} r={5} fill={c.high} />
         </G>
 
         {/* Inner: the work. The only place a category hue appears. */}
@@ -188,9 +224,9 @@ export function DayRing({
           gap: space.xs,
         }}
       >
-        {/* A 24-hour clock needs no range printed on it, only what its two
-            marks mean. */}
-        <Dot colour={c.mid} />
+        {/* Each swatch is the shape of the mark it names: a meeting is an arc,
+            so its key is a short bar, and now is a dot, so its key is a dot. */}
+        <Bar colour={c.mid} />
         <T role="label" tone="low">
           Meeting
         </T>
@@ -235,27 +271,19 @@ function Arc({
   );
 }
 
-/** A short radial tick on the outer ring, at a fraction of the 24-hour clock. */
-function Tick({ frac, colour }: { frac: number; colour: string }) {
-  const angle = frac * 2 * Math.PI - Math.PI / 2;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const inner = R_TIME - 7;
-  const outer = R_TIME + 7;
-  return (
-    <Circle
-      cx={CENTRE + cos * ((inner + outer) / 2)}
-      cy={CENTRE + sin * ((inner + outer) / 2)}
-      r={1.6}
-      fill={colour}
-    />
-  );
-}
-
 function Dot({ colour }: { colour: string }) {
   return (
     <View
       style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: colour }}
+    />
+  );
+}
+
+/** The meeting swatch: a short arc-shaped bar rather than a dot. */
+function Bar({ colour }: { colour: string }) {
+  return (
+    <View
+      style={{ width: 14, height: 5, borderRadius: 999, backgroundColor: colour }}
     />
   );
 }

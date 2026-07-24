@@ -39,69 +39,13 @@ import { Icon } from './Icon';
 import { Chip, T } from './ui';
 import { needsComposer, railFor, type RailAction } from '../lib/actions';
 import { ago, deadlineLabel } from '../lib/time';
-import { decodeEntities, subtext } from '../lib/subtext';
+import {
+  cardSubtitle,
+  headerSubline,
+  primaryLine,
+  sourceName,
+} from '../lib/rowText';
 import type { FeedRow, Source } from '../api/types';
-
-/**
- * The 34pt line. Normally the subject, but a mail with no subject was drawing
- * the literal string "(no subject)" as large as everything else on the screen.
- * When the title says nothing, the message says it instead.
- */
-function cardTitle(row: FeedRow): string {
-  const title = decodeEntities((row.title || '').trim());
-  const empty = !title || /^\(no subject\)$/i.test(title);
-  if (!empty) return title;
-  const fallback = subtext(row);
-  return fallback || row.sender_name || 'Message';
-}
-
-const SOURCE_NAME: Record<Source, string> = {
-  github: 'GitHub',
-  slack: 'Slack',
-  gmail: 'Gmail',
-  linear: 'Linear',
-  calendar: 'Calendar',
-  google_docs: 'Google Docs',
-};
-
-/**
- * The line under the source name: what this item belongs to, in the terms of
- * its own source. A GitHub item is a repository, a Gmail item is who sent it, a
- * Linear item is its project or identifier, a Slack item is its channel or the
- * person. Naming it "Inbox" for every mail, which is what `context_chip` did,
- * told the reader nothing they did not already know from the mark beside it.
- */
-function context(row: FeedRow): string | null {
-  const value = subline(row);
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  // Never the source name printed twice, and never a generic mailbox label.
-  const lower = trimmed.toLowerCase();
-  if (lower === SOURCE_NAME[row.source].toLowerCase()) return null;
-  if (lower === 'inbox') return row.sender_name || row.sender_handle || null;
-  return trimmed;
-}
-
-function subline(row: FeedRow): string | null {
-  switch (row.source) {
-    case 'github':
-      return row.repo || row.context_chip;
-    case 'gmail':
-      return row.sender_name || row.sender_handle || null;
-    case 'slack':
-      return row.context_chip || row.sender_name || row.sender_handle;
-    case 'linear':
-      // The issue identifier (ENG-412) or its project, never the word "Linear".
-      return row.context_chip && row.context_chip !== 'Linear'
-        ? row.context_chip
-        : row.repo || null;
-    case 'calendar':
-      return row.context_chip;
-    default:
-      return row.context_chip || row.repo || row.sender_handle;
-  }
-}
 
 export function FeedCard({
   row,
@@ -118,8 +62,9 @@ export function FeedCard({
   const { width } = useWindowDimensions();
   const category = CATEGORY_OF_TIER[row.tier];
   const rail = railFor(row);
-  const heading = cardTitle(row);
-  const body = subtext(row);
+  const heading = primaryLine(row);
+  const subline = headerSubline(row);
+  const body = cardSubtitle(row);
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
 
   return (
@@ -143,13 +88,13 @@ export function FeedCard({
         >
           <BrandMark source={row.source} size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <T role="heading">{SOURCE_NAME[row.source]}</T>
-            {/* Only when it says something the line above does not. Linear
-                sets `context_chip` to "Linear", which read as the source name
+            <T role="heading">{sourceName(row)}</T>
+            {/* The item's own context: the sender, the channel, the repo, or
+                the kind of ask. Never "Inbox", and never the source name
                 printed twice. */}
-            {context(row) ? (
-              <T role="secondary" tone="low" numeric lines={1}>
-                {context(row)}
+            {subline ? (
+              <T role="secondary" tone="low" lines={1}>
+                {subline}
               </T>
             ) : null}
           </View>
@@ -209,9 +154,9 @@ export function FeedCard({
       </Pressable>
 
       {/* The one hint that the card opens. Centred at the bottom where nothing
-          else sits, breathing slowly so it is noticed without being read as an
+          else sits, pinging slowly so it is noticed without being read as an
           instruction. Tapping it is tapping the card. */}
-      <OpenHint onPress={() => onOpen(row)} />
+      <OpenHint colour={c.hue[category]} onPress={() => onOpen(row)} />
 
       {/* The column sits over the You tab beneath it: its buttons are centred
           on the same x as the last nav item, which is why the right inset is
@@ -283,23 +228,40 @@ export function FeedCard({
 }
 
 /**
- * A "details" grabber, in the shape iOS uses for a sheet that can be pulled up.
- * It breathes on a four-second cycle between two low opacities, so it lives at
- * the edge of noticing: enough to say the card is a door, quiet enough that it
- * never competes with the copy or the rail.
+ * The one hint that the card opens: a slow ripple around a small dot, the way a
+ * live point pings on a map.
+ *
+ * The earlier version was a horizontal grab-bar at the very bottom, which on a
+ * real phone lands a few points above the home indicator and reads as a second,
+ * broken one. A ripple is round, so it cannot be mistaken for that bar, and it
+ * sits well clear of the indicator zone. It pulses rather than sits still,
+ * because a static dot is decoration and a pulsing one is an invitation.
  */
-function OpenHint({ onPress }: { onPress: () => void }) {
-  const c = useTheme();
-  const pulse = useSharedValue(0.35);
+function OpenHint({ colour, onPress }: { colour: string; onPress: () => void }) {
+  const p = useSharedValue(0);
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(0.7, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+    p.value = withRepeat(
+      withTiming(1, { duration: 2800, easing: Easing.out(Easing.ease) }),
       -1,
-      true,
+      false,
     );
-  }, [pulse]);
-  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  }, [p]);
 
+  // Two rings a half-cycle apart, so there is always one expanding. Kept faint
+  // and in the category hue rather than white, so it reads as a quiet live
+  // point rather than a bright control.
+  const ring = (offset: number) =>
+    useAnimatedStyle(() => {
+      const t = (p.value + offset) % 1;
+      return {
+        transform: [{ scale: 0.5 + t * 0.9 }],
+        opacity: (1 - t) * 0.28,
+      };
+    });
+  const ringA = ring(0);
+  const ringB = ring(0.5);
+
+  // 44 of touch, an 18pt ping: a tap target's worth of area, a hint's worth of ink.
   return (
     <Pressable
       onPress={onPress}
@@ -307,22 +269,39 @@ function OpenHint({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Open details"
       style={{
         position: 'absolute',
-        bottom: space.xs,
+        bottom: 60,
         left: 0,
         right: 0,
         alignItems: 'center',
+        justifyContent: 'center',
+        height: 18,
       }}
     >
-      <Animated.View
-        style={[
-          {
-            width: 36,
-            height: 4,
-            borderRadius: 999,
-            backgroundColor: c.high,
-          },
-          style,
-        ]}
+      {[ringA, ringB].map((style, index) => (
+        <Animated.View
+          key={index}
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colour,
+            },
+            style,
+          ]}
+        />
+      ))}
+      <View
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 999,
+          backgroundColor: colour,
+          opacity: 0.6,
+        }}
       />
     </Pressable>
   );

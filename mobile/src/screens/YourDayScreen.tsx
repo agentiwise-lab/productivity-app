@@ -29,7 +29,7 @@ import { BrandMark } from '../components/BrandMark';
 import { SectionLabel, T } from '../components/ui';
 import { Clear, NoMeetingsLeft, NothingConnected, Skeleton, StaleBanner } from '../components/states';
 import { ago, deadlineLabel } from '../lib/time';
-import { subtext } from '../lib/subtext';
+import { listSubtitle, primaryLine } from '../lib/rowText';
 import type { FeedRow } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
@@ -155,10 +155,9 @@ export function YourDayScreen({
                       key={row.id}
                       category={CATEGORY_OF_TIER[row.tier]}
                       leading={<BrandMark source={row.source} size={32} />}
-                      title={row.title}
-                      subtitle={subtext(row)}
+                      title={primaryLine(row)}
+                      subtitle={listSubtitle(row)}
                       meta={deadlineLabel(row.deadline) ?? ago(row.occurred_at)}
-                      submeta={row.repo || row.context_chip}
                       onPress={() => onOpen(row)}
                     />
                   ))

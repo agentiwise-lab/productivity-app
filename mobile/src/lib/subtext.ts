@@ -83,7 +83,7 @@ export function readable(raw?: string | null): string | null {
 }
 
 /** The message itself, one line, decoded and de-marked. */
-function firstLine(raw?: string | null): string | null {
+export function oneLine(raw?: string | null): string | null {
   const body = decodeEntities(raw?.trim() || '');
   if (!body) return null;
   const first = body.split('\n').map(strip).find((line) => line.length > 0);
@@ -102,9 +102,9 @@ export function subtext(row: {
   // markdown, so there the one-line summary is the better line.
   const conversational = row.source === 'gmail' || row.source === 'slack';
   if (conversational) {
-    return firstLine(row.body) ?? (row.summary ? decodeEntities(row.summary.trim()) : null);
+    return oneLine(row.body) ?? (row.summary ? decodeEntities(row.summary.trim()) : null);
   }
   const summary = row.summary?.trim();
   if (summary) return decodeEntities(summary);
-  return firstLine(row.body);
+  return oneLine(row.body);
 }
