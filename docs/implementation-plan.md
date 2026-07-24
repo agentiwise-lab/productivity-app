@@ -54,9 +54,9 @@ This is a one-line client fix plus a contract tightening, it is independent of t
 | `urgent` | `#FF6B5F` | `#CC4432` | Someone is blocked on you |
 | `byEod` | `#63E4C2` | `#0D8167` | Due before tonight |
 | `canWait` | `#AB7FF8` | `#7144CC` | Neither |
-| `later` | `#F2B366` | `#B87A2E` | Arrived, did not need you |
+| `later` | `#F2B366` | `#96631F` | Arrived, did not need you |
 | `none` | `#7FA6D9` | `#3E6EA8` | A row with no category at all |
-| `summary` | `#C9B79A` | `#8A7355` | A card that totals something |
+| `summary` | `#C9B79A` | `#6E5A40` | A card that totals something |
 
 **Colour is the category and never the source.** A source is already named by its own brand mark sitting beside the text, so spending a hue on it says nothing new and costs the one thing hue is good for.
 
@@ -64,7 +64,23 @@ The four tiers are the categories proper. The last two exist because plenty of r
 
 The four tiers were tuned twice: lightened, because the violet had arrived deep and saturated beside a light mint and read as a different class of signal; then brought **75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless.
 
-Contrast of the near-black chip text on the tiers: **7.0:1, 12.6:1, 6.7:1** in dark and **4.7:1, 4.7:1, 6.1:1** in light. All clear AA, and the two light values sit close enough to the floor that any change there must be re-measured.
+### Light is teal, not white
+
+Light was a bright warm white and it glared. The neutral ladder is now a soft teal-grey, green-leaning so it reads calm rather than clinical, with the same lightness steps and **the six category hues unchanged in role**:
+
+| | Value |
+|---|---|
+| `canvas` | `#DDE6E2` |
+| `surface` | `#EFF4F2` |
+| `raised` | `#F5F9F7` |
+| `overlay` | `#CFDCD7` |
+| `hairline` | `#C2D1CC` |
+| `border` | `#AEBFBA` |
+| `faint` / `low` / `mid` / `high` | `#8B9C97` / `#5F6F6B` / `#41514D` / `#141E1B` |
+
+Changing the canvas broke three things that a colour swap alone would not have surfaced, all now fixed: three chips hardcoded near-black text, which is right on a light fill and wrong on a dark one; the Later and summary fills were too light for white text at 3.5:1 and 4.4:1; and tertiary text sat at 3.7:1. The day ring also carried five hardcoded light hexes from the old warm palette.
+
+**Every chip and text pair now clears AA in both modes.** Dark chips run 6.7 to 12.6, light chips 4.7 to 6.5, light body text 4.8 to 15.3. The lowest light values sit close to the floor, so **re-measure before changing any light fill.**
 
 ### What colours a row
 

@@ -33,11 +33,11 @@
 }
 /* warm light: the Warm Sand canvas the project already owns */
 .lightmode{
-  --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
-  --hairline:#E2DCD2; --border:#D2CABE;
-  --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
-  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#B87A2E; --none:#3E6EA8; --stat:#8A7355; --onSolid:#FFFDF9;
-  --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
+  --canvas:#DDE6E2; --surface:#EFF4F2; --raised:#F5F9F7; --overlay:#CFDCD7;
+  --hairline:#C2D1CC; --border:#AEBFBA;
+  --faint:#8B9C97; --low:#5F6F6B; --mid:#41514D; --high:#141E1B;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#96631F; --none:#3E6EA8; --stat:#6E5A40; --onSolid:#FFFDF9;
+  --tabbg:rgba(221,230,226,.80); --phedge:#C2CFCB;
 }
 .pg *{box-sizing:border-box;}
 
@@ -76,7 +76,7 @@
 .sb .clock{font-size:15px;font-weight:600;letter-spacing:-.1px;font-variant-numeric:tabular-nums;}
 .sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
   width:125px;height:36px;border-radius:999px;background:#000;}
-.lightmode .sb .isl{background:#141210;}
+.lightmode .sb .isl{background:#101816;}
 .sb .glyphs{display:flex;align-items:center;gap:4px;}
 .bd{flex:1;overflow:hidden;position:relative;}
 .scroll{position:absolute;inset:0;overflow:hidden;}
@@ -153,7 +153,7 @@
   position:relative;overflow:hidden;}
 .mark::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent);}
-.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(0,0,0,.10),transparent);}
+.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(20,29,27,.12),transparent);}
 .mark.s16{width:16px;height:16px;border-radius:4px;}
 .mark.s20{width:20px;height:20px;border-radius:4px;}
 .mark.s24{width:24px;height:24px;border-radius:8px;}
@@ -170,9 +170,9 @@
   text-transform:uppercase;font-weight:600;white-space:nowrap;}
 .chip.solid{background:var(--alarm);color:var(--onSolid);}
 .chip.solid.acc{background:var(--accent);}
-.chip.solid.wait{background:var(--wait);color:#0C0B0A;}
-.chip.solid.later{background:var(--later);color:#0C0B0A;}
-.chip.solid.none{background:var(--none);color:#0C0B0A;}
+.chip.solid.wait{background:var(--wait);color:var(--onSolid);}
+.chip.solid.later{background:var(--later);color:var(--onSolid);}
+.chip.solid.none{background:var(--none);color:var(--onSolid);}
 .chip.outline{border:1px solid var(--border);color:var(--mid);}
 .chip.outline.acc{border-color:var(--border);color:var(--high);}
 .chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
@@ -245,13 +245,13 @@
 .fstrip{position:relative;z-index:5;padding:0 96px 16px 16px;display:flex;align-items:center;gap:8px;}
 .quote{border-left:2px solid var(--border);padding-left:12px;}
 .why{border-radius:12px;padding:12px;background:rgba(255,255,255,.04);}
-.lightmode .why{background:rgba(0,0,0,.04);}
+.lightmode .why{background:rgba(20,29,27,.05);}
 .quote.acc{border-left-color:var(--mid);}
 .kv{display:flex;justify-content:space-between;padding:4px 0;}
 
 /* ═══ SHEETS ═════════════════════════════════════════════════════ */
 .scrim{position:absolute;inset:0;background:rgba(0,0,0,.58);z-index:18;}
-.lightmode .scrim{background:rgba(26,23,20,.32);}
+.lightmode .scrim{background:rgba(20,29,27,.34);}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:var(--raised);
   border-radius:16px 16px 0 0;padding:0 16px 34px;overflow:hidden;}
 .sheet .swash{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
@@ -946,11 +946,11 @@ const MEETINGS=[[10.5,11.25],[14,14.5],[16,17]];
 const frac=h=>(h-DAY_START)/DAY_H;
 function dayDual(light){
  const acc=light?'#0D8167':'#63E4C2', alm=light?'#CC4432':'#FF6B5F';
- const track=light?'#E2DCD2':'#2E2A26';
- const past =light?'#D2CABE':'#3B352F';
+ const track=light?'#C2D1CC':'#2E2A26';
+ const past =light?'#AEBFBA':'#3B352F';
  const quiet=light?'#7144CC':'#AB7FF8';   // can wait: the third tier hue
- const meet =light?'#5E564E':'#A79F97';
- const now  =light?'#1A1714':'#F5F1EC';
+ const meet =light?'#41514D':'#A79F97';
+ const now  =light?'#141E1B':'#F5F1EC';
  const R1=88,R2=66,C1=2*Math.PI*R1,C2=2*Math.PI*R2;
  const arc=(r,c,from,to,col,w)=>{const a=from*c,l=Math.max(0,(to-from)*c);
   return `<circle cx="96" cy="96" r="${r}" fill="none" stroke="${col}" stroke-width="${w}"
