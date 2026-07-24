@@ -22,8 +22,8 @@
   --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
   --hairline:#2E2A26; --border:#3B352F;
   --faint:#57504A; --low:#7A736C; --mid:#A79F97; --high:#F5F1EC;
-  --accent:#6FE6C6; --alarm:#FF9E90; --wait:#C3A8FA; --onSolid:#0C0B0A;
-  --github:#C3A8FA; --linear:#5E6AD2; --slack:#36C5F0;
+  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --onSolid:#0C0B0A;
+  --github:#AB7FF8; --linear:#5E6AD2; --slack:#36C5F0;
   --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
   --tabbg:rgba(12,11,10,.74);
   --page:#151412; --pagefg:#EDEAE5; --pagedim:#8E8880; --pageln:#2E2A26; --phedge:#332E29;
@@ -36,7 +36,7 @@
   --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
   --hairline:#E2DCD2; --border:#D2CABE;
   --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
-  --accent:#0F8E71; --alarm:#D9503C; --wait:#7C4FD6; --onSolid:#FFFDF9;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --onSolid:#FFFDF9;
   --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
 }
 .pg *{box-sizing:border-box;}
@@ -57,7 +57,7 @@
 .cell{flex:none;width:393px;}
 .cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;}
 .cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
-.cap .rec{color:#6FE6C6;}
+.cap .rec{color:#63E4C2;}
 .specrow{display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;align-items:flex-end;}
 .specitem{padding:12px 16px;border:1px solid var(--pageln);border-radius:12px;background:#0C0B0A;}
 .specitem .nm{font-family:"Geist Mono",monospace;font-size:10px;color:var(--pagedim);margin-top:8px;}
@@ -196,8 +196,8 @@
 .daykey{position:absolute;bottom:0;display:flex;align-items:center;gap:8px;}
 .daykey .dot{width:8px;height:8px;border-radius:999px;display:block;}
 .arcglow{position:absolute;width:260px;height:260px;border-radius:999px;
-  background:radial-gradient(circle,rgba(255,158,144,.14) 0%,rgba(255,158,144,0) 62%);}
-.lightmode .arcglow{background:radial-gradient(circle,rgba(217,80,60,.09) 0%,rgba(217,80,60,0) 62%);}
+  background:radial-gradient(circle,rgba(255,107,95,.14) 0%,rgba(255,107,95,0) 62%);}
+.lightmode .arcglow{background:radial-gradient(circle,rgba(204,68,50,.09) 0%,rgba(204,68,50,0) 62%);}
 .arcnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 
 /* ═══ FEED CARD ══════════════════════════════════════════════════ */
@@ -206,20 +206,20 @@
 /* the flamboyance: tier colour rising from the bottom edge */
 .beneath{position:absolute;left:0;right:0;bottom:0;height:340px;pointer-events:none;z-index:1;}
 .beneath.u{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(255,158,144,.50) 0%,rgba(255,158,144,.16) 42%,rgba(255,158,144,0) 74%),
-  linear-gradient(0deg,rgba(255,158,144,.16) 0%,rgba(255,158,144,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(255,107,95,.50) 0%,rgba(255,107,95,.16) 42%,rgba(255,107,95,0) 74%),
+  linear-gradient(0deg,rgba(255,107,95,.16) 0%,rgba(255,107,95,0) 58%);}
 .beneath.b{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(111,230,198,.42) 0%,rgba(111,230,198,.13) 42%,rgba(111,230,198,0) 74%),
-  linear-gradient(0deg,rgba(111,230,198,.12) 0%,rgba(111,230,198,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(99,228,194,.42) 0%,rgba(99,228,194,.13) 42%,rgba(99,228,194,0) 74%),
+  linear-gradient(0deg,rgba(99,228,194,.12) 0%,rgba(99,228,194,0) 58%);}
 .beneath.c{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(195,168,250,.34) 0%,rgba(195,168,250,.11) 42%,rgba(195,168,250,0) 74%),
-  linear-gradient(0deg,rgba(195,168,250,.12) 0%,rgba(195,168,250,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(171,127,248,.34) 0%,rgba(171,127,248,.11) 42%,rgba(171,127,248,0) 74%),
+  linear-gradient(0deg,rgba(171,127,248,.12) 0%,rgba(171,127,248,0) 58%);}
 .lightmode .beneath.u{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(217,80,60,.22) 0%,rgba(217,80,60,.07) 42%,rgba(217,80,60,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(204,68,50,.22) 0%,rgba(204,68,50,.07) 42%,rgba(204,68,50,0) 74%);}
 .lightmode .beneath.b{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(15,142,113,.20) 0%,rgba(15,142,113,.06) 42%,rgba(15,142,113,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(13,129,103,.20) 0%,rgba(13,129,103,.06) 42%,rgba(13,129,103,0) 74%);}
 .lightmode .beneath.c{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(124,79,214,.20) 0%,rgba(124,79,214,.06) 42%,rgba(124,79,214,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(113,68,204,.20) 0%,rgba(113,68,204,.06) 42%,rgba(113,68,204,0) 74%);}
 .fbody{flex:1;padding:16px 16px 0;position:relative;z-index:4;display:flex;flex-direction:column;min-height:0;}
 .fhead{display:flex;align-items:center;gap:12px;}
 .fmid{margin-top:24px;}
@@ -342,9 +342,9 @@
   <div class="sw-item"><div class="sw-chip" style="background:#3B352F"></div><div class="sw-nm">border 3B352F</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#A79F97"></div><div class="sw-nm">mid A79F97</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#F5F1EC"></div><div class="sw-nm">high F5F1EC</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#6FE6C6"></div><div class="sw-nm">By EOD 6FE6C6</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#FF9E90"></div><div class="sw-nm">Urgent FF9E90</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#C3A8FA"></div><div class="sw-nm">Can wait C3A8FA</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#63E4C2"></div><div class="sw-nm">By EOD 6FE6C6</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#FF6B5F"></div><div class="sw-nm">Urgent FF9E90</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#AB7FF8"></div><div class="sw-nm">Can wait C3A8FA</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#F4F1EC"></div><div class="sw-nm">light canvas</div></div>
 </div>
 
@@ -522,7 +522,7 @@
 <div class="pgsec">
 <p class="eyebrow">Screens</p>
 <h2>A card for every source and tier</h2>
-<p class="lede">Drawn with treatment A. The glow colour is the tier: alarm for urgent, accent for by EOD, a neutral warm grey for can wait. The source tint stays a wash behind the top edge and never competes with it. <b>What changes per source is the middle block and the three rail actions</b>, taken from the matrix in <span class="mono">lib/actions.ts</span> so nothing reachable today is lost.</p>
+<p class="lede">Drawn with treatment A. <b>Every wash on the card is the tier</b>: the bloom from beneath and the tint behind the top edge both carry Urgent, By EOD or Can wait, so colour answers how urgent this is rather than which tool it came from. <b>The brand mark keeps its own colour</b>, since it is identity rather than priority and never sits where a tier signal lives. <b>What changes per source is the middle block and the three rail actions</b>, taken from the matrix in <span class="mono">lib/actions.ts</span> so nothing reachable today is lost.</p>
 <div class="rail" data-cards></div>
 </div>
 
@@ -826,7 +826,7 @@
 <div class="pgsec">
 <p class="eyebrow">The alternate</p>
 <h2>Light, and warm</h2>
-<p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0F8E71</span> and the alarm to <span class="mono">#D9503C</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
+<p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0D8167</span> and the alarm to <span class="mono">#CC4432</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
 <div class="rail lightmode">
 
 <div class="cell"><div class="ph" data-tab="day">
@@ -881,19 +881,20 @@
 <script>
 /* ═══ brand marks, Simple Icons paths (CC0) ═══════════════════════ */
 const MARKS={
- github:{c:'#C3A8FA',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
+ github:{c:'#AB7FF8',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
  slack:{c:'#36C5F0',p:'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z'},
  linear:{c:'#5E6AD2',p:'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z'},
  gmail:{c:'#EA4335',p:'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z'},
  gdocs:{c:'#4285F4',p:'M14 2H6.4C5.1 2 4 3.1 4 4.4v15.2C4 20.9 5.1 22 6.4 22h11.2c1.3 0 2.4-1.1 2.4-2.4V8l-6-6zm-1 7V3.6L18.4 9H13zM8 12.4h8v1.4H8v-1.4zm0 3.2h8V17H8v-1.4zM8 9h4v1.4H8V9z'},
- calendar:{c:'#34A853',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
+ calendar:{c:'#4285F4',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
 };
 /* Three hues in the whole app, and they mean tier. Nothing else is coloured. */
-const TIERRGB={u:'255,158,144',b:'111,230,198',c:'195,168,250'};
-/* Monochrome. A brand mark is identity by shape, not by hue, and colouring
-   six of them would put six hues on screen that mean nothing about priority. */
+const TIERRGB={u:'255,107,95',b:'99,228,194',c:'171,127,248'};
+/* Brand marks keep their own colour. They are identity, not priority, and
+   they never occupy a position where a tier signal lives, so they cannot be
+   misread as one. This is the one exemption from "hue means tier". */
 function markSvg(id,box){const m=MARKS[id];
- return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="var(--mid)"><path d="${m.p}"/></svg>`;}
+ return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="${m.c}"><path d="${m.p}"/></svg>`;}
 function paint(root=document){
  root.querySelectorAll('[data-mark]').forEach(el=>{
   if(el.dataset.done)return; el.dataset.done=1;
@@ -918,10 +919,10 @@ const DAY_START=8,DAY_H=12,NOW=9+41/60;
 const MEETINGS=[[10.5,11.25],[14,14.5],[16,17]];
 const frac=h=>(h-DAY_START)/DAY_H;
 function dayDual(light){
- const acc=light?'#0F8E71':'#6FE6C6', alm=light?'#D9503C':'#FF9E90';
+ const acc=light?'#0D8167':'#63E4C2', alm=light?'#CC4432':'#FF6B5F';
  const track=light?'#E2DCD2':'#2E2A26';
  const past =light?'#D2CABE':'#3B352F';
- const quiet=light?'#7C4FD6':'#C3A8FA';   // can wait: the third tier hue
+ const quiet=light?'#7144CC':'#AB7FF8';   // can wait: the third tier hue
  const meet =light?'#5E564E':'#A79F97';
  const now  =light?'#1A1714':'#F5F1EC';
  const R1=88,R2=66,C1=2*Math.PI*R1,C2=2*Math.PI*R2;

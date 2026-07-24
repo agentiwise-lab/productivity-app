@@ -51,24 +51,26 @@ This is a one-line client fix plus a contract tightening, it is independent of t
 
 | Token | Dark | Light | Means |
 |---|---|---|---|
-| `urgent` | `#FF9E90` | `#D9503C` | Someone is blocked on you |
-| `byEod` | `#6FE6C6` | `#0F8E71` | Due before tonight |
-| `canWait` | `#C3A8FA` | `#7C4FD6` | Neither |
+| `urgent` | `#FF6B5F` | `#CC4432` | Someone is blocked on you |
+| `byEod` | `#63E4C2` | `#0D8167` | Due before tonight |
+| `canWait` | `#AB7FF8` | `#7144CC` | Neither |
 
-All three sit in one luminous band so they read as a family rather than as three unrelated signals. Near-black text on each fill measures **9.6:1, 12.9:1 and 9.6:1**, all above AAA.
+All three sit in one band so they read as a family rather than as three unrelated signals. They were tuned twice: first lightened, because the violet arrived deep and saturated beside a light mint and looked like a different class of signal; then **brought 75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless. This is the midpoint that keeps the family and keeps the punch.
+
+Contrast of the near-black chip text: **7.0:1, 12.6:1 and 6.7:1** in dark, **4.7:1, 4.7:1 and 6.1:1** in light. All clear AA. The two light values sit close to the floor, so **re-measure before changing any light-mode fill.**
 
 **The rule that makes this work: everything that is not a tier is neutral.** Buttons, toggles, status dots, selection bars, tab chrome and brand marks all use the grey ladder. The old design had mint doing double duty as "By EOD" *and* as the primary button, which is what made the palette feel arbitrary.
 
-**One documented exception: data visualisation may use the `byEod` hue.** The Activity sparklines are neutral by the letter of the rule and looked dead for it. A sparkline encodes a quantity over time, not a priority, so it cannot be misread as a tier. Nothing else gets this exemption.
+**Two exemptions, and only two: brand marks, above, and data visualisation.** The Activity sparklines are neutral by the letter of the rule and looked dead for it. A sparkline encodes a quantity over time, not a priority, so it cannot be misread as a tier. Nothing else gets this exemption.
 
 Consequences, all applied in v4:
 
-- **Brand marks render monochrome.** Six brand colours would put six hues on screen that say nothing about priority. Identity comes from the mark's shape. **This is the one place the rule costs something**. Flag it if source recognition suffers in use.
+- **Brand marks keep their own colours.** This was tried monochrome and rejected. A mark is identity, not priority, and it never occupies a position where a tier signal lives, so it cannot be misread as one. **Do not desaturate the source icons during implementation**, in the Feed, in Later, in Activity, in You, or in an action sheet. Use the official marks: GitHub is monochrome by its own brand, Slack is four-colour, Gmail red, Linear indigo, Google blue.
 - **Source tints are gone.** Card washes, sheet washes and row washes are tier-coloured now, so the colour at the top of a sheet answers "how urgent" rather than "which tool".
 - **All three tier chips are solid** with near-black text. Previously only Urgent was solid and the other two were outline and ghost, which read as three different components.
 - The tab bar's selected indicator, the "live" status dot and the toggle "on" state moved to neutral.
 
-A verification pass over all 30 phones reports **zero colours outside the neutral ladder and these three hues.**
+A verification pass over all 30 phones reports zero colours outside the neutral ladder, these three hues, and the two exemptions.
 
 ---
 
@@ -197,7 +199,8 @@ v4 ships with an automated check, and the same assertions should become a lint o
 - Spacing on `4 / 8 / 12 / 16 / 24 / 32 / 48 / 96` only
 - Radii on `4 / 8 / 12 / 16 / pill` only, nested as `inner = outer − padding`
 - Type on the seven roles only
-- **No colour outside the neutral ladder and the three tier hues**, data visualisation excepted
+- **No colour outside the neutral ladder and the three tier hues**, excepting brand marks and data visualisation
+- Chip text at or above 4.5:1 on every tier fill, in both modes
 - No non-inset shadow anywhere
 - No content past the fold, and none hidden under a fixed footer
 - No control under 28pt, and a 44pt touch target via `hitSlop`
@@ -208,6 +211,5 @@ It caught six things in v4 that reading did not, including a class-name collisio
 
 ## 5. Open questions
 
-1. **Monochrome brand marks.** Required by the three-hue rule, and the one place it costs something. Worth watching in use.
-2. **"By EOD" grouping in the Feed.** The tier is deadline-based. If the intent was ever ownership, that is a backend change and it changes the Feed's grouping.
-3. **Sequencing against the other session.** `backend/` and `mobile/` are both being edited on this branch by another session. Phase 1 rewrites `theme.ts` and every screen, so it needs a clean handoff or its own branch.
+1. **"By EOD" grouping in the Feed.** The tier is deadline-based. If the intent was ever ownership, that is a backend change and it changes the Feed's grouping.
+2. **Sequencing against the other session.** `backend/` and `mobile/` are both being edited on this branch by another session. Phase 1 rewrites `theme.ts` and every screen, so it needs a clean handoff or its own branch.
