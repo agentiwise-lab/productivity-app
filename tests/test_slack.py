@@ -81,18 +81,18 @@ def test_your_own_reply_in_someone_elses_dm_is_not_a_notification():
     assert direct_message_to_raw_event(own, identity=ME) is None
 
 
-def test_a_note_to_yourself_is_kept():
-    """A self-DM is Slack's save-for-later, and the sender being you is the
-    whole point of it. It is indistinguishable from your own reply by sender
-    alone, so the self-DM channel id is what separates them."""
+def test_nothing_you_wrote_yourself_comes_back_at_you():
+    """Including a note in your own self-DM.
+
+    This reverses an earlier decision. Treating the self-DM as save-for-later
+    was defensible, but in practice the feed filled with the user reading their
+    own words back, and a feed that tells you what you already said is not
+    telling you anything.
+    """
     me_with_channel = Identity(slack_user_id="U_ME", slack_dm_channel="D_SELF")
     note = {**DM, "user": "U_ME", "channel": "D_SELF"}
 
-    event = direct_message_to_raw_event(note, identity=me_with_channel)
-
-    assert event is not None
-    assert event.context_chip == "Note to self"
-    assert event.is_blocking is False  # nobody else is waiting on it
+    assert direct_message_to_raw_event(note, identity=me_with_channel) is None
 
 
 def test_your_own_reply_is_still_dropped_when_the_self_channel_is_known():
@@ -221,3 +221,66 @@ def test_a_thread_reply_is_its_own_item_not_a_duplicate_of_the_parent():
         {**CHANNEL_MESSAGE, "text": "<@U_ME> two", "ts": "1.2"}, identity=ME
     )
     assert first.source_ref != second.source_ref
+
+
+# --- noise that is not a person talking to you ----------------------------
+
+
+@pytest.mark.parametrize(
+    "subtype",
+    ["huddle_thread", "channel_join", "channel_leave", "bot_message_deleted"],
+)
+def test_huddles_and_membership_events_are_not_things_that_need_you(subtype):
+    """A huddle notice tells you a call happened. There is nothing to do with
+    it, and it arrived in the feed as though somebody had asked a question."""
+    assert direct_message_to_raw_event({**DM, "subtype": subtype}, identity=ME) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You have been removed from #os-runs by <@U081ABC>",
+        "<@U081ABC> started a huddle",
+    ],
+)
+def test_slackbot_system_notices_are_dropped(text):
+    """Observed live: the only Slack row that reached the feed was Slackbot
+    telling the user they had been removed from a channel."""
+    system = {**DM, "user": "USLACK", "text": text}
+    assert direct_message_to_raw_event(system, identity=ME) is None
+
+
+# --- who sent it -----------------------------------------------------------
+
+
+def test_the_sender_is_named_rather_than_shown_as_a_raw_id():
+    """The card said "U8FAN1KSN" where a person's name belongs."""
+    event = direct_message_to_raw_event(
+        DM, identity=ME, names={"U_PRIYA": "Priya Sharma"}
+    )
+    assert event.actor.display_name == "Priya Sharma"
+
+
+def test_mention_tokens_in_the_text_are_rendered_as_names():
+    """Raw ``<@U…>`` in the body is unreadable, and the model is asked to judge
+    that text as well."""
+    message = {**DM, "text": "<@U_ME> can you look at this with <@U_RAJ>?"}
+    event = direct_message_to_raw_event(
+        message, identity=ME, names={"U_ME": "Vicky", "U_RAJ": "Raj"}
+    )
+    assert event.title == "@Vicky can you look at this with @Raj?"
+
+
+def test_an_unknown_id_degrades_to_a_readable_token_not_a_crash():
+    message = {**DM, "text": "ping <@U_NOBODY>"}
+    event = direct_message_to_raw_event(message, identity=ME, names={})
+    assert event.title == "ping @U_NOBODY"
+
+
+def test_a_channel_message_names_its_sender_too():
+    message = {**CHANNEL_MESSAGE, "text": "<@U_ME> please review"}
+    event = channel_message_to_raw_event(
+        message, identity=ME, names={"U_PRIYA": "Priya Sharma"}
+    )
+    assert event.actor.display_name == "Priya Sharma"
+    assert event.title == "@Vicky please review" or "@" in event.title

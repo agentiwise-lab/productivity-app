@@ -33,14 +33,55 @@ _IGNORED_SUBTYPES = {
     "channel_topic",
     "channel_purpose",
     "channel_name",
+    "channel_archive",
+    "channel_unarchive",
     "pinned_item",
     "unpinned_item",
     "message_changed",
     "message_deleted",
     "bot_add",
     "bot_remove",
+    "bot_message_deleted",
     "thread_broadcast_join",
+    # A huddle notice reports that a call happened. There is nothing to do with
+    # it, and it arrived looking exactly like somebody asking a question.
+    "huddle_thread",
+    "huddle_room_created",
+    "sh_room_created",
 }
+
+#: Slackbot itself. Everything it sends is the platform talking about itself:
+#: "you have been removed from #x", "a huddle started". Never a person.
+_SYSTEM_SENDERS = {"USLACK", "USLACKBOT", "B01"}
+
+#: Phrases Slackbot uses for membership and call events. Checked because the
+#: same notice arrives with no subtype at all when it is delivered as a DM.
+_SYSTEM_PHRASES = (
+    "you have been removed from",
+    "you have been added to",
+    "started a huddle",
+    "has joined the channel",
+    "has left the channel",
+)
+
+_MENTION_TOKEN = re.compile(r"<@([A-Z0-9_]+)(?:\|([^>]*))?>")
+
+
+def render_mentions(text: str, names: dict[str, str] | None) -> str:
+    """Turn ``<@U8FAN1KSN>`` into ``@Priya Sharma``.
+
+    The raw token is unreadable on a card, and the model is asked to judge this
+    same text, so an id there is a wasted token as well as an ugly one. An
+    unknown id degrades to ``@U8FAN1KSN`` rather than vanishing, because a
+    dropped mention changes what the sentence means.
+    """
+    lookup = names or {}
+
+    def replace(match: re.Match) -> str:
+        user_id, inline = match.group(1), match.group(2)
+        return f"@{lookup.get(user_id) or inline or user_id}"
+
+    return _MENTION_TOKEN.sub(replace, text)
 
 # @channel, @here and @everyone address a room, not a person. Counting them as
 # a direct ask is how the urgent tier fills with things nobody meant for you.
@@ -86,11 +127,17 @@ def _is_failure_report(text: str) -> bool:
 
 
 def _base_event(
-    message: dict[str, Any], *, reason: str, context_chip: str, is_blocking: bool
+    message: dict[str, Any],
+    *,
+    reason: str,
+    context_chip: str,
+    is_blocking: bool,
+    names: dict[str, str] | None = None,
 ) -> RawEvent:
     channel = message.get("channel", "")
     ts = message.get("ts", "")
-    text = message.get("text", "")
+    text = render_mentions(message.get("text", ""), names)
+    sender = message.get("user") or message.get("bot_id") or ""
     return RawEvent(
         source="slack",
         source_ref=f"slack:{channel}:{ts}",
@@ -103,7 +150,12 @@ def _base_event(
         url=_permalink(message),
         repo="",
         context_chip=context_chip,
-        actor=Actor(login=message.get("user") or message.get("bot_id") or ""),
+        # A raw id in the sender slot is what put "U8FAN1KSN" on the card where
+        # a person's name belongs.
+        actor=Actor(
+            login=sender,
+            display_name=(names or {}).get(sender) or None,
+        ),
         occurred_at=_ts_to_datetime(ts),
         is_blocking=is_blocking,
         raw=message,
@@ -127,31 +179,38 @@ def _permalink(message: dict[str, Any]) -> str:
 def _unusable(message: dict[str, Any]) -> bool:
     if message.get("subtype") in _IGNORED_SUBTYPES:
         return True
-    return not (message.get("text") or "").strip()
+    text = (message.get("text") or "").strip()
+    if not text:
+        return True
+    # Slackbot narrating the workspace at you. Live, the single Slack row that
+    # reached the feed was "You have been removed from #os-runs".
+    if str(message.get("user") or "").upper() in _SYSTEM_SENDERS:
+        return True
+    lowered = text.lower()
+    return any(phrase in lowered for phrase in _SYSTEM_PHRASES)
 
 
 def direct_message_to_raw_event(
-    message: dict[str, Any], *, identity: Identity
+    message: dict[str, Any],
+    *,
+    identity: Identity,
+    names: dict[str, str] | None = None,
 ) -> RawEvent | None:
     """A DM is a person addressing this user, so it counts by default.
 
-    The exception is the user's own messages. The trigger fires on everything in
-    the conversation, so a reply you send to Priya comes straight back at you as
-    something needing your attention. The one message from yourself that does
-    count is a note in your own self-DM, which is Slack's save-for-later.
+    Nothing the user wrote themselves ever counts, including a note in their own
+    self-DM. The trigger fires on everything in the conversation, so a reply you
+    send to Priya comes straight back at you as something needing attention;
+    treating the self-DM as save-for-later was the same problem wearing a
+    different label, and it filled the feed with the user's own words.
     """
     if _unusable(message):
         return None
 
-    own_message = (
+    if (
         identity.slack_user_id is not None
         and message.get("user") == identity.slack_user_id
-    )
-    note_to_self = own_message and (
-        identity.slack_dm_channel is not None
-        and message.get("channel") == identity.slack_dm_channel
-    )
-    if own_message and not note_to_self:
+    ):
         return None
 
     if message.get("bot_id"):
@@ -160,17 +219,15 @@ def direct_message_to_raw_event(
             if _is_failure_report(message.get("text", ""))
             else "slack_bot_noise"
         )
-    elif note_to_self:
-        reason = "slack_note_to_self"
     else:
         reason = "slack_dm"
 
     return _base_event(
         message,
         reason=reason,
-        context_chip="Note to self" if note_to_self else "DM",
-        # Nobody else is waiting on a note you wrote yourself.
+        context_chip="DM",
         is_blocking=reason == "slack_dm",
+        names=names,
     )
 
 
@@ -179,6 +236,7 @@ def channel_message_to_raw_event(
     *,
     identity: Identity,
     my_threads: set[str] | None = None,
+    names: dict[str, str] | None = None,
 ) -> RawEvent | None:
     """A channel message counts only when this user was actually addressed.
 
@@ -222,4 +280,5 @@ def channel_message_to_raw_event(
         reason=reason,
         context_chip=chip,
         is_blocking=reason in {"slack_mention", "slack_thread_reply"},
+        names=names,
     )

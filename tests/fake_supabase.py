@@ -60,6 +60,36 @@ class _Query:
         )
         return self
 
+    def or_(self, expression: str) -> "_Query":
+        """PostgREST's comma-separated OR, e.g.
+        ``occurred_at.gte.2026-01-01,deadline.not.is.null``.
+
+        Only the operators the repository actually uses are supported: a fake
+        that silently accepted anything would pass tests the real client fails.
+        """
+        clauses = []
+        for term in expression.split(","):
+            parts = term.split(".", 2)
+            if parts[:3] == ["deadline", "not", "is.null"] or (
+                len(parts) == 3 and parts[1] == "not" and parts[2] == "is.null"
+            ):
+                column = parts[0]
+                clauses.append(
+                    lambda row, c=column: row.get(c) is not None
+                )
+                continue
+            if len(parts) == 3 and parts[1] == "gte":
+                column, value = parts[0], parts[2]
+                clauses.append(
+                    lambda row, c=column, v=value: row.get(c) is not None
+                    and row[c] >= v
+                )
+                continue
+            raise NotImplementedError(f"or_ term not supported: {term!r}")
+
+        self._filters.append(lambda row: any(clause(row) for clause in clauses))
+        return self
+
     # --- shaping ---
 
     def order(self, column: str, desc: bool = False) -> "_Query":

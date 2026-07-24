@@ -146,7 +146,15 @@ class InMemoryFeedRepository:
             for item in self._by_key.values()
             if item.user_id == user_id
             and item.status not in _CLOSED
-            and (item.occurred_at or item.created_at or now) >= cutoff
+            and (
+                (item.occurred_at or item.created_at or now) >= cutoff
+                # An open item with a deadline is a live obligation, not an old
+                # event, and must not age out. Linear issues last touched in
+                # June were months overdue and invisible at the same time,
+                # because retention read "when did this happen" rather than
+                # "is this still owed".
+                or item.deadline is not None
+            )
         ]
 
     def list_pending_classification(

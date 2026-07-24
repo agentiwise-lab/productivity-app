@@ -111,7 +111,11 @@ class SupabaseFeedRepository:
             .select("*")
             .eq("user_id", user_id)
             .in_("status", [FeedStatus.UNREAD.value, FeedStatus.SNOOZED.value])
-            .gte("occurred_at", cutoff)
+            # Mirrors the in-memory store: an open item carrying a deadline is a
+            # live obligation and never ages out, however long ago it was last
+            # touched. Without the second clause, months-overdue work is dropped
+            # for being old.
+            .or_(f"occurred_at.gte.{cutoff},deadline.not.is.null")
             .order("occurred_at", desc=True)
             .execute()
             .data

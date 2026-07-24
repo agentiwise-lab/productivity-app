@@ -53,8 +53,18 @@ class SourceDashboard(BaseModel):
 
 
 def _recent(items: list[FeedItem], now: datetime) -> list[FeedItem]:
+    """The same rule the feed's retention uses, and for the same reason.
+
+    An open item carrying a deadline never ages out, so "Needs you" agrees with
+    what Home actually shows. Filtering on age alone made the tile read 2 while
+    the feed listed 9, because seven of them were overdue since June.
+    """
     cutoff = now - WINDOW
-    return [i for i in items if (i.occurred_at or i.created_at or now) >= cutoff]
+    return [
+        i
+        for i in items
+        if (i.occurred_at or i.created_at or now) >= cutoff or i.deadline is not None
+    ]
 
 
 def _tier_of(item: FeedItem) -> Tier:
@@ -193,11 +203,15 @@ class SourceStatsService:
             board.unavailable.append("issue counts")
             stats = {}
 
+        # Every figure covers only issues assigned to this user. Linear holds a
+        # lot of work nobody is assigned to, and counting it told the user they
+        # had finished nothing in a month they had worked all the way through.
         board.headline += [
             StatLine(label="Completed", value=stats.get("completed_30d", 0), detail="this month"),
             StatLine(label="Remaining", value=stats.get("remaining", 0), detail="open"),
             StatLine(label="Backlog", value=stats.get("backlog", 0), detail="not started"),
             StatLine(label="Overdue", value=stats.get("overdue", 0), detail="past due"),
+            StatLine(label="Due this week", value=stats.get("due_this_week", 0), detail="next 7 days"),
         ]
 
         # Per project: how much is done and how much is left, the two numbers
@@ -270,10 +284,17 @@ class SourceStatsService:
         for i in items:
             senders_map[(i.sender_name or i.sender_handle or "unknown", i.sender_handle or "")] += 1
 
+        # "Unread" was a lie: this counts the mail that reached the feed, which
+        # is capped per refresh, not the true unread count in the mailbox. And
+        # "filtered / bulk and lists" did not say what had been filtered or why.
         board.headline += [
-            StatLine(label="Unread", value=len(items), detail="30 days"),
-            StatLine(label="Senders", value=len(senders_map), detail="distinct"),
-            StatLine(label="Filtered", value=noise, detail="bulk and lists"),
+            StatLine(label="Emails", value=len(items), detail="in the last 30 days"),
+            StatLine(label="Senders", value=len(senders_map), detail="wrote to you"),
+            StatLine(
+                label="Set aside",
+                value=noise,
+                detail="newsletters and promos",
+            ),
         ]
         # Grouped by sender with the email count, like the GitHub repo rows.
         # Tapping opens that sender's unread mail in Gmail, not one arbitrary
@@ -316,20 +337,26 @@ class SourceStatsService:
             StatLine(label="Channels", value=summary["channels"], detail="active"),
             StatLine(label="DMs", value=summary["dms"], detail="one to one"),
         ]
-        # The channels the user is in, tappable to open. Per-channel message
-        # counts are deliberately not fetched: that is a history call each and
-        # Slack throttles it. The workspace total is in the headline instead.
+        # Channels and DMs together, every one counted, so the rows add up to
+        # the Messages tile above them. A conversation Slack refused to count
+        # says so rather than showing a zero it did not earn.
+        uncounted = summary.get("uncounted") or 0
+        if uncounted:
+            board.unavailable.append(
+                f"message counts for {uncounted} conversation"
+                + ("s" if uncounted != 1 else "")
+            )
         board.breakdown = [
             StatLine(
-                label=row["label"],
+                label=row["label"] if row.get("is_dm") is False else f"@{row['label']}",
                 value=row.get("count", 0),
                 value_label=(
                     f"{row['count']} message" + ("s" if row["count"] != 1 else "")
-                    if row.get("count")
-                    else "—"
+                    if row.get("counted", True)
+                    else "not counted"
                 ),
                 detail=None,
                 url=row.get("url"),
             )
-            for row in summary["rows"][:20]
+            for row in summary["rows"]
         ]

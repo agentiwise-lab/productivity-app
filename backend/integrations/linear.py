@@ -25,7 +25,28 @@ log = logging.getLogger(__name__)
 
 _UNSET = object()
 
+#: Matched against ``state.name``. The list payload has no ``state.type``: the
+#: ``state`` object it returns carries exactly one key, ``name``. Reading the
+#: absent field meant the Done check never fired.
 _DONE_STATES = {"completed", "canceled", "cancelled", "done"}
+
+#: An issue due this many days out is close enough to belong on the Home feed.
+DUE_SOON = timedelta(days=7)
+
+
+def _is_done(issue: dict[str, Any]) -> bool:
+    """True when Linear considers this issue finished.
+
+    Both fields are checked because the two endpoints disagree: the issue
+    *list* returns a ``state`` carrying only ``name``, while a single-issue
+    fetch and the webhooks also carry ``type``. Reading ``type`` alone meant the
+    check never fired on anything the list produced.
+    """
+    state = issue.get("state") or {}
+    return any(
+        str(state.get(field) or "").strip().lower() in _DONE_STATES
+        for field in ("name", "type")
+    )
 
 
 def _parse(value: Any) -> datetime | None:
@@ -54,15 +75,12 @@ def issue_to_raw_event(
     if not identifier:
         return None
 
-    state = issue.get("state") or {}
-    state_type = str(state.get("type") or "").lower()
-    if state_type in _DONE_STATES:
+    if _is_done(issue):
         return None
 
-    # Linear's list tool accepts an assignee_id argument and ignores it, so the
-    # filter has to happen here. Verified against the live workspace: the
-    # filtered and unfiltered calls returned identical sets, and the feed filled
-    # with other people's issues. An unassigned issue is nobody's action.
+    # The fetch filters by assignee server-side now, but a webhook delivers
+    # whatever it likes, so the guard stays. An unassigned issue is nobody's
+    # action.
     assignee = issue.get("assignee") or {}
     if assignee_id is not None and assignee.get("id") != assignee_id:
         return None
@@ -72,12 +90,22 @@ def issue_to_raw_event(
     team = (issue.get("team") or {}).get("key") or ""
     creator = (issue.get("creator") or {}).get("displayName") or ""
 
+    state_name = str((issue.get("state") or {}).get("name") or "").strip().lower()
+
+    # The ladder that decides whether this belongs on Home or in Later. A stated
+    # priority or a real date is what puts an issue in front of the user; an
+    # untouched backlog item with neither is real work that nobody is waiting
+    # on, so it is filed rather than surfaced.
     if priority == PRIORITY_URGENT:
         reason = "linear_urgent"
     elif priority == PRIORITY_HIGH:
         reason = "linear_high"
     elif due is not None:
         reason = "linear_due"
+    elif "progress" in state_name or "started" in state_name:
+        reason = "linear_in_progress"
+    elif "backlog" in state_name:
+        reason = "linear_backlog"
     else:
         reason = "linear_assigned"
 
@@ -104,6 +132,71 @@ def issue_to_raw_event(
         is_blocking=False,
         raw=issue,
     )
+
+
+def issue_stats_from_issues(
+    issues: list[dict[str, Any]], *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Counts by state, plus per-project done/remaining.
+
+    Pure, so the arithmetic can be tested without a workspace. Every figure here
+    covers only the issues passed in, which are only ever this user's: crediting
+    the user with issues Linear does not attribute to them was how "completed
+    this month" ended up describing somebody else's work.
+
+    State is read from ``state.name``. The list payload carries no
+    ``state.type``, and reading the absent field is why backlog was invisible.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    horizon = now + DUE_SOON
+
+    done = backlog = todo = in_progress = 0
+    overdue = due_this_week = completed_30d = 0
+    projects: dict[str, dict[str, int]] = {}
+
+    for issue in issues:
+        name = str((issue.get("state") or {}).get("name") or "").strip().lower()
+        project = (issue.get("project") or {}).get("name") or "No project"
+        bucket = projects.setdefault(project, {"done": 0, "remaining": 0})
+
+        if name in _DONE_STATES:
+            done += 1
+            bucket["done"] += 1
+            # completedAt only exists when the fetch asked for transitions.
+            # Falling back to updatedAt counts a title edit as a completion.
+            finished = _parse(issue.get("completedAt"))
+            if finished is not None and finished >= cutoff:
+                completed_30d += 1
+            continue
+
+        bucket["remaining"] += 1
+        if "backlog" in name:
+            backlog += 1
+        elif "progress" in name or "started" in name:
+            in_progress += 1
+        else:
+            todo += 1
+
+        due = _parse(issue.get("dueDate"))
+        if due is not None:
+            deadline = _end_of_day(due)
+            if deadline < now:
+                overdue += 1
+            elif deadline <= horizon:
+                due_this_week += 1
+
+    return {
+        "assigned": len(issues),
+        "remaining": backlog + todo + in_progress,
+        "completed_30d": completed_30d,
+        "backlog": backlog,
+        "in_progress": in_progress,
+        "todo": todo,
+        "overdue": overdue,
+        "due_this_week": due_this_week,
+        "projects": projects,
+    }
 
 
 class ComposioLinearService:
@@ -137,12 +230,13 @@ class ComposioLinearService:
         return self._me
 
     def assigned_to_me(self) -> list[RawEvent]:
-        """Only this user's issues.
+        """Only this user's issues, filtered by Linear rather than by us.
 
-        Without ``assignee_id`` Linear returns the whole workspace, and the feed
-        fills with other people's work: fifty issues arrived this way, seven of
-        them Urgent, none of them necessarily this user's. A feed that shows
-        everyone's tasks is not a feed, it is a backlog.
+        This filter has to happen server-side. Asking for ``first: 100`` of a
+        183-issue workspace and narrowing afterwards returned **none** of the
+        user's 31 issues, because all of them sat past position 100 in Linear's
+        default order. Linear contributed nothing to the feed at all, which read
+        as "no Linear tasks today" rather than as a broken fetch.
         """
         assignee = self.current_user_id()
         if not assignee:
@@ -150,12 +244,9 @@ class ComposioLinearService:
             log.warning("skipping Linear: no assignee id to filter by")
             return []
 
-        data = self._execute("LINEAR_LIST_LINEAR_ISSUES", {"first": 100})
-        issues = data.get("issues") or data.get("nodes") or []
-        if isinstance(issues, dict):
-            issues = issues.get("nodes") or []
         found = [
-            issue_to_raw_event(issue, assignee_id=assignee) for issue in issues
+            issue_to_raw_event(issue, assignee_id=assignee)
+            for issue in self.my_issues()
         ]
         return [event for event in found if event is not None]
 
@@ -171,64 +262,45 @@ class ComposioLinearService:
         return proj
 
     def my_issues(self) -> list[dict[str, Any]]:
-        """Every issue assigned to this user."""
+        """Every issue assigned to this user, filtered by Linear itself.
+
+        ``include_transitions`` is what makes "completed this month" mean
+        anything: the plain list payload has no ``completedAt`` at all, so the
+        only completion signal available was ``updatedAt``, which moves whenever
+        the title or a label changes. The flag caps ``first`` at 25, hence the
+        paging loop.
+        """
         assignee = self.current_user_id()
-        data = self._execute("LINEAR_LIST_LINEAR_ISSUES", {"first": 250})
-        issues = data.get("issues") or data.get("nodes") or []
-        if isinstance(issues, dict):
-            issues = issues.get("nodes") or []
-        return [i for i in issues if (i.get("assignee") or {}).get("id") == assignee]
+        if not assignee:
+            return []
+
+        issues: list[dict[str, Any]] = []
+        cursor: str | None = None
+        # Bounded: the cap is a runaway guard, not an expected page count.
+        for _ in range(20):
+            arguments: dict[str, Any] = {
+                "first": 25,
+                "assignee_id": assignee,
+                "include_transitions": True,
+            }
+            if cursor:
+                arguments["after"] = cursor
+            data = self._execute("LINEAR_LIST_LINEAR_ISSUES", arguments)
+            page = data.get("issues") or data.get("nodes") or []
+            if isinstance(page, dict):
+                page = page.get("nodes") or []
+            issues.extend(page)
+
+            info = data.get("page_info") or data.get("pageInfo") or {}
+            if not info.get("hasNextPage"):
+                break
+            cursor = info.get("endCursor")
+            if not cursor:
+                break
+        return issues
 
     def issue_stats(self) -> dict[str, Any]:
-        """Counts by state, plus per-project completed/remaining.
-
-        Linear leaves ``state.type`` empty over Composio, so the state is read
-        from ``state.name`` (Done / Backlog / Todo / In Progress). Getting this
-        wrong is why every issue counted as open and backlog was invisible.
-        """
-        mine = self.my_issues()
-        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-        now = datetime.now(timezone.utc)
-
-        done = backlog = todo = in_progress = overdue = completed_30d = 0
-        projects: dict[str, dict[str, int]] = {}
-
-        for issue in mine:
-            name = str((issue.get("state") or {}).get("name") or "").lower()
-            is_done = name in {"done", "completed", "canceled", "cancelled"}
-            project = (issue.get("project") or {}).get("name") or "No project"
-            bucket = projects.setdefault(project, {"done": 0, "remaining": 0})
-
-            if is_done:
-                done += 1
-                bucket["done"] += 1
-                updated = _parse(issue.get("completedAt") or issue.get("updatedAt"))
-                if updated and updated >= cutoff:
-                    completed_30d += 1
-                continue
-
-            bucket["remaining"] += 1
-            if "backlog" in name:
-                backlog += 1
-            elif "progress" in name or "started" in name:
-                in_progress += 1
-            else:
-                todo += 1
-            due = _parse(issue.get("dueDate"))
-            if due is not None and _end_of_day(due) < now:
-                overdue += 1
-
-        remaining = backlog + todo + in_progress
-        return {
-            "assigned": len(mine),
-            "remaining": remaining,
-            "completed_30d": completed_30d,
-            "backlog": backlog,
-            "in_progress": in_progress,
-            "todo": todo,
-            "overdue": overdue,
-            "projects": projects,
-        }
+        return issue_stats_from_issues(self.my_issues())
 
     def comment(self, source_ref: str, body: str) -> None:
         issue_id = source_ref.split(":", 1)[1] if ":" in source_ref else source_ref

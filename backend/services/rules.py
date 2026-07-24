@@ -71,6 +71,10 @@ _TERMINAL: dict[str, tuple[Tier, TypeTag]] = {
     # A due date settles it by itself: read-time ranking promotes it as the
     # deadline approaches and once it passes (3.8).
     "linear_due": (Tier.TODAY, TypeTag.ASSIGNED),
+    # An untouched backlog item with no priority and no date. Real work, but
+    # nobody is waiting on it today, so it belongs in Later rather than in
+    # front of the user. Terminal: there is no prose here to judge.
+    "linear_backlog": (Tier.NOISE, TypeTag.ASSIGNED),
     # Filtered by Gmail's own category labels before the model, so we never pay
     # to classify a newsletter.
     "gmail_bulk": (Tier.NOISE, TypeTag.FYI),
@@ -89,9 +93,6 @@ _DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
     # judgement. The rules' job on Slack is the filtering that happens in the
     # mapper, before anything reaches here.
     "slack_dm": (Tier.TODAY, TypeTag.REPLY),
-    # You wrote it to yourself, so nobody is blocked. It still gets read, since
-    # a note saying "ship this before the call" is a real deadline.
-    "slack_note_to_self": (Tier.CAN_WAIT, TypeTag.FYI),
     "slack_mention": (Tier.TODAY, TypeTag.REPLY),
     "slack_thread_reply": (Tier.CAN_WAIT, TypeTag.REPLY),
     # Automation reporting that the user's own work broke is the one bot case
@@ -100,6 +101,9 @@ _DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
     # Linear with no priority and no due date (3.5). Everything else about
     # Linear is stated outright and settled below without a model.
     "linear_assigned": (Tier.TODAY, TypeTag.ASSIGNED),
+    # Work the user has actually started. No date, so the tier is a judgement,
+    # but started work belongs on Home rather than filed away.
+    "linear_in_progress": (Tier.TODAY, TypeTag.ASSIGNED),
     # Gmail (3.6). An email has no type, so the tier is always a judgement.
     "gmail_message": (Tier.TODAY, TypeTag.REPLY),
     # A doc comment naming you is a question until the model says otherwise.

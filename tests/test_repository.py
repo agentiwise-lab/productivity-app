@@ -182,3 +182,39 @@ def test_get_is_scoped_to_the_user(repo):
     item = repo.upsert(make_item(user_id="me"))
     assert repo.get("me", item.id) is not None
     assert repo.get("intruder", item.id) is None
+
+
+def test_an_overdue_item_is_not_aged_out_of_the_feed():
+    """Retention drops stale *events*. An open item whose deadline has passed
+    is not a stale event, it is an obligation: the user's June Linear issues
+    were overdue and invisible at the same time, which is the worst pair.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from backend.models.feed import FeedItem
+    from backend.models.tiers import Tier, TypeTag
+    from backend.repositories.feed_repository import InMemoryFeedRepository
+
+    now = datetime(2026, 7, 24, tzinfo=timezone.utc)
+    long_ago = now - timedelta(days=45)
+
+    repo = InMemoryFeedRepository()
+    repo.upsert(
+        FeedItem(
+            id="overdue", user_id="u", source="linear", source_ref="linear:AGE-52",
+            rule_tier=Tier.TODAY, type_tag=TypeTag.ASSIGNED, title="Admin dashboard", url="",
+            occurred_at=long_ago, created_at=long_ago,
+            deadline=now - timedelta(days=30),
+        )
+    )
+    repo.upsert(
+        FeedItem(
+            id="stale", user_id="u", source="gmail", source_ref="gmail:1",
+            rule_tier=Tier.NOISE, type_tag=TypeTag.FYI, title="Old newsletter", url="",
+            occurred_at=long_ago, created_at=long_ago,
+        )
+    )
+
+    kept = {item.id for item in repo.list_by_user("u", now=now)}
+    assert "overdue" in kept
+    assert "stale" not in kept
