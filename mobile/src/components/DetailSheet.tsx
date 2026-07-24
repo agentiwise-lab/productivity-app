@@ -288,18 +288,19 @@ export function DetailSheet({
               </View>
             ) : null}
 
-            {/* The actions. A reply or comment button opens the composer above
-                and highlights; the rest act at once. */}
+            {/* The actions, none of them pre-selected. The white "active" fill
+                means one thing only: the composer for this button is open. So a
+                sheet opened to read shows a flat row, and a button lights up
+                exactly when it is the one you are writing under. */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-              {buttons.map((action, index) => {
+              {buttons.map((action) => {
                 const composerButton = needsComposer(action.id);
                 const active = composing === action.id;
-                const lead = index === 0;
                 return (
                   <BigButton
                     key={action.id}
                     label={busy && !composerButton ? 'Working...' : action.label}
-                    variant={active || (lead && !composing) ? 'primary' : 'secondary'}
+                    variant={active ? 'primary' : 'secondary'}
                     disabled={busy}
                     onPress={() => tap(action.id)}
                     style={{ flexGrow: 1, flexBasis: buttons.length > 2 ? '30%' : 0 }}

@@ -23,7 +23,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space, topInset, useTheme } from '../theme';
-import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Icon } from '../components/Icon';
 import { T } from '../components/ui';
@@ -59,7 +58,6 @@ export function ActivityScreen({
     () => sources.filter((info) => info.status === 'connected'),
     [sources],
   );
-  const title = `${connected.length} ${connected.length === 1 ? 'source' : 'sources'} connected`;
 
   // One board per connected source, fetched in parallel. They are computed live
   // at each provider and slow by design, so each card fills in on its own
@@ -101,8 +99,14 @@ export function ActivityScreen({
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
-        <ScreenHeader eyebrow="Last 30 days" title={title} />
-        <View style={{ height: space.lg }} />
+        {/* No 34pt "N sources connected" hero: this tab is a list of boards, not
+            a headline, and the count is plainly visible in the boards below.
+            A quiet eyebrow is all the framing it needs. */}
+        <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
+          <T role="label" tone="low">
+            Last 30 days
+          </T>
+        </View>
 
         {loadingStatus && connected.length === 0 ? (
           <Skeleton rows={3} />
@@ -123,7 +127,6 @@ export function ActivityScreen({
           ))
         )}
       </AnimatedScrollView>
-      <CollapsedTitle title={title} scrollY={scrollY} />
     </View>
   );
 }
@@ -186,13 +189,16 @@ function SourceCard({
           Quiet across the last 30 days.
         </T>
       ) : (
-        <View style={{ flexDirection: 'row', marginTop: space.md, gap: space.lg }}>
-          {stats.map((stat, index) => (
+        // Equal columns, so three figures of different digit-widths still line
+        // up: each takes a third of the row, its number and its label sharing a
+        // left edge. They were a larger "hero" beside two smaller ones before,
+        // which left the numbers on different baselines and the labels adrift.
+        <View style={{ flexDirection: 'row', marginTop: space.md }}>
+          {stats.map((stat) => (
             <Stat
               key={stat.label}
               value={stat.value_label ?? String(stat.value)}
               label={stat.label}
-              hero={index === 0}
             />
           ))}
         </View>
@@ -217,20 +223,11 @@ function summarise(board: Board): StatLine[] {
     .slice(0, 3);
 }
 
-function Stat({
-  value,
-  label,
-  hero,
-}: {
-  value: string;
-  label: string;
-  hero: boolean;
-}) {
+function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <View style={{ minWidth: 0 }}>
-      {/* The first figure is the source's headline and reads a step larger, the
-          way the board inside draws it. */}
-      <T role={hero ? 'title' : 'heading'} numeric tone="high">
+    <View style={{ flex: 1, minWidth: 0, paddingRight: space.sm }}>
+      {/* Every figure the same size, so a 1 and a 5984 sit on one baseline. */}
+      <T role="title" numeric tone="high" lines={1}>
         {value}
       </T>
       <T role="label" tone="low" lines={1}>
