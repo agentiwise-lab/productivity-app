@@ -56,7 +56,9 @@ def test_action_endpoint_comments_and_marks_acted():
 
     client = TestClient(app)
     response = client.post(
-        f"/feed/{item.id}/actions", json={"body": "LGTM"}, headers={"X-User-Id": "me"}
+        f"/feed/{item.id}/actions",
+        json={"action": "comment", "body": "LGTM"},
+        headers={"X-User-Id": "me"},
     )
 
     assert response.status_code == 200
@@ -67,7 +69,9 @@ def test_action_endpoint_comments_and_marks_acted():
 def test_action_on_missing_item_returns_404():
     client = TestClient(dev_app())
     response = client.post(
-        "/feed/nope/actions", json={"body": "x"}, headers={"X-User-Id": "me"}
+        "/feed/nope/actions",
+        json={"action": "comment", "body": "x"},
+        headers={"X-User-Id": "me"},
     )
     assert response.status_code == 404
 
@@ -248,6 +252,44 @@ def test_acting_twice_returns_409_rather_than_sending_again():
 
     assert (first.status_code, second.status_code) == (200, 409)
     assert len(github.comments) == 1
+
+
+def test_an_omitted_action_is_rejected_rather_than_treated_as_a_comment():
+    """The action name is the whole request. When it defaulted to "comment",
+    a client that forgot to send one had every button silently perform the
+    same thing: Approve posted a comment and left the review outstanding."""
+    github = FakeGitHubService()
+    app = create_app(github=github, auth_mode="dev")
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7"), prefs
+    )
+    response = TestClient(app).post(
+        f"/feed/{item.id}/actions",
+        json={"body": "LGTM"},
+        headers={"X-User-Id": "me"},
+    )
+
+    assert response.status_code == 422
+    assert github.comments == []
+
+
+def test_approving_submits_a_review_and_posts_no_comment():
+    """`_approve` exists so that approving is a review rather than a comment
+    reading "approved". Routing the request by name is what keeps it that way."""
+    github = FakeGitHubService()
+    app = create_app(github=github, auth_mode="dev")
+    item = app.state.feed_service.ingest(
+        "me", make_event(source_ref="octo/repo#7", reason="review_requested"), prefs
+    )
+    response = TestClient(app).post(
+        f"/feed/{item.id}/actions",
+        json={"action": "approve", "body": ""},
+        headers={"X-User-Id": "me"},
+    )
+
+    assert response.status_code == 200
+    assert github.approvals == [("octo/repo", 7)]
+    assert github.comments == []
 
 
 def test_an_unknown_action_is_a_400_not_a_silent_success():

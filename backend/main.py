@@ -85,8 +85,16 @@ class _NullConnectionRepository:
 
 
 class ActionBody(BaseModel):
+    """The action name is required, deliberately.
+
+    It used to default to ``comment``, which meant a client that forgot to send
+    one had every button perform the same thing: Approve posted a comment and
+    left the review outstanding. A missing name is now a 422 rather than a
+    quiet wrong answer.
+    """
+
+    action: str
     body: str = ""
-    action: str = "comment"
 
 
 class SnoozeBody(BaseModel):

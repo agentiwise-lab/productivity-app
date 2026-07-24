@@ -196,7 +196,7 @@ export default function App() {
         } else if (action === 'mark_read' || action === 'dismiss') {
           await api.dismiss(row.id);
         } else {
-          await api.act(row.id, body ?? '');
+          await api.act(row.id, action, body ?? '');
         }
       } catch (error) {
         setRows(previous);

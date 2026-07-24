@@ -170,10 +170,15 @@ export class ApiClient {
     );
   }
 
-  act(itemId: string, body: string) {
+  /**
+   * The action name is not optional. Omitting it used to leave the server to
+   * assume "comment", so Approve posted a comment on the pull request and then
+   * failed on the empty body, which the user saw as a 409.
+   */
+  act(itemId: string, action: string, body = '') {
     return this.request<FeedRow>(`/feed/${itemId}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ action, body }),
     });
   }
 
