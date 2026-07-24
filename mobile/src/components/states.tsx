@@ -1,26 +1,97 @@
 /**
- * The states plan 6.4 requires. Each is a moment where an unconsidered screen
- * actively misleads: an empty feed reads as "nothing needs you" whether the
- * truth is that you are clear, that nothing is connected, or that we could not
- * ask. None of these say "Nothing here" and stop. Every one of them names what
- * would appear and what to do about it.
+ * The states an unconsidered screen gets wrong.
+ *
+ * An empty feed reads as "nothing needs you" whether the truth is that you are
+ * clear, that nothing is connected, or that we could not ask. None of these say
+ * "Nothing here" and stop; every one names what would have appeared and what to
+ * do about it.
+ *
+ * There are no placeholder rows anywhere. A skeleton that resolves into nothing
+ * is a screen that lied for two seconds.
  */
 
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { colors, s, type } from '../theme';
+import React, { useEffect } from 'react';
+import { View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { radius, space, useTheme } from '../theme';
+import { BigButton, T } from './ui';
 import { clockTime } from '../lib/time';
 
-export function Skeleton() {
+/** A slow pulse, so a loading screen is visibly alive rather than merely empty. */
+function usePulse() {
+  const value = useSharedValue(0.4);
+  useEffect(() => {
+    value.value = withRepeat(
+      withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [value]);
+  return useAnimatedStyle(() => ({ opacity: value.value }));
+}
+
+export function Skeleton({ rows = 3 }: { rows?: number }) {
+  const c = useTheme();
+  const pulse = usePulse();
   return (
-    <View style={styles.pad}>
-      {[0, 1, 2].map((n) => (
-        <View key={n} style={styles.skeletonCard}>
-          <View style={[styles.bar, { width: '32%' }]} />
-          <View style={[styles.bar, { width: '86%', height: s(11) }]} />
-          <View style={[styles.bar, { width: '54%' }]} />
-        </View>
+    <View>
+      {Array.from({ length: rows }, (_, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            {
+              height: 64,
+              marginHorizontal: space.md,
+              marginBottom: space.xs,
+              borderRadius: radius.md,
+              backgroundColor: c.surface,
+            },
+            pulse,
+          ]}
+        />
       ))}
+    </View>
+  );
+}
+
+/** A block of honest copy. Two lines, and never a shrug. */
+export function Explain({
+  title,
+  body,
+  action,
+  onAction,
+  top = 48,
+}: {
+  title: string;
+  body: string;
+  action?: string;
+  onAction?: () => void;
+  top?: number;
+}) {
+  return (
+    <View style={{ paddingHorizontal: space.md, paddingTop: top }}>
+      <T role="title">{title}</T>
+      <T role="body" tone="mid" style={{ marginTop: space.xs }}>
+        {body}
+      </T>
+      {action && onAction ? (
+        <BigButton
+          label={action}
+          variant="primary"
+          onPress={onAction}
+          style={{
+            marginTop: space.md,
+            alignSelf: 'flex-start',
+            paddingHorizontal: space.lg,
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -33,82 +104,48 @@ export function Clear({
   filtered?: boolean;
 }) {
   return (
-    <View style={styles.block}>
-      <Text style={styles.blockTitle}>
-        {filtered ? 'Nothing in this category' : "You're clear for today"}
-      </Text>
-      <Text style={styles.blockBody}>
-        {heldBack > 0
-          ? `${heldBack} ${heldBack === 1 ? 'item was' : 'items were'} held back as noise. They are in Later under Held back.`
-          : 'Nothing across your sources is waiting on you.'}
-      </Text>
-    </View>
+    <Explain
+      title={filtered ? 'Nothing in this category' : 'You are clear for today'}
+      body={
+        heldBack > 0
+          ? `${heldBack} ${heldBack === 1 ? 'item' : 'items'} arrived and did not need you. They are in Later.`
+          : 'Nothing across your sources is waiting on you.'
+      }
+    />
   );
 }
 
 export function NothingConnected({ onConnect }: { onConnect: () => void }) {
   return (
-    <View style={styles.centre}>
-      <Text style={styles.blockTitle}>Connect your first tool</Text>
-      <Text style={styles.blockBody}>
-        Your feed is built from GitHub, Slack, Calendar, Linear, Gmail and Docs.
-        Connect one to see what needs you.
-      </Text>
-      <Pressable onPress={onConnect} style={styles.cta}>
-        <Text style={styles.ctaText}>Open Sources</Text>
-      </Pressable>
-    </View>
+    <Explain
+      title="Connect your first tool"
+      body="Your feed is built from GitHub, Slack, Calendar, Linear, Gmail and Docs. Connect one to see what needs you."
+      action="Open You"
+      onAction={onConnect}
+    />
   );
 }
 
 /**
- * An empty Later still has to be useful. It names the bucket, says what would
- * land there, and points at the thing worth doing instead.
+ * Not a banner in an accent colour: the point is that the rows below are real
+ * but old, so it sits quietly above them rather than shouting over them.
  */
-
 export function StaleBanner({ fetchedAt }: { fetchedAt: Date | null }) {
+  const c = useTheme();
   return (
-    <View style={styles.banner}>
-      <Text style={styles.bannerText}>
-        Can't reach the backend. Showing what we had
+    <View
+      style={{
+        marginHorizontal: space.md,
+        marginTop: space.xs,
+        backgroundColor: c.surface,
+        borderRadius: radius.md,
+        padding: space.sm,
+      }}
+    >
+      <T role="secondary" tone="mid">
+        Cannot reach the backend. Showing what we had
         {fetchedAt ? ` from ${clockTime(fetchedAt)}` : ''}.
-      </Text>
+      </T>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  pad: { padding: s(13), gap: s(9) },
-  block: { paddingHorizontal: s(20), paddingTop: s(26), gap: s(6) },
-  centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: s(24), gap: s(6) },
-  blockTitle: { fontSize: s(15), fontWeight: '600', color: colors.fg },
-  emptyTitle: { ...type.groupLabel, color: colors.fg },
-  blockBody: { ...type.why },
-  hint: { ...type.rowSub, color: colors.accent, marginTop: s(2) },
-  cta: {
-    marginTop: s(10),
-    backgroundColor: colors.accent,
-    paddingHorizontal: s(20),
-    paddingVertical: s(9),
-    borderRadius: s(9),
-  },
-  ctaText: { ...type.button, color: colors.onAccent, fontWeight: '600' },
-  skeletonCard: {
-    backgroundColor: colors.surface,
-    borderRadius: s(14),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    padding: s(12),
-    gap: s(8),
-  },
-  bar: { height: s(8), borderRadius: s(4), backgroundColor: colors.line },
-  banner: {
-    marginHorizontal: s(13),
-    marginTop: s(9),
-    backgroundColor: colors.accentSoft,
-    borderRadius: s(9),
-    paddingHorizontal: s(10),
-    paddingVertical: s(7),
-  },
-  bannerText: { ...type.rowSub, color: colors.accent },
-});

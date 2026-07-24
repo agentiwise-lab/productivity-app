@@ -1,63 +1,121 @@
 /**
- * The action matrix from plan 6.2, in one place.
+ * What a card offers, and why it is never more than that.
  *
- * Two actions reach the card and the rest live in the detail sheet, because a
- * card offering five choices is a card that gets read instead of acted on. Which
- * two depends on the source and the type tag: "Approve" on a review request and
- * "Reply" on a Slack DM are the same slot.
+ * The previous matrix promised six actions the backend raises `UnknownAction`
+ * on: reply on Docs, comment on Linear, accept and decline on Calendar,
+ * request changes, and assign to me. A button that fails is worse than a button
+ * that is absent, so the table below is the single source of truth for which
+ * actions exist, and the rail is built from it rather than from a wish.
  *
- * Merge is deliberately absent. Reacting is deferred past the MVP.
+ * When an action lands in the backend, flip its entry here and the button
+ * appears. Nothing else has to change.
  */
 
-import type { FeedRow } from '../api/types';
+import type { FeedRow, Source } from '../api/types';
+import type { GlyphName } from '../components/Icon';
 
 export interface Action {
   id: string;
   label: string;
+  glyph: GlyphName;
 }
 
-const OPEN: Action = { id: 'open', label: 'Open' };
-const REPLY: Action = { id: 'reply', label: 'Reply' };
-const COMMENT: Action = { id: 'comment', label: 'Comment' };
-const APPROVE: Action = { id: 'approve', label: 'Approve' };
-const SNOOZE: Action = { id: 'snooze', label: 'Snooze' };
-const MARK_READ: Action = { id: 'mark_read', label: 'Mark read' };
-const ACCEPT: Action = { id: 'accept', label: 'Accept' };
+const OPEN: Action = { id: 'open', label: 'Open', glyph: 'external' };
+const REPLY: Action = { id: 'reply', label: 'Reply', glyph: 'reply' };
+const COMMENT: Action = { id: 'comment', label: 'Comment', glyph: 'chat' };
+const APPROVE: Action = { id: 'approve', label: 'Approve', glyph: 'check' };
+const REQUEST_CHANGES: Action = {
+  id: 'request_changes',
+  label: 'Changes',
+  glyph: 'more',
+};
+const ASSIGN: Action = { id: 'assign_to_me', label: 'Assign', glyph: 'user' };
+const ACCEPT: Action = { id: 'accept', label: 'Accept', glyph: 'check' };
+const DECLINE: Action = { id: 'decline', label: 'Decline', glyph: 'more' };
+const SNOOZE: Action = { id: 'snooze', label: 'Snooze', glyph: 'snooze' };
+const MARK_READ: Action = { id: 'mark_read', label: 'Read', glyph: 'checks' };
+const BRING_BACK: Action = { id: 'bring_back', label: 'Bring back', glyph: 'up' };
 
-/** [primary, secondary] for the card. */
-export function actionsFor(row: FeedRow): [Action, Action] {
+/**
+ * Which source-and-action pairs the backend actually performs.
+ *
+ * `open`, `snooze` and `mark_read` work everywhere: the first never leaves the
+ * client, the second touches nothing upstream, and the third falls back to
+ * dismissing locally where the provider has no read state to move.
+ */
+const IMPLEMENTED: Record<Source, Set<string>> = {
+  github: new Set(['comment', 'approve', 'request_changes', 'assign_to_me']),
+  slack: new Set(['reply', 'mark_read']),
+  linear: new Set(['comment']),
+  calendar: new Set(['accept', 'decline']),
+  google_docs: new Set(['reply']),
+  // Sending mail is its own project: a send scope, threading, quoting and a
+  // signature. Until that lands, Gmail opens and nothing else.
+  gmail: new Set<string>(),
+};
+
+const EVERYWHERE = new Set(['open', 'snooze', 'mark_read', 'bring_back']);
+
+export function isImplemented(source: Source, actionId: string): boolean {
+  return EVERYWHERE.has(actionId) || IMPLEMENTED[source].has(actionId);
+}
+
+export interface RailAction extends Action {
+  /**
+   * The one filled glyph on the card. Only urgent and by-EOD earn it: nothing
+   * that can wait deserves the strongest affordance, which is what stops the
+   * emphasis appearing on every screen and meaning nothing on any of them.
+   */
+  primary: boolean;
+}
+
+/** The vertical rail, bottom right. At most three, and often two. */
+export function railFor(row: FeedRow): RailAction[] {
+  const wanted = candidates(row).filter((a) => isImplemented(row.source, a.id));
+  const pressing = row.tier === 'urgent' || row.tier === 'today';
+  return wanted.slice(0, 3).map((action, index) => ({
+    ...action,
+    primary: index === 0 && pressing,
+  }));
+}
+
+function candidates(row: FeedRow): Action[] {
+  // Anything snoozed or dateless is in the Later group, where the only action
+  // unique to the group is promoting it back into the live queue.
+  if (row.status === 'snoozed' || row.tier === 'noise') {
+    return [OPEN, BRING_BACK, MARK_READ];
+  }
+
   switch (row.source) {
     case 'github':
       if (row.type_tag === 'review' || row.type_tag === 'approve') {
-        return [APPROVE, COMMENT];
+        return [APPROVE, COMMENT, REQUEST_CHANGES];
       }
-      return [COMMENT, SNOOZE];
+      if (row.type_tag === 'assigned') return [ASSIGN, COMMENT, SNOOZE];
+      return [COMMENT, OPEN, SNOOZE];
     case 'slack':
-      return [REPLY, MARK_READ];
-    case 'google_docs':
-      return [REPLY, OPEN];
+      return [REPLY, MARK_READ, SNOOZE];
     case 'calendar':
-      return [ACCEPT, OPEN];
+      return [ACCEPT, DECLINE, OPEN];
+    case 'google_docs':
+      return [REPLY, OPEN, SNOOZE];
     case 'linear':
-      return [COMMENT, OPEN];
+      return [COMMENT, OPEN, SNOOZE];
     default:
-      return [OPEN, SNOOZE];
+      return [OPEN, SNOOZE, MARK_READ];
   }
 }
 
-/** Everything else, for the detail sheet. */
+/** Everything the rail did not have room for, as chips in the detail sheet. */
 export function overflowFor(row: FeedRow): Action[] {
-  const [primary, secondary] = actionsFor(row);
-  const taken = new Set([primary.id, secondary.id]);
-  const rest: Action[] = [OPEN, SNOOZE, MARK_READ];
-  if (row.source === 'github' && row.type_tag === 'review') {
-    rest.unshift({ id: 'request_changes', label: 'Request changes' });
-  }
-  if (row.source === 'github' && row.type_tag === 'assigned') {
-    rest.unshift({ id: 'assign_to_me', label: 'Assign to me' });
-  }
-  if (row.source === 'calendar') {
-    rest.unshift({ id: 'decline', label: 'Decline' });
-  }
-  return rest.filter((action) => !taken.has(action.id));
+  const taken = new Set(railFor(row).map((a) => a.id));
+  return [OPEN, SNOOZE, MARK_READ, DECLINE, REQUEST_CHANGES]
+    .filter((action) => isImplemented(row.source, action.id))
+    .filter((action) => !taken.has(action.id))
+    .filter((action) => action.id !== 'decline' || row.source === 'calendar');
+}
+
+/** Whether the sheet shows a composer, which is a real send rather than a form. */
+export function canCompose(row: FeedRow): boolean {
+  return railFor(row).some((a) => a.id === 'reply' || a.id === 'comment');
 }

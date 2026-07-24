@@ -1,162 +1,249 @@
 /**
- * You: notification level, connected accounts, and the AI disclosure.
+ * You: notifications, appearance, connections.
  *
- * The disclosure is not buried in a policy link. Classifying a Slack message
- * means sending its text to a third party, which is the core privacy fact of
- * this product, so it is stated on the settings screen next to the switch that
- * turns it off per source.
+ * The AI section is gone. Summarising and ranking is what the product *is*, so
+ * asking permission per source framed the core behaviour as an optional extra
+ * and invited the user to turn the product off inside the product.
+ *
+ * There is no "Fix" button either. A connection is either live, or it needs
+ * connecting, and a third word for the middle case was three words for two
+ * states.
  */
 
-import React from 'react';
-import { View, Text, Pressable, ScrollView, Switch, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, s, space, radius, text, type } from '../theme';
-import { Header } from '../components/Chrome';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { radius, space, useAppearance, useTheme, type Appearance } from '../theme';
+import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
-import type { Source } from '../api/types';
-import type { SourceInfo } from '../api/types';
+import { Icon } from '../components/Icon';
+import { Row } from '../components/ListRow';
+import { Chip, SectionLabel, Segmented, Separator, T, Toggle } from '../components/ui';
+import type { Source, SourceInfo } from '../api/types';
 
-export type NotifyLevel = 'urgent' | 'urgent_today' | 'off';
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
-const LEVELS: { id: NotifyLevel; label: string; detail: string }[] = [
-  { id: 'urgent', label: 'Urgent only', detail: 'Someone is waiting on you now.' },
-  { id: 'urgent_today', label: 'Urgent and today', detail: 'Anything due before tonight.' },
-  { id: 'off', label: 'Nothing', detail: 'Check the app when you want to.' },
+/**
+ * Four levels on the wire, three controls on the screen: the toggle expresses
+ * `off`, so the segmented control never has to offer it.
+ *
+ * `urgent_today` keeps its wire value. Renaming a persisted enum because its
+ * label changed is a migration that buys nothing.
+ */
+export type NotifyLevel = 'urgent' | 'urgent_today' | 'all' | 'off';
+
+const LEVELS: { value: Exclude<NotifyLevel, 'off'>; label: string }[] = [
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'urgent_today', label: '+ By EOD' },
+  { value: 'all', label: 'All' },
+];
+
+const APPEARANCES: { value: Appearance; label: string }[] = [
+  { value: 'dark', label: 'Dark' },
+  { value: 'light', label: 'Light' },
+  { value: 'system', label: 'System' },
 ];
 
 interface Props {
   email: string;
+  name?: string;
   notifyLevel: NotifyLevel;
   connections: SourceInfo[];
-  aiOptOut: Partial<Record<Source, boolean>>;
   onSetNotifyLevel: (level: NotifyLevel) => void;
-  onToggleAi: (provider: Source, optOut: boolean) => void;
-  onReconnect: (provider: Source) => void;
+  onConnect: (provider: Source) => void;
   onSignOut: () => void;
 }
 
 export function YouScreen({
   email,
+  name,
   notifyLevel,
   connections,
-  aiOptOut,
   onSetNotifyLevel,
-  onToggleAi,
-  onReconnect,
+  onConnect,
   onSignOut,
 }: Props) {
-  return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <Header title="You" subtitle="Settings and connections" rightGlyph=" " />
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.email}>{email}</Text>
-
-        <Section title="Notifications">
-          {LEVELS.map((level) => {
-            const active = level.id === notifyLevel;
-            return (
-              <Pressable
-                key={level.id}
-                onPress={() => onSetNotifyLevel(level.id)}
-                style={[styles.option, active && styles.optionActive]}
-              >
-                <View style={styles.optionText}>
-                  <Text style={[styles.optionLabel, active && styles.optionLabelActive]}>
-                    {level.label}
-                  </Text>
-                  <Text style={[styles.optionDetail, active && styles.optionDetailActive]}>
-                    {level.detail}
-                  </Text>
-                </View>
-                {active ? <View style={styles.tick} /> : null}
-              </Pressable>
-            );
-          })}
-        </Section>
-
-        <Section title="AI summaries">
-          <Text style={styles.disclosure}>
-            To decide what is urgent, message text is sent to OpenRouter, a
-            third-party model provider. Turn this off for a source and that
-            source falls back to rules only, which still works but is blunter.
-          </Text>
-          {connections.map((connection) => (
-            <View key={connection.source} style={styles.connection}>
-              <BrandMark source={connection.source} size={24} />
-              <Text style={styles.connectionLabel}>{connection.label}</Text>
-              <View style={styles.spacer} />
-              <Switch
-                value={!aiOptOut[connection.source]}
-                onValueChange={(on) => onToggleAi(connection.source, !on)}
-                trackColor={{ true: colors.accent, false: colors.line }}
-                // Left to the platform, the thumb comes out green and is the
-                // only colour on screen that belongs to no part of the palette.
-                thumbColor={colors.surface}
-                ios_backgroundColor={colors.line}
-              />
-            </View>
-          ))}
-        </Section>
-
-        <Pressable onPress={onSignOut} style={styles.signOut}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+  const c = useTheme();
+  const insets = useSafeAreaInsets();
+  const { appearance, setAppearance } = useAppearance();
+  const [lastLevel, setLastLevel] = useState<Exclude<NotifyLevel, 'off'>>(
+    notifyLevel === 'off' ? 'urgent' : notifyLevel,
   );
-}
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const on = notifyLevel !== 'off';
+  // What the segmented control shows. When notifications are off the control
+  // is not rendered at all, so it falls back to whatever was last chosen
+  // rather than to a level the user never picked.
+  const level: Exclude<NotifyLevel, 'off'> = on ? notifyLevel : lastLevel;
+  // Dev builds authenticate with a bare user id, and a UUID rendered at 34pt
+  // as though it were a person's name is the screen showing its plumbing.
+  const local = email.includes('@') ? email.split('@')[0] : '';
+  const title = name || local || 'You';
+  const needsAction = connections.filter(
+    (info) => info.status === 'expired' || info.status === 'error',
+  ).length;
+
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
+    <View style={{ flex: 1, backgroundColor: c.canvas }}>
+      <AnimatedScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xl }}
+      >
+        <ScreenHeader eyebrow={local ? email : "Signed in"} title={title} />
+
+        <SectionLabel label="Notifications" />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm,
+            paddingHorizontal: space.md,
+            minHeight: 72,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <T role="heading">Notify me</T>
+            <T role="secondary" tone="mid">
+              {on
+                ? `${LEVELS.find((entry) => entry.value === level)?.label ?? ''} only`
+                : 'Off'}
+            </T>
+          </View>
+          <Toggle
+            value={on}
+            onChange={(next) => onSetNotifyLevel(next ? lastLevel : 'off')}
+          />
+        </View>
+
+        {/* The level appears only when notifications are on. A disabled row of
+            three options is three controls explaining they do nothing. */}
+        {on ? (
+          <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
+            <Segmented
+              options={LEVELS}
+              value={level}
+              onChange={(next) => {
+                setLastLevel(next);
+                onSetNotifyLevel(next);
+              }}
+            />
+          </View>
+        ) : null}
+
+        <Separator inset={0} />
+
+        <SectionLabel label="Appearance" />
+        <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
+          <Segmented options={APPEARANCES} value={appearance} onChange={setAppearance} />
+        </View>
+
+        <Separator inset={0} />
+
+        <SectionLabel
+          label="Connections"
+          right={
+            needsAction > 0 ? (
+              // The bubble counts only what needs action, so an optional source
+              // that was never connected never badges.
+              <View
+                style={{
+                  minWidth: 20,
+                  height: 20,
+                  paddingHorizontal: space.xs,
+                  borderRadius: radius.pill,
+                  backgroundColor: c.hue.urgent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <T role="label" colour={c.onSolid} numeric>
+                  {String(needsAction)}
+                </T>
+              </View>
+            ) : null
+          }
+        />
+
+        {connections.map((info) => (
+          <Row
+            key={info.source}
+            category="none"
+            leading={<BrandMark source={info.source} size={32} />}
+            title={info.label}
+            subtitle={statusLine(info)}
+            trailing={
+              info.status === 'connected' ? (
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      backgroundColor: c.mid,
+                    }}
+                  />
+                  <T role="label" tone="low">
+                    Live
+                  </T>
+                </View>
+              ) : (
+                <Chip
+                  label="Connect"
+                  variant="outline"
+                  onPress={() => onConnect(info.source)}
+                />
+              )
+            }
+          />
+        ))}
+
+        <Pressable
+          onPress={onSignOut}
+          style={({ pressed }) => [
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: space.md,
+              minHeight: 56,
+              marginTop: space.lg,
+            },
+            pressed ? { opacity: 0.7 } : null,
+          ]}
+        >
+          <T role="body" tone="mid" style={{ flex: 1 }}>
+            Sign out
+          </T>
+          <Icon name="chevron" size={16} color={c.low} weight={1.8} />
+        </Pressable>
+        <Separator inset={0} />
+      </AnimatedScrollView>
+      <CollapsedTitle title={title} scrollY={scrollY} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-
-  body: { padding: space.lg, paddingBottom: space.xxl, gap: space.xl },
-  email: { ...text.body, color: colors.dim },
-  section: { gap: space.sm },
-  sectionTitle: { ...text.small, fontWeight: '600', color: colors.dim, letterSpacing: 0.4 },
-  card: { gap: space.sm },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  optionActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  optionText: { flex: 1, gap: 2 },
-  optionLabel: { ...text.body, fontWeight: '600', color: colors.fg },
-  optionLabelActive: { color: colors.accent },
-  optionDetail: { ...text.small, color: colors.dim },
-  optionDetailActive: { color: colors.accent },
-  tick: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    padding: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  connectionLabel: { ...text.body, color: colors.fg },
-  spacer: { flex: 1 },
-  ok: { ...text.small, color: colors.dim },
-  bad: { ...text.small, fontWeight: '600', color: colors.urgent },
-  disclosure: { ...text.small, color: colors.dim, paddingBottom: space.sm },
-  signOut: {
-    alignItems: 'center',
-    paddingVertical: space.lg,
-  },
-  signOutText: { ...text.body, fontWeight: '600', color: colors.urgent },
-});
+function statusLine(info: SourceInfo): string {
+  switch (info.status) {
+    case 'connected':
+      return info.urgent > 0
+        ? `${info.urgent} need you of ${info.count}`
+        : `${info.count} in the last 30 days`;
+    case 'expired':
+      return 'Sign-in expired. Connect again.';
+    case 'error':
+      return 'Could not read this connection.';
+    default:
+      return 'Never connected';
+  }
+}

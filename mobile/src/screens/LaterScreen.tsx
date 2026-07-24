@@ -13,26 +13,29 @@
  * One source at a time, chosen from the strip. "Everything" is deliberately not
  * an option: it would be four slow fetches to build a list nobody reads to the
  * end of.
+ *
+ * The structure above is exactly what was built. Only the surface changed.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  StyleSheet,
-  Linking,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, s, type } from '../theme';
-import { Header } from '../components/Chrome';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { haptics, radius, size, space, useTheme } from '../theme';
+import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
+import { Row } from '../components/ListRow';
+import { SectionLabel, T } from '../components/ui';
+import { Explain } from '../components/states';
 import { streamEvents, type StreamHandle } from '../api/stream';
 import { ago } from '../lib/time';
 import type { ApiClient } from '../api/client';
 import type { LaterRow, Source } from '../api/types';
+
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 /** Only the sources that have a "did not need you" pile worth reading. */
 const SOURCES: { id: Source; label: string }[] = [
@@ -42,12 +45,24 @@ const SOURCES: { id: Source; label: string }[] = [
   { id: 'github', label: 'GitHub' },
 ];
 
-export function LaterScreen({ api }: { api: ApiClient }) {
+export function LaterScreen({
+  api,
+  onOpen,
+}: {
+  api: ApiClient;
+  onOpen: (url: string) => void;
+}) {
+  const c = useTheme();
+  const insets = useSafeAreaInsets();
   const [source, setSource] = useState<Source>('gmail');
   const [all, setAll] = useState<LaterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const handle = useRef<StreamHandle | null>(null);
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
   // One stream for every source, opened once. Switching source used to start a
   // fresh fetch and wait on it again; now it is a filter over rows already in
@@ -71,145 +86,141 @@ export function LaterScreen({ api }: { api: ApiClient }) {
     () => all.filter((row) => row.source === source),
     [all, source],
   );
+  const label = SOURCES.find((entry) => entry.id === source)?.label ?? '';
+  const title = `${all.length} did not need you`;
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <Header title="Later" subtitle="Last 30 days" />
-
-      {/* Icons rather than words, along the full width and scrollable, so the
-          strip stays one line however many sources there are. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.stripBox}
-        contentContainerStyle={styles.strip}
+    <View style={{ flex: 1, backgroundColor: c.canvas }}>
+      <AnimatedScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{
+          paddingTop: insets.top,
+          paddingBottom: space.xl,
+        }}
       >
-        {SOURCES.map((entry) => {
-          const active = entry.id === source;
-          return (
-            <Pressable
-              key={entry.id}
-              onPress={() => setSource(entry.id)}
-              style={[styles.pill, active && styles.pillOn]}
-            >
-              <BrandMark source={entry.id} size={s(16)} radius={s(5)} />
-              {active ? <Text style={styles.pillText}>{entry.label}</Text> : null}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <ScreenHeader eyebrow="Last 30 days" title={title} />
 
-      <ScrollView contentContainerStyle={styles.body}>
+        {/* Icon-only when inactive, icon plus label when active, so the strip
+            stays one line however many sources there are. */}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: space.xs,
+            paddingHorizontal: space.md,
+            paddingTop: space.md,
+          }}
+        >
+          {SOURCES.map((entry) => {
+            const on = entry.id === source;
+            return (
+              <Pressable
+                key={entry.id}
+                onPress={() => {
+                  haptics.select();
+                  setSource(entry.id);
+                }}
+                style={[
+                  {
+                    height: size.control,
+                    borderRadius: radius.md,
+                    borderWidth: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.xs,
+                    paddingHorizontal: space.sm,
+                    borderColor: c.hairline,
+                    backgroundColor: c.surface,
+                  },
+                  // The selector takes the same hue the rows below it take,
+                  // because it is selecting within Later rather than between
+                  // categories.
+                  on ? { borderColor: c.hue.later, backgroundColor: c.overlay } : null,
+                ]}
+              >
+                <BrandMark source={entry.id} size={16} />
+                {on ? (
+                  // The hue lives in the border and the fill. As text on a
+                  // tinted overlay it measured 3.6 in light mode, and a label
+                  // that has to be legible cannot be the place the colour is
+                  // carried.
+                  <T role="label" tone="high">
+                    {entry.label}
+                  </T>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <SectionLabel
+          label={label}
+          tight
+          // The header never claims a total it does not have yet.
+          count={loading ? 'counting...' : `${rows.length} items`}
+        />
+
         {rows.map((row) => (
-          <Pressable
+          <Row
             key={row.source_ref}
-            onPress={() => row.url && void Linking.openURL(row.url)}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          >
-            <BrandMark source={row.source} size={s(24)} radius={s(7)} />
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {row.sender_name ? `${row.sender_name}: ` : ''}
+            category="later"
+            leading={<BrandMark source={row.source} size={32} />}
+            title={
+              <T role="body" lines={1}>
+                {row.sender_name ? (
+                  <T role="body" medium>
+                    {row.sender_name}
+                  </T>
+                ) : null}
+                {row.sender_name ? ' · ' : ''}
                 {row.title}
-              </Text>
-              {row.summary ? (
-                <Text style={styles.rowSub} numberOfLines={1}>
-                  {row.summary}
-                </Text>
-              ) : null}
-            </View>
-            <Text style={styles.rowMeta}>{ago(row.occurred_at)}</Text>
-          </Pressable>
+              </T>
+            }
+            subtitle={row.summary}
+            meta={ago(row.occurred_at)}
+            glyph={row.url ? 'external' : null}
+            onPress={row.url ? () => onOpen(row.url) : undefined}
+          />
         ))}
 
         {loading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.loadingNote}>
-              {all.length > 0
-                ? `${all.length} from all sources so far`
-                : 'Reading every source at once.'}
-            </Text>
+          <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.xl }}>
+            <ActivityIndicator color={c.hue.later} />
+            {all.length > 0 ? (
+              <T role="secondary" tone="mid" numeric>
+                {`${all.length} from all sources so far`}
+              </T>
+            ) : null}
+            <T
+              role="secondary"
+              tone="low"
+              style={{ paddingHorizontal: space.xxl, textAlign: 'center' }}
+            >
+              Reading every source at once.
+            </T>
           </View>
         ) : null}
 
-        {!loading && error ? <Text style={styles.error}>{error}</Text> : null}
+        {!loading && error ? (
+          <Explain title="Could not read Later" body={error} />
+        ) : null}
 
         {!loading && !error && rows.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Nothing waiting here</Text>
-            <Text style={styles.emptyBody}>
-              Everything from this source either needed you, and is on Home, or
-              you have already dealt with it.
-            </Text>
-          </View>
+          <Explain
+            title="Nothing waiting here"
+            body={`Everything from ${label} either needed you, and is on Your day, or you have already dealt with it.`}
+          />
         ) : null}
 
         {!loading && rows.length > 0 ? (
-          <Text style={styles.footnote}>
-            {rows.length} from {SOURCES.find((e) => e.id === source)?.label}.
-            Read live, never stored.
-          </Text>
+          <View style={{ paddingHorizontal: space.md, paddingTop: space.xs }}>
+            <T role="secondary" tone="low">
+              {rows.length} from {label}. Read live, never stored.
+            </T>
+          </View>
         ) : null}
-      </ScrollView>
-    </SafeAreaView>
+      </AnimatedScrollView>
+      <CollapsedTitle title={title} scrollY={scrollY} />
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  strip: {
-    flexDirection: 'row',
-    // Without this the pills stretch to the scroll view's full height, because
-    // a horizontal ScrollView stretches its children on the cross axis.
-    alignItems: 'center',
-    gap: s(6),
-    paddingHorizontal: s(13),
-    paddingTop: s(9),
-    paddingBottom: s(3),
-  },
-  stripBox: { flexGrow: 0, flexShrink: 0 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(6),
-    paddingHorizontal: s(9),
-    paddingVertical: s(6),
-    borderRadius: s(9),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-  },
-  pillOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  pillText: { ...type.chipLabel, color: colors.fg },
-
-  body: { paddingTop: s(6), paddingBottom: s(30) },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(10),
-    marginHorizontal: s(13),
-    marginBottom: s(7),
-    paddingHorizontal: s(12),
-    paddingVertical: s(11),
-    backgroundColor: colors.surface,
-    borderRadius: s(12),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  rowPressed: { opacity: 0.6 },
-  rowBody: { flex: 1, gap: s(2) },
-  rowTitle: { ...type.rowTitle, fontWeight: '600', color: colors.fg },
-  rowSub: { ...type.rowSub },
-  rowMeta: { ...type.ago },
-
-  loading: { alignItems: 'center', gap: s(7), paddingTop: s(18) },
-  loadingNote: { ...type.rowSub, textAlign: 'center', paddingHorizontal: s(30) },
-  error: { ...type.rowSub, color: colors.urgent, textAlign: 'center', paddingTop: s(20) },
-
-  empty: { paddingHorizontal: s(20), paddingTop: s(30), gap: s(6) },
-  emptyTitle: { ...type.rowTitle, fontWeight: '700', color: colors.fg, fontSize: s(13) },
-  emptyBody: { ...type.rowSub },
-
-  footnote: { ...type.rowSub, textAlign: 'center', paddingTop: s(14) },
-});

@@ -1,19 +1,34 @@
 /**
- * "Your day": the whole day at true proportion, midnight to midnight.
+ * The day object: two rings, and the count that neither of them states.
  *
- * Full 24 hours rather than 9 to 18, because this app is not only for office
- * work and an 11pm meeting is still a meeting. A meeting that runs past
- * midnight is clipped at the edge rather than dropped, which is what used to
- * make a real 23:00 to 00:00 booking simply vanish from the strip.
+ * The review's question was the right one, and the answer was that the colours
+ * meant two things each. Green was meetings on the outer ring and by-EOD on the
+ * inner one; red was now on the outer ring and urgent on the inner one. Two
+ * collisions, on the one element meant to be read at a glance.
  *
- * Three block colours carry three different facts: what is done, what is next,
- * and what is later. Free time is derived from the same meetings drawn above
- * it, so the picture and the number cannot disagree.
+ * The fix is a rule rather than a repaint. **The outer ring is time, so it is
+ * monochrome**, on a four-step grey ladder: hairline for the day still to come,
+ * border for what has gone, mid for a meeting, and the brightest thing on the
+ * screen for now. **The inner ring is work, so it is the only place a category
+ * hue appears.** It needs no legend, because the selector immediately below it
+ * is the legend, in the same colours and the same order.
+ *
+ * The number in the middle is what needs you, which is a third fact again, so
+ * the hero is never a restatement of either ring.
  */
 
-import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { colors, s, type } from '../theme';
+import React from 'react';
+import { View } from 'react-native';
+import Svg, {
+  Circle,
+  Defs,
+  RadialGradient,
+  Rect,
+  Stop,
+  G,
+} from 'react-native-svg';
+import { space, useTheme, type Category } from '../theme';
+import { T } from './ui';
 
 export interface Meeting {
   title: string;
@@ -21,207 +36,198 @@ export interface Meeting {
   end: Date;
 }
 
-interface Props {
+/** The window the ring draws. Outside it, a meeting is clamped to the edge. */
+const DAY_START = 8;
+const DAY_HOURS = 12;
+
+const R_TIME = 88;
+const R_WORK = 66;
+const BOX = 192;
+const CENTRE = BOX / 2;
+
+/** A 2pt gap between category arcs, so three of them are countable rather than
+ *  merely proportional. */
+const GAP = 0.008;
+
+const ORDER: Category[] = ['urgent', 'byEod', 'canWait'];
+
+export function DayRing({
+  meetings,
+  counts,
+  now = new Date(),
+}: {
   meetings: Meeting[];
+  /** How many items sit in each of the three live categories. */
+  counts: Record<'urgent' | 'byEod' | 'canWait', number>;
   now?: Date;
-}
+}) {
+  const c = useTheme();
+  const hours = now.getHours() + now.getMinutes() / 60;
+  const nowFrac = clamp((hours - DAY_START) / DAY_HOURS);
+  const total = counts.urgent + counts.byEod + counts.canWait;
 
-const DAY_MINUTES = 24 * 60;
-const HOUR_MARKS = [0, 6, 12, 18, 24];
-
-const pct = (value: number) =>
-  `${Math.max(0, Math.min(100, value * 100))}%` as `${number}%`;
-
-const clock = (date: Date) =>
-  `${String(date.getHours()).padStart(2, '0')}:${String(
-    date.getMinutes(),
-  ).padStart(2, '0')}`;
-
-export function YourDayCard({ meetings: allMeetings, now = new Date() }: Props) {
-  const [shown, setShown] = useState<Meeting | null>(null);
-
-  // Only today's meetings, in the device's own timezone. The server sends a
-  // wider window because at 00:15 local it is still yesterday in UTC; the
-  // client is the only place that knows which calendar day "today" is.
-  const todayKey = now.toDateString();
-  const meetings = allMeetings.filter((m) => m.start.toDateString() === todayKey);
-
-  const into = (date: Date) => date.getHours() * 60 + date.getMinutes();
-  const nowFrac = into(now) / DAY_MINUTES;
-
-  const sorted = [...meetings].sort((a, b) => a.start.getTime() - b.start.getTime());
-  const upcoming = sorted.filter((m) => m.end > now);
-  const next = upcoming[0];
-
-  const bookedAhead = upcoming.reduce(
-    (total, m) =>
-      total + (m.end.getTime() - Math.max(m.start.getTime(), now.getTime())) / 60000,
-    0,
-  );
-  const leftInDay = Math.max(0, DAY_MINUTES - into(now));
-  const freeMinutes = Math.max(0, leftInDay - bookedAhead);
-  const freeLabel =
-    freeMinutes >= 60
-      ? `${Math.floor(freeMinutes / 60)}h ${Math.round(freeMinutes % 60)}m free`
-      : `${Math.round(freeMinutes)}m free`;
-
-  const caption = shown
-    ? `${clock(shown.start)} to ${clock(shown.end)}  ${shown.title}`
-    : next
-      ? `${clock(next.start)}  ${next.title}`
-      : 'Nothing left on the calendar today';
+  const timeC = 2 * Math.PI * R_TIME;
+  const workC = 2 * Math.PI * R_WORK;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Your day</Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {upcoming.length} {upcoming.length === 1 ? 'meeting' : 'meetings'} left ·{' '}
-          {freeLabel}
-        </Text>
+    <View style={{ height: 252, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
+      <View style={{ position: 'absolute', width: 260, height: 260 }}>
+        <Svg width={260} height={260}>
+          <Defs>
+            <RadialGradient id="dayglow" cx="50%" cy="50%" r="50%">
+              <Stop
+                offset="0"
+                stopColor={`rgb(${c.rgb.urgent})`}
+                stopOpacity={c.mode === 'light' ? 0.09 : 0.14}
+              />
+              <Stop offset="0.62" stopColor={`rgb(${c.rgb.urgent})`} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Rect width={260} height={260} fill="url(#dayglow)" />
+        </Svg>
       </View>
 
-      <View style={styles.ruler}>
-        <View style={styles.track} />
-
-        {HOUR_MARKS.slice(1, -1).map((hour) => (
-          <View
-            key={`grid-${hour}`}
-            style={[styles.grid, { left: pct(hour / 24) }]}
-          />
-        ))}
-
-        {sorted.map((meeting, index) => {
-          const startFrac = into(meeting.start) / DAY_MINUTES;
-          // A meeting ending after midnight reports an end-of-day earlier than
-          // its start. Clamp it to the edge instead of computing a negative
-          // width and drawing nothing at all.
-          const crossesMidnight = meeting.end <= meeting.start;
-          const endFrac = crossesMidnight ? 1 : into(meeting.end) / DAY_MINUTES;
-          const width = Math.max(0.008, endFrac - startFrac);
-
-          const past = meeting.end <= now;
-          const isNext = next != null && meeting === next;
-
+      <Svg width={BOX} height={BOX}>
+        {/* Outer: the day. Monochrome, always. */}
+        <Circle
+          cx={CENTRE}
+          cy={CENTRE}
+          r={R_TIME}
+          fill="none"
+          stroke={c.hairline}
+          strokeWidth={5}
+        />
+        <Arc r={R_TIME} c={timeC} from={0} to={nowFrac} colour={c.border} width={5} />
+        {meetings.map((meeting, index) => {
+          const from = clamp((hoursOf(meeting.start) - DAY_START) / DAY_HOURS);
+          const to = clamp((hoursOf(meeting.end) - DAY_START) / DAY_HOURS);
+          if (to <= from) return null;
           return (
-            <Pressable
+            <Arc
               key={index}
-              onPress={() => setShown(shown === meeting ? null : meeting)}
-              style={[
-                styles.block,
-                past ? styles.blockPast : isNext ? styles.blockNext : styles.blockLater,
-                { left: pct(startFrac), width: pct(width) },
-              ]}
+              r={R_TIME}
+              c={timeC}
+              from={from}
+              to={to}
+              colour={c.mid}
+              width={5}
             />
           );
         })}
+        <G
+          transform={`rotate(${nowFrac * 360} ${CENTRE} ${CENTRE})`}
+        >
+          <Circle cx={CENTRE} cy={8} r={5} fill={c.high} />
+        </G>
 
-        <View style={[styles.nowLine, { left: pct(nowFrac) }]} />
+        {/* Inner: the work. The only place a category hue appears. */}
+        <Circle
+          cx={CENTRE}
+          cy={CENTRE}
+          r={R_WORK}
+          fill="none"
+          stroke={c.hairline}
+          strokeWidth={16}
+        />
+        {total > 0
+          ? ORDER.reduce<{ at: number; nodes: React.ReactNode[] }>(
+              (acc, category) => {
+                const share =
+                  counts[category as keyof typeof counts] / total;
+                if (share === 0) return acc;
+                acc.nodes.push(
+                  <Arc
+                    key={category}
+                    r={R_WORK}
+                    c={workC}
+                    from={acc.at}
+                    to={acc.at + share - GAP}
+                    colour={c.hue[category]}
+                    width={16}
+                  />,
+                );
+                return { at: acc.at + share, nodes: acc.nodes };
+              },
+              { at: 0, nodes: [] },
+            ).nodes
+          : null}
+      </Svg>
 
-        {HOUR_MARKS.map((hour) => (
-          <Text
-            key={`tick-${hour}`}
-            style={[
-              styles.tick,
-              hour === 24
-                ? { right: 0 }
-                : hour === 0
-                  ? { left: 0 }
-                  : { left: pct(hour / 24), marginLeft: -s(4) },
-            ]}
-          >
-            {String(hour).padStart(2, '0')}
-          </Text>
-        ))}
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <T role="hero" numeric>
+          {String(total)}
+        </T>
+        <T role="label" tone="low" style={{ marginTop: space.xxs }}>
+          need you
+        </T>
       </View>
 
-      <View style={styles.foot}>
-        <View
-          style={[
-            styles.dot,
-            shown
-              ? shown.end <= now
-                ? styles.blockPast
-                : styles.blockNext
-              : styles.blockNext,
-          ]}
-        />
-        <Text style={styles.caption} numberOfLines={2}>
-          {caption}
-        </Text>
+      {/* The outer ring's key. The inner ring has none, because the selector
+          directly beneath it is its key. */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.xs,
+        }}
+      >
+        <T role="label" tone="low">
+          Your day
+        </T>
+        <Dot colour={c.mid} />
+        <T role="label" tone="low">
+          Meeting
+        </T>
+        <Dot colour={c.high} />
+        <T role="label" tone="low">
+          Now
+        </T>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: s(13),
-    marginTop: s(9),
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    borderRadius: s(14),
-    paddingHorizontal: s(12),
-    paddingVertical: s(11),
-    gap: s(2),
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    gap: s(8),
-  },
-  title: { ...type.cardTitle, color: colors.fg },
-  meta: { ...type.cardMeta, flexShrink: 1 },
-  ruler: { height: s(32), marginTop: s(6), marginBottom: s(4) },
-  track: {
-    position: 'absolute',
-    top: s(6),
-    left: 0,
-    right: 0,
-    height: s(11),
-    borderRadius: s(4),
-    backgroundColor: colors.bg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  grid: {
-    position: 'absolute',
-    top: s(6),
-    width: StyleSheet.hairlineWidth,
-    height: s(11),
-    backgroundColor: colors.line,
-  },
-  block: {
-    position: 'absolute',
-    top: s(7),
-    height: s(9),
-    borderRadius: s(3),
-    minWidth: s(3),
-  },
-  /** Done. Present but spent. */
-  blockPast: { backgroundColor: '#C3BFB7' },
-  /** The one you are walking into. */
-  blockNext: { backgroundColor: '#3F8F5F' },
-  /** Later today. */
-  blockLater: { backgroundColor: colors.accent },
-  nowLine: {
-    position: 'absolute',
-    top: s(3),
-    width: 2,
-    height: s(17),
-    backgroundColor: colors.urgent,
-    borderRadius: 1,
-  },
-  tick: {
-    position: 'absolute',
-    top: s(20),
-    fontFamily: 'Menlo',
-    fontSize: s(7.5),
-    color: colors.dim,
-  },
-  foot: { flexDirection: 'row', alignItems: 'flex-start', gap: s(6) },
-  dot: { width: s(6), height: s(6), borderRadius: s(3), marginTop: s(3) },
-  caption: { flex: 1, fontSize: s(10.5), lineHeight: s(10.5) * 1.35, color: colors.fg },
-});
+function Arc({
+  r,
+  c: circumference,
+  from,
+  to,
+  colour,
+  width,
+}: {
+  r: number;
+  c: number;
+  from: number;
+  to: number;
+  colour: string;
+  width: number;
+}) {
+  const length = Math.max(0, (to - from) * circumference);
+  return (
+    <Circle
+      cx={CENTRE}
+      cy={CENTRE}
+      r={r}
+      fill="none"
+      stroke={colour}
+      strokeWidth={width}
+      strokeDasharray={`${length} ${circumference - length}`}
+      strokeDashoffset={-from * circumference}
+      // Twelve o'clock is zero, and the day runs clockwise from there.
+      transform={`rotate(-90 ${CENTRE} ${CENTRE})`}
+    />
+  );
+}
+
+function Dot({ colour }: { colour: string }) {
+  return (
+    <View
+      style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: colour }}
+    />
+  );
+}
+
+const hoursOf = (date: Date) => date.getHours() + date.getMinutes() / 60;
+const clamp = (value: number) => Math.max(0, Math.min(1, value));

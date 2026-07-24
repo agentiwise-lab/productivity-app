@@ -1,31 +1,43 @@
 /**
- * The detail sheet.
+ * The detail sheet: where the decision is actually made.
  *
- * Three regions, and the split is the point. The head (who, where, when, tier)
- * and the footer (what you can do) are fixed, and only the message scrolls
- * between them. Letting the whole sheet scroll pushes the actions off-screen
- * exactly when a long message makes you want them.
+ * The regions and the split between them are unchanged, because the split is
+ * the point. The head (who, where, when, category) and the footer (what you can
+ * do) are fixed, and only the message scrolls between them. Letting the whole
+ * sheet scroll pushes the actions off screen exactly when a long message makes
+ * you want them.
  *
- * The message itself is shown in full. A row that says only "dswh/glued_landing"
- * and offers a reply box is asking you to answer something you have not read.
+ * The category wash at the top is the one place the sheet is coloured. The
+ * primary button is the neutral `high` fill and never a hue: a green button
+ * under a green "By EOD" chip is the same colour claiming two different things.
  */
 
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
-  TextInput,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  TextInput,
+  View,
 } from 'react-native';
-import { colors, s, text, type, tierLabel } from '../theme';
+import {
+  CATEGORY_LABEL,
+  CATEGORY_OF_TIER,
+  fonts,
+  inset,
+  radius,
+  space,
+  type as roles,
+  useTheme,
+} from '../theme';
 import { BrandMark } from './BrandMark';
+import { Icon } from './Icon';
+import { BigButton, Chip, T, Wash } from './ui';
+import { canCompose, overflowFor, railFor } from '../lib/actions';
 import { ago, deadlineLabel } from '../lib/time';
-import { actionsFor, overflowFor } from '../lib/actions';
 import type { FeedRow } from '../api/types';
 
 interface Props {
@@ -36,13 +48,15 @@ interface Props {
 }
 
 export function DetailSheet({ row, busy, onClose, onAction }: Props) {
+  const c = useTheme();
   const [draft, setDraft] = useState('');
   if (!row) return null;
 
-  const urgent = row.tier === 'urgent';
-  const [primary, secondary] = actionsFor(row);
+  const category = CATEGORY_OF_TIER[row.tier];
+  const rail = railFor(row);
+  const [primary, secondary] = rail;
   const overflow = overflowFor(row);
-  const canReply = ['reply', 'comment'].includes(primary.id);
+  const compose = canCompose(row);
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
   const body = row.body?.trim() || row.title;
 
@@ -53,230 +67,184 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      {/* The backdrop fills the screen behind the sheet rather than sitting
-          above it in the flow. As a flex sibling it stole the height the sheet
-          needed, and the message area collapsed to a sliver. */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-        <View style={styles.backdrop} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]} />
       </Pressable>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.wrap}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
         pointerEvents="box-none"
       >
-        <View style={styles.sheet}>
-          <View style={styles.grabber} />
+        <View
+          style={{
+            height: '82%',
+            backgroundColor: c.raised,
+            borderTopLeftRadius: radius.lg,
+            borderTopRightRadius: radius.lg,
+            paddingHorizontal: space.md,
+            paddingBottom: inset.bottom,
+            overflow: 'hidden',
+          }}
+        >
+          <Wash category={category} height={220} direction="vertical" alpha={0.2} />
 
-          {/* Fixed head. */}
-          <View style={styles.head}>
-            <BrandMark source={row.source} size={s(24)} radius={s(7)} />
-            <View style={styles.headText}>
-              <Text style={styles.sender} numberOfLines={1}>
-                {row.sender_name || row.sender_handle || row.context_chip || 'Unknown sender'}
-              </Text>
-              <Text style={styles.meta} numberOfLines={1}>
+          <View
+            style={{
+              width: 36,
+              height: 5,
+              borderRadius: radius.pill,
+              backgroundColor: c.border,
+              alignSelf: 'center',
+              marginTop: space.xs,
+              marginBottom: space.md,
+            }}
+          />
+
+          {/* Head. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <BrandMark source={row.source} size={32} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <T role="body" medium lines={1}>
+                {row.sender_name ||
+                  row.sender_handle ||
+                  row.context_chip ||
+                  'Unknown sender'}
+              </T>
+              <T role="secondary" tone="low" numeric lines={1}>
                 {row.context_chip ? `${row.context_chip} · ` : ''}
                 {when}
-              </Text>
+              </T>
             </View>
-            <View style={[styles.pill, urgent && styles.pillUrgent]}>
-              <Text style={[styles.pillText, urgent && styles.pillTextUrgent]}>
-                {tierLabel[row.tier]}
-              </Text>
-            </View>
+            {CATEGORY_LABEL[category] ? (
+              <Chip
+                label={CATEGORY_LABEL[category]}
+                variant="solid"
+                category={category}
+              />
+            ) : null}
           </View>
 
-          <Text style={styles.subject} numberOfLines={2}>
+          {/* Subject. */}
+          <T role="title" lines={2} style={{ marginTop: space.md }}>
             {row.title}
-          </Text>
+          </T>
 
+          {/* Why this category. */}
           {row.reason ? (
-            <View style={[styles.why, urgent && styles.whyUrgent]}>
-              <Text style={[styles.whyLabel, urgent && styles.whyLabelUrgent]}>
-                Why this is {tierLabel[row.tier].toLowerCase()}
-              </Text>
-              <Text style={[styles.whyText, urgent && styles.whyTextUrgent]}>
+            <View
+              style={{
+                marginTop: space.md,
+                borderRadius: radius.md,
+                padding: space.sm,
+                backgroundColor: c.lift,
+              }}
+            >
+              <T role="label" tone="mid">
+                Why this is {(CATEGORY_LABEL[category] || 'here').toLowerCase()}
+              </T>
+              <T role="body" style={{ marginTop: space.xxs }}>
                 {row.reason}
-              </Text>
+              </T>
             </View>
           ) : null}
 
-          {/* The only scrolling region. */}
-          <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.bodyPad}>
-            <Text style={styles.bodyText}>{body}</Text>
+          {/* The only region that scrolls. */}
+          <ScrollView
+            style={{ flex: 1, marginTop: space.md }}
+            contentContainerStyle={{ paddingBottom: space.md }}
+          >
+            <T role="body" tone="mid">
+              {body}
+            </T>
           </ScrollView>
 
-          {/* Fixed footer. */}
-          <View style={styles.footer}>
-            {canReply ? (
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder={`Reply to ${row.sender_name ?? 'this'}...`}
-                placeholderTextColor={colors.dim}
-                multiline
-                style={styles.input}
-              />
+          {/* Footer. */}
+          <View style={{ gap: space.sm }}>
+            {compose ? (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderRadius: radius.md,
+                  padding: space.sm,
+                  backgroundColor: c.surface,
+                  flexDirection: 'row',
+                  alignItems: 'flex-end',
+                  gap: space.sm,
+                }}
+              >
+                <TextInput
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder={`Reply to ${row.sender_name ?? 'this'}...`}
+                  placeholderTextColor={c.low}
+                  multiline
+                  style={{
+                    flex: 1,
+                    ...roles.body,
+                    fontFamily: fonts.sans,
+                    color: c.high,
+                    maxHeight: 96,
+                  }}
+                />
+                <Pressable
+                  // An empty reply is rejected server-side, so the button is
+                  // inert until there is something to send rather than
+                  // offering a round trip that can only fail.
+                  disabled={busy || !draft.trim()}
+                  onPress={() => send(primary?.id ?? 'reply')}
+                  accessibilityLabel="Send"
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: radius.pill,
+                    backgroundColor: c.high,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: draft.trim() ? 1 : 0.4,
+                  }}
+                >
+                  <Icon name="send" size={20} color={c.canvas} weight={1.8} />
+                </Pressable>
+              </View>
             ) : null}
 
-            <View style={styles.actions}>
-              <Pressable
-                disabled={busy}
-                onPress={() => send(primary.id)}
-                style={[styles.primary, urgent && styles.primaryUrgent, busy && styles.busy]}
-              >
-                <Text style={styles.primaryText}>
-                  {busy ? 'Working...' : primary.label}
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={busy}
-                onPress={() => send(secondary.id)}
-                style={styles.secondary}
-              >
-                <Text style={styles.secondaryText}>{secondary.label}</Text>
-              </Pressable>
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              {primary ? (
+                <BigButton
+                  label={busy ? 'Working...' : primary.label}
+                  variant="primary"
+                  disabled={busy}
+                  onPress={() => send(primary.id)}
+                  style={{ flex: 1 }}
+                />
+              ) : null}
+              {secondary ? (
+                <BigButton
+                  label={secondary.label}
+                  disabled={busy}
+                  onPress={() => send(secondary.id)}
+                  style={{ flex: 1 }}
+                />
+              ) : null}
             </View>
 
-            <View style={styles.overflow}>
-              {overflow.map((action) => (
-                <Pressable
-                  key={action.id}
-                  disabled={busy}
-                  onPress={() => send(action.id)}
-                  style={styles.chip}
-                >
-                  <Text style={styles.chipText}>{action.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {overflow.length > 0 ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+                {overflow.map((action) => (
+                  <Chip
+                    key={action.id}
+                    label={action.label}
+                    variant="outline"
+                    onPress={() => send(action.id)}
+                  />
+                ))}
+              </View>
+            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(32,36,43,0.32)' },
-  wrap: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: s(18),
-    borderTopRightRadius: s(18),
-    // Tall by default: the sheet is where you read, so it should not open as a
-    // letterbox that needs dragging before it is useful.
-    height: '82%',
-    overflow: 'hidden',
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: s(26),
-    height: s(3),
-    borderRadius: s(2),
-    backgroundColor: colors.line,
-    marginTop: s(6),
-    marginBottom: s(2),
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(8),
-    paddingHorizontal: s(14),
-    paddingTop: s(8),
-  },
-  headText: { flex: 1 },
-  sender: { ...type.groupLabel, color: colors.fg },
-  meta: { ...type.rowSub, marginTop: s(1) },
-  pill: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: s(8),
-    paddingVertical: s(3),
-  },
-  pillUrgent: { backgroundColor: colors.urgentSoft },
-  pillText: { ...type.tag, color: colors.accent },
-  pillTextUrgent: { color: colors.urgent },
-  subject: {
-    ...type.cardHeading,
-    color: colors.fg,
-    paddingHorizontal: s(14),
-    paddingTop: s(10),
-  },
-  why: {
-    marginHorizontal: s(14),
-    marginTop: s(9),
-    backgroundColor: colors.accentSoft,
-    borderRadius: s(9),
-    paddingHorizontal: s(10),
-    paddingVertical: s(7),
-  },
-  whyUrgent: { backgroundColor: colors.urgentSoft },
-  whyLabel: { ...type.tag, color: colors.accent },
-  whyLabelUrgent: { color: colors.urgent },
-  whyText: { ...text.small, color: colors.accent, marginTop: s(2) },
-  whyTextUrgent: { color: colors.urgent },
-  bodyScroll: {
-    flex: 1,
-    marginTop: s(10),
-    marginHorizontal: s(14),
-    backgroundColor: colors.surface,
-    borderRadius: s(11),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  bodyPad: { padding: s(12) },
-  bodyText: { ...text.body, color: colors.fg },
-  footer: {
-    paddingHorizontal: s(14),
-    paddingTop: s(10),
-    paddingBottom: s(20),
-    gap: s(8),
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.line,
-    backgroundColor: colors.bg,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: s(9),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    paddingHorizontal: s(10),
-    paddingVertical: s(8),
-    minHeight: s(38),
-    maxHeight: s(70),
-    ...text.body,
-    color: colors.fg,
-  },
-  actions: { flexDirection: 'row', gap: s(6) },
-  primary: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: s(9),
-    paddingVertical: s(9),
-    alignItems: 'center',
-  },
-  primaryUrgent: { backgroundColor: colors.urgent },
-  busy: { opacity: 0.6 },
-  primaryText: { ...type.button, fontWeight: '600', color: colors.onAccent },
-  secondary: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    borderRadius: s(9),
-    paddingVertical: s(9),
-    alignItems: 'center',
-  },
-  secondaryText: { ...type.button, fontWeight: '600', color: colors.accent },
-  overflow: { flexDirection: 'row', flexWrap: 'wrap', gap: s(6) },
-  chip: {
-    paddingHorizontal: s(10),
-    paddingVertical: s(5),
-    borderRadius: 999,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  chipText: { ...type.chipLabel, color: colors.dim },
-});

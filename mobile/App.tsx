@@ -1,9 +1,9 @@
 /**
- * App root: owns the feed, hands it to four screens.
+ * App root: owns the feed, hands it to five screens.
  *
- * One fetch feeds every tab. Home, Sources and Later are three readings of the
- * same ranked array rather than three queries, which is what makes it
- * impossible for them to disagree about what is urgent.
+ * One fetch feeds every tab. Your day, Feed, Activity and Later are four
+ * readings of the same ranked array rather than four queries, which is what
+ * makes it impossible for them to disagree about what is urgent.
  *
  * Acting is optimistic: the row leaves the list the moment you reply, because
  * an item you have dealt with sitting there for a network round trip is the
@@ -11,12 +11,22 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, StatusBar, StyleSheet, View } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useFonts } from 'expo-font';
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+} from '@expo-google-fonts/geist';
+import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
+import { Archivo_600SemiBold } from '@expo-google-fonts/archivo';
 
-import { colors, s, type } from './src/theme';
+import { AppearanceProvider, haptics, useTheme } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
 import type {
@@ -26,21 +36,19 @@ import type {
   SourceDashboard,
   SourceInfo,
 } from './src/api/types';
-import { HomeScreen } from './src/screens/HomeScreen';
-import { SourcesScreen } from './src/screens/SourcesScreen';
+import { YourDayScreen } from './src/screens/YourDayScreen';
+import { FeedScreen } from './src/screens/FeedScreen';
+import { ActivityScreen } from './src/screens/ActivityScreen';
 import { SourceDetailScreen } from './src/screens/SourceDetailScreen';
 import { LaterScreen } from './src/screens/LaterScreen';
 import { YouScreen, type NotifyLevel } from './src/screens/YouScreen';
 import { DetailSheet } from './src/components/DetailSheet';
-import { TabIcon } from './src/components/Chrome';
+import { SnoozeSheet } from './src/components/SnoozeSheet';
+import { TabBar } from './src/components/TabBar';
+import { Grain } from './src/components/Grain';
 import type { Meeting } from './src/components/YourDayCard';
 
 const Tab = createBottomTabNavigator();
-
-const navTheme = {
-  ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: colors.bg, card: colors.surface },
-};
 
 const api = new ApiClient(API_URL, (): Record<string, string> =>
   AUTH_MODE === 'dev' ? { 'X-User-Id': DEV_USER_ID } : {},
@@ -60,7 +68,7 @@ const SOURCE_LABELS: Record<Source, string> = {
  *
  * This is the list, not whatever the API happened to return. Sources used to
  * start empty and fill in from `/connections`, so when that call failed the
- * screen was blank and Home claimed there was nothing connected: a network
+ * screen was blank and Your day claimed there was nothing connected: a network
  * error was indistinguishable from a user who had never set anything up.
  */
 const ALL_SOURCES: Source[] = [
@@ -81,22 +89,45 @@ const SOURCE_SKELETON: SourceInfo[] = ALL_SOURCES.map((source) => ({
   connected_account_id: null,
 }));
 
-/** Live statuses laid over the full list, so a source the API omits still
- *  shows as a row rather than disappearing. */
 function mergeSources(live: SourceInfo[]): SourceInfo[] {
   const byId = new Map(live.map((info) => [info.source, info]));
   return SOURCE_SKELETON.map((row) => byId.get(row.source) ?? row);
 }
 
 export default function App() {
+  // Each weight is its own family. Asking for a weight a family did not ship
+  // fails silently on iOS: it renders the regular cut and says nothing.
+  const [fontsReady] = useFonts({
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    GeistMono_400Regular,
+    Archivo_600SemiBold,
+  });
+
+  if (!fontsReady) return null;
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppearanceProvider>
+        <SafeAreaProvider>
+          <Shell />
+        </SafeAreaProvider>
+      </AppearanceProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function Shell() {
+  const c = useTheme();
   const [rows, setRows] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [selected, setSelected] = useState<FeedRow | null>(null);
+  const [snoozing, setSnoozing] = useState<FeedRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
-  const [aiOptOut, setAiOptOut] = useState<Partial<Record<Source, boolean>>>({});
 
   const [sources, setSources] = useState<SourceInfo[]>(SOURCE_SKELETON);
   const [sourcesFailed, setSourcesFailed] = useState(false);
@@ -104,6 +135,19 @@ export default function App() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [dashboard, setDashboard] = useState<SourceDashboard | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+
+  useEffect(() => {
+    haptics.prepare();
+  }, []);
+
+  const navTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      dark: c.mode === 'dark',
+      colors: { ...DefaultTheme.colors, background: c.canvas, card: c.surface },
+    }),
+    [c],
+  );
 
   const connectedCount = useMemo(
     () => sources.filter((info) => info.status === 'connected').length,
@@ -117,9 +161,7 @@ export default function App() {
     } catch {
       // The list still renders in full; every row says the status could not be
       // read. "Not connected yet" would be a claim we cannot make.
-      setSources(
-        SOURCE_SKELETON.map((row) => ({ ...row, status: 'error' as const })),
-      );
+      setSources(SOURCE_SKELETON.map((row) => ({ ...row, status: 'error' as const })));
       setSourcesFailed(true);
     } finally {
       setLoadingSources(false);
@@ -137,7 +179,7 @@ export default function App() {
         })),
       );
     } catch {
-      // An unreadable calendar leaves the ruler empty rather than inventing a
+      // An unreadable calendar leaves the ring empty rather than inventing a
       // schedule, which would make the free-time figure a lie.
     }
   }, []);
@@ -161,8 +203,6 @@ export default function App() {
    * Paint first, then fetch. Pulling five providers takes seconds, and making
    * the user watch a skeleton for all of them before seeing anything is the
    * difference between an app that feels instant and one that feels broken.
-   * The cached feed and the connection list render immediately; the pull
-   * happens behind them and the rows update when it lands.
    */
   const refresh = useCallback(async () => {
     await Promise.all([load(), loadSources(), loadDay()]);
@@ -185,30 +225,63 @@ export default function App() {
         void Linking.openURL(row.url);
         return;
       }
+      // Snooze is the one action that asks a question first, because "later"
+      // is the user's word and the client had been picking three hours for
+      // them without asking.
+      if (action === 'snooze') {
+        setSelected(null);
+        setSnoozing(row);
+        return;
+      }
 
       const previous = rows;
       setRows((current) => current.filter((item) => item.id !== row.id));
       setSelected(null);
       setBusy(true);
       try {
-        if (action === 'snooze') {
-          await api.snooze(row.id, new Date(Date.now() + 3 * 3600 * 1000));
-        } else if (action === 'mark_read' || action === 'dismiss') {
+        if (action === 'mark_read' || action === 'dismiss') {
           await api.dismiss(row.id);
+        } else if (action === 'bring_back') {
+          // Promoting a snoozed item back to the live queue is a snooze that
+          // has already expired, which is exactly what the endpoint models.
+          await api.snooze(row.id, new Date());
+          await load();
         } else {
           await api.act(row.id, action, body ?? '');
         }
       } catch (error) {
         setRows(previous);
+        haptics.refused();
         Alert.alert(
-          "That didn't go through",
+          'That did not go through',
           error instanceof ApiError ? error.message : 'Try again.',
         );
       } finally {
         setBusy(false);
       }
     },
-    [rows],
+    [rows, load],
+  );
+
+  const applySnooze = useCallback(
+    async (at: Date) => {
+      const row = snoozing;
+      setSnoozing(null);
+      if (!row) return;
+      const previous = rows;
+      setRows((current) => current.filter((item) => item.id !== row.id));
+      try {
+        await api.snooze(row.id, at);
+      } catch (error) {
+        setRows(previous);
+        haptics.refused();
+        Alert.alert(
+          'That did not go through',
+          error instanceof ApiError ? error.message : 'Try again.',
+        );
+      }
+    },
+    [snoozing, rows],
   );
 
   const openSource = useCallback(async (info: SourceInfo) => {
@@ -225,15 +298,16 @@ export default function App() {
       setDashboard(await api.sourceDashboard(info.source));
     } catch {
       setDashboard(null);
-      Alert.alert("Couldn't load", `${info.label} did not answer. Try again.`);
+      Alert.alert('Could not load', `${info.label} did not answer. Try again.`);
     } finally {
       setDashboardLoading(false);
     }
   }, []);
 
-  const connectSource = useCallback(async (info: SourceInfo) => {
+  const connectSource = useCallback(async (provider: Source) => {
+    const label = SOURCE_LABELS[provider];
     try {
-      const { url } = await api.connectUrl(info.source);
+      const { url } = await api.connectUrl(provider);
       if (url) {
         void Linking.openURL(url);
         return;
@@ -242,34 +316,26 @@ export default function App() {
       // fall through to the explanation below
     }
     Alert.alert(
-      `Connect ${info.label}`,
+      `Connect ${label}`,
       'Managed sign-in is not wired up in this build. The accounts in this demo were connected in Composio directly.',
     );
   }, []);
 
   const notImplemented = useCallback(() => {
-    Alert.alert('Not yet', 'Connecting new tools lands with the next phase.');
+    Alert.alert('Not yet', 'Signing out lands with managed accounts.');
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
+    <>
+      <StatusBar style={c.mode === 'dark' ? 'light' : 'dark'} />
       <NavigationContainer theme={navTheme}>
         <Tab.Navigator
-          screenOptions={({ route }) => ({
-            headerShown: false,
-            tabBarActiveTintColor: colors.accent,
-            tabBarInactiveTintColor: colors.dim,
-            tabBarStyle: styles.tabBar,
-            tabBarLabelStyle: styles.tabLabel,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={route.name} color={color} focused={focused} />
-            ),
-          })}
+          tabBar={(props) => <TabBar {...props} />}
+          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.canvas } }}
         >
-          <Tab.Screen name="Home">
+          <Tab.Screen name="Day" options={{ title: 'Day' }}>
             {() => (
-              <HomeScreen
+              <YourDayScreen
                 rows={rows}
                 loading={loading}
                 stale={stale}
@@ -280,36 +346,42 @@ export default function App() {
                 sourcesLoading={loadingSources}
                 onRefresh={refresh}
                 onOpen={setSelected}
-                onAction={act}
-                onConnect={notImplemented}
+                onConnect={() => connectSource('github')}
               />
             )}
           </Tab.Screen>
-          <Tab.Screen name="Sources">
+          <Tab.Screen name="Feed" options={{ title: 'Feed' }}>
             {() => (
-              <SourcesScreen
+              <FeedScreen
+                rows={rows}
+                loading={loading}
+                onAction={act}
+                onOpen={setSelected}
+              />
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Later" options={{ title: 'Later' }}>
+            {() => (
+              <LaterScreen api={api} onOpen={(url) => void Linking.openURL(url)} />
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Activity" options={{ title: 'Activity' }}>
+            {() => (
+              <ActivityScreen
                 sources={sources}
                 loadingStatus={loadingSources}
                 onOpen={openSource}
-                onConnect={connectSource}
               />
             )}
           </Tab.Screen>
-          <Tab.Screen name="Later">
-            {() => <LaterScreen api={api} />}
-          </Tab.Screen>
-          <Tab.Screen name="You">
+          <Tab.Screen name="You" options={{ title: 'You' }}>
             {() => (
               <YouScreen
                 email={DEV_USER_ID}
                 notifyLevel={notifyLevel}
                 connections={sources}
-                aiOptOut={aiOptOut}
                 onSetNotifyLevel={setNotifyLevel}
-                onToggleAi={(provider, optOut) =>
-                  setAiOptOut((current) => ({ ...current, [provider]: optOut }))
-                }
-                onReconnect={notImplemented}
+                onConnect={connectSource}
                 onSignOut={notImplemented}
               />
             )}
@@ -317,11 +389,27 @@ export default function App() {
         </Tab.Navigator>
 
         {dashboard ? (
-          <View style={styles.fullScreen}>
+          // Covers the tab bar too: a board is a place you go, not a panel
+          // that shares the screen with the thing you left.
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: c.canvas,
+              zIndex: 20,
+            }}
+          >
             <SourceDetailScreen
               dashboard={dashboard}
               loading={dashboardLoading}
               onBack={() => setDashboard(null)}
+              onRefresh={() => {
+                const info = sources.find((s) => s.source === dashboard.source);
+                if (info) void openSource(info);
+              }}
             />
           </View>
         ) : null}
@@ -332,26 +420,13 @@ export default function App() {
           onClose={() => setSelected(null)}
           onAction={act}
         />
+        <SnoozeSheet
+          visible={snoozing !== null}
+          onPick={applySnooze}
+          onClose={() => setSnoozing(null)}
+        />
+        <Grain />
       </NavigationContainer>
-    </SafeAreaProvider>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.line,
-    // Tall enough for icon plus label plus the home indicator. At 62 the
-    // labels were clipped by the bar's own bottom edge.
-    borderTopWidth: StyleSheet.hairlineWidth,
-    // Icon, label and the home indicator all need room. Too short and the
-    // labels are clipped away entirely, leaving four unexplained glyphs.
-    height: s(50),
-    paddingTop: s(5),
-    paddingBottom: s(8),
-  },
-  tabLabel: { ...type.tabLabel, marginTop: s(2) },
-  // Covers the tab bar too: a source dashboard is a place you go, not a
-  // panel that shares the screen with the thing you left.
-  fullScreen: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, zIndex: 20 },
-});

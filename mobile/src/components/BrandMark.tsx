@@ -1,163 +1,126 @@
 /**
- * Real brand marks, per plan 6.3. Not two-letter placeholders.
+ * A source's own mark, in its own colour.
  *
- * Each path is the vendor's own official mark, redrawn as a component so it can
- * sit inside a tinted roundel without being distorted. The marks keep their own
- * colours where the vendor's guidelines require it (Slack, Google) and use a
- * single fill where the vendor publishes a monochrome mark (GitHub, Linear).
- * Proportions are never altered; only the roundel around them is themed.
+ * This is one of exactly two exemptions from "colour is the category". A mark
+ * is identity rather than priority, and it never occupies a position where a
+ * category signal lives, so it cannot be misread as one. Monochrome marks were
+ * tried and rejected: they cost the instant recognition that is the only
+ * reason to draw a mark instead of writing the word.
+ *
+ * Paths are Simple Icons, CC0.
+ *
+ * Five sizes and no others, each with its own radius and glyph box, because a
+ * mark scaled to an arbitrary size stops sitting on the same optical baseline
+ * as the text beside it.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { colors } from '../theme';
+import { fonts, useTheme } from '../theme';
 import type { Source } from '../api/types';
 
-const SIZE = 28;
-
-function GitHubMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 16 16">
-      <Path
-        fill="#1B1F23"
-        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-      />
-    </Svg>
-  );
-}
-
-function SlackMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 122 122">
-      <Path
-        fill="#E01E5A"
-        d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"
-      />
-      <Path
-        fill="#36C5F0"
-        d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"
-      />
-      <Path
-        fill="#2EB67D"
-        d="M96.9 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H96.9V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.6 5.8 70.4 0 77.5 0s12.9 5.8 12.9 12.9v32.3z"
-      />
-      <Path
-        fill="#ECB22E"
-        d="M77.5 96.9c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V96.9h12.9zm0-6.4c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.5z"
-      />
-    </Svg>
-  );
-}
-
-function LinearMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Path
-        fill="#5E6AD2"
-        d="M1.2 61.5a49 49 0 0 0 37.3 37.3L1.2 61.5zM.1 49.5l50.4 50.4c2.6-.1 5.2-.4 7.7-.9L1 41.8c-.5 2.5-.8 5.1-.9 7.7zM3.8 33.2l63 63a49.8 49.8 0 0 0 6.1-3.1L6.9 27.1a49.8 49.8 0 0 0-3.1 6.1zM11.3 21.7 78.3 88.7a50.6 50.6 0 0 0 10.4-10.4L21.7 11.3a50.6 50.6 0 0 0-10.4 10.4zM50 0a50 50 0 1 1 0 100C22.4 100 0 77.6 0 50S22.4 0 50 0z"
-      />
-    </Svg>
-  );
-}
-
-function CalendarMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path fill="#FFF" d="M4 4h16v16H4z" />
-      <Path fill="#4285F4" d="M20 2H4a2 2 0 0 0-2 2v3h20V4a2 2 0 0 0-2-2z" />
-      <Path fill="#34A853" d="M2 17v3a2 2 0 0 0 2 2h3v-5H2z" />
-      <Path fill="#EA4335" d="M17 17h5v3a2 2 0 0 1-2 2h-3v-5z" />
-      <Path
-        fill="#1A73E8"
-        d="M9.4 15.6c-1.6 0-2.7-.9-2.9-2.2l1.4-.4c.1.7.7 1.2 1.5 1.2s1.4-.4 1.4-1.1-.5-1-1.4-1h-.7v-1.3h.6c.8 0 1.3-.4 1.3-1s-.5-1-1.2-1c-.7 0-1.2.4-1.3 1.1l-1.4-.4c.2-1.2 1.3-2.1 2.8-2.1 1.6 0 2.7.9 2.7 2.2 0 .8-.4 1.4-1.1 1.7.8.3 1.3.9 1.3 1.8 0 1.4-1.2 2.5-3 2.5zM16.3 15.5h-1.5V9.9l-1.5.5-.3-1.3 2.2-.8h1.1z"
-      />
-    </Svg>
-  );
-}
-
-function DocsMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path fill="#4285F4" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
-      <Path fill="#A1C2FA" d="M14 2v6h6l-6-6z" />
-      <Path
-        fill="#FFF"
-        d="M8 12h8v1.2H8zm0 2.6h8v1.2H8zm0 2.6h5.4v1.2H8z"
-      />
-    </Svg>
-  );
-}
-
-function GmailMark({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 18">
-      <Path fill="#4285F4" d="M1.6 18h3.2V9.3L0 5.7v10.7C0 17.3.7 18 1.6 18z" />
-      <Path fill="#34A853" d="M19.2 18h3.2c.9 0 1.6-.7 1.6-1.6V5.7l-4.8 3.6V18z" />
-      <Path fill="#FBBC04" d="M19.2 1.6v7.7L24 5.7V2.4c0-1.5-1.7-2.3-2.9-1.4l-1.9 1.4z" />
-      <Path fill="#EA4335" d="M4.8 9.3V1.6L12 7l7.2-5.4v7.7L12 14.7z" />
-      <Path fill="#C5221F" d="M0 2.4v3.3l4.8 3.6V1.6L2.9 1C1.7.1 0 .9 0 2.4z" />
-    </Svg>
-  );
-}
-
-const MARKS: Partial<Record<Source, (p: { size: number }) => React.JSX.Element>> = {
-  github: GitHubMark,
-  slack: SlackMark,
-  linear: LinearMark,
-  calendar: CalendarMark,
-  google_docs: DocsMark,
-  gmail: GmailMark,
+const PATHS: Record<Source, string> = {
+  github:
+    'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z',
+  slack:
+    'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z',
+  linear:
+    'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z',
+  gmail:
+    'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z',
+  google_docs:
+    'M14 2H6.4C5.1 2 4 3.1 4 4.4v15.2C4 20.9 5.1 22 6.4 22h11.2c1.3 0 2.4-1.1 2.4-2.4V8l-6-6zm-1 7V3.6L18.4 9H13zM8 12.4h8v1.4H8v-1.4zm0 3.2h8V17H8v-1.4zM8 9h4v1.4H8V9z',
+  calendar:
+    'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z',
 };
 
-const TINT: Record<Source, string> = {
-  github: '#EEEBE6',
-  slack: '#F3ECF2',
-  linear: '#EAEBF7',
-  calendar: '#E8F0FE',
-  google_docs: '#E8F0FE',
-  gmail: '#FCE8E6',
-};
+/** size, tile radius, glyph box. Five, and only five. */
+const SIZES = {
+  16: { radius: 4, glyph: 11 },
+  20: { radius: 4, glyph: 12 },
+  24: { radius: 8, glyph: 14 },
+  32: { radius: 8, glyph: 18 },
+  44: { radius: 12, glyph: 24 },
+} as const;
 
-/**
- * The roundel plus the mark. Falls back to a two-letter monogram for a source
- * whose mark has not been vendored yet, which keeps the layout correct rather
- * than leaving a hole.
- */
+export type MarkSize = keyof typeof SIZES;
+
 export function BrandMark({
   source,
-  size = SIZE,
-  radius: r,
+  size = 32,
 }: {
   source: Source;
-  size?: number;
-  radius?: number;
+  size?: MarkSize;
 }) {
-  const Mark = MARKS[source];
-  const tint = TINT[source] ?? colors.accentSoft;
-
+  const c = useTheme();
+  const { radius, glyph } = SIZES[size];
   return (
     <View
-      style={[
-        styles.roundel,
-        { width: size, height: size, borderRadius: r ?? size * 0.28, backgroundColor: tint },
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: c.overlay,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
     >
-      {Mark ? (
-        <Mark size={size * 0.62} />
-      ) : (
-        <Text style={styles.monogram}>{source.slice(0, 2).toUpperCase()}</Text>
-      )}
+      {/* A one-pixel specular edge along the top. It is what stops the tile
+          reading as a flat grey square at 16pt, where the glyph inside it is
+          too small to carry the shape on its own. */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor:
+            c.mode === 'dark' ? 'rgba(255,255,255,0.20)' : 'rgba(18,32,31,0.12)',
+        }}
+      />
+      <Svg width={glyph} height={glyph} viewBox="0 0 24 24">
+        <Path d={PATHS[source]} fill={c.brand[source]} />
+      </Svg>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  roundel: { alignItems: 'center', justifyContent: 'center' },
-  monogram: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.accent,
-    letterSpacing: 0.5,
-  },
-});
+/**
+ * Initials, where there is a person rather than a service. Same tile, same
+ * ladder, round instead of square so the two are never confused.
+ */
+export function Avatar({
+  name,
+  size = 32,
+}: {
+  name: string | null;
+  size?: 24 | 32 | 44;
+}) {
+  const c = useTheme();
+  const initials = (name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+  const fontSize = size === 44 ? 15 : size === 24 ? 11 : 13;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        backgroundColor: c.overlay,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontFamily: fonts.sansSemi, fontSize, color: c.mid }}>
+        {initials || '?'}
+      </Text>
+    </View>
+  );
+}

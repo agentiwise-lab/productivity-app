@@ -1,108 +1,138 @@
 /**
- * The grouped list under the card feed, and the same row shape everywhere it
- * appears: Home, Later, and a source dashboard.
+ * One row shape, everywhere a list appears.
  *
- * Each row is a bordered card with its own padding rather than a line in a
- * table, so the list reads as a set of things rather than a grid. The one shape
- * is reused deliberately: three screens listing feed items in three different
- * styles is what made the app feel unfinished.
+ * The old list was text on a hairline, and that is the whole reason it read as
+ * primitive: a rule between two rows separates them by exactly one pixel, so no
+ * amount of good type stops the list looking like one undifferentiated block.
+ * A row here is a discrete card with 8pt of air under it.
+ *
+ * Every row carries its category twice: a 3pt bar down the leading edge, and a
+ * 120pt wash at 16% behind the mark. Two signals rather than one, so the row
+ * survives being read at arm's length and survives greyscale.
  */
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { colors, s, type, pipColor, tierLabel } from '../theme';
-import { ago, deadlineLabel } from '../lib/time';
-import { BrandMark } from './BrandMark';
-import type { FeedRow, Tier } from '../api/types';
-import { subtext } from '../lib/subtext';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { radius, size, space, useTheme, type Category } from '../theme';
+import { Icon, type GlyphName } from './Icon';
+import { T, Wash } from './ui';
 
-export function GroupHeader({ tier, count }: { tier: Tier; count: number }) {
-  return (
-    <View style={styles.groupHeader}>
-      <View style={[styles.pip, { backgroundColor: pipColor[tier] }]} />
-      <Text style={styles.groupLabel}>{tierLabel[tier]}</Text>
-      <Text style={styles.groupCount}>{count}</Text>
-    </View>
-  );
+export interface RowProps {
+  category: Category;
+  /** The mark, a time, or an avatar. Whatever names the row's origin. */
+  leading?: React.ReactNode;
+  title: React.ReactNode;
+  subtitle?: string | null;
+  /** Top right: an age, a duration, a count. Always machine-set. */
+  meta?: string | null;
+  /** Under the meta, smaller and quieter: a repo, an id, a channel. */
+  submeta?: string | null;
+  /** Right of the text, at heading size. A count that is the row's point. */
+  value?: string | null;
+  /** Only ever set where there is somewhere to go. */
+  glyph?: GlyphName | null;
+  trailing?: React.ReactNode;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function ListRow({
-  row,
+export function Row({
+  category,
+  leading,
+  title,
+  subtitle,
+  meta,
+  submeta,
+  value,
+  glyph,
+  trailing,
   onPress,
-}: {
-  row: FeedRow;
-  onPress: (row: FeedRow) => void;
-}) {
-  const meta = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
-  const urgent = row.tier === 'urgent';
-  return (
-    <Pressable
-      onPress={() => onPress(row)}
-      style={({ pressed }) => [
-        styles.row,
-        urgent && styles.rowUrgent,
-        pressed && styles.rowPressed,
-      ]}
-    >
-      <BrandMark source={row.source} size={s(24)} radius={s(7)} />
-      <View style={styles.rowBody}>
-        <Text style={styles.rowTitle} numberOfLines={1} ellipsizeMode="tail">
-          {row.sender_name ? `${row.sender_name}: ` : ''}
-          {row.title}
-        </Text>
-        {/* Why this row exists. Without it a list of titles is just an inbox,
-            which is the thing this product replaces. */}
-        {subtext(row) ? (
-          <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">
-            {subtext(row)}
-          </Text>
+  style,
+}: RowProps) {
+  const c = useTheme();
+
+  const content = (
+    <>
+      <Wash category={category} width={120} />
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          backgroundColor: c.hue[category],
+          zIndex: 2,
+        }}
+      />
+      {leading}
+      {/* No gap. Body is 15/20 and secondary is 13/20, so the two line boxes
+          already carry their own leading, and 20 + 20 + 24 of padding lands
+          the row on exactly the 64 it is specified at. */}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {typeof title === 'string' ? (
+          <T role="body" lines={1}>
+            {title}
+          </T>
+        ) : (
+          title
+        )}
+        {subtitle ? (
+          <T role="secondary" tone="mid" lines={1}>
+            {subtitle}
+          </T>
         ) : null}
       </View>
-      <Text style={[styles.rowMeta, urgent && styles.rowMetaUrgent]}>{meta}</Text>
+      {value ? (
+        <T role="heading" numeric>
+          {value}
+        </T>
+      ) : null}
+      {meta || submeta ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          {meta ? (
+            <T role="secondary" tone="mid" numeric>
+              {meta}
+            </T>
+          ) : null}
+          {submeta ? (
+            // 11/16 rather than the secondary role's 13/20: this is the
+            // quietest thing on the row and it must not compete with the age
+            // directly above it.
+            <T role="label" tone="low" numeric style={{ letterSpacing: 0 }}>
+              {submeta}
+            </T>
+          ) : null}
+        </View>
+      ) : null}
+      {glyph ? <Icon name={glyph} size={14} color={c.low} weight={1.8} /> : null}
+      {trailing}
+    </>
+  );
+
+  const shape: StyleProp<ViewStyle> = [
+    {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+      marginHorizontal: space.md,
+      marginBottom: space.xs,
+      padding: space.sm,
+      backgroundColor: c.surface,
+      borderRadius: radius.md,
+      minHeight: size.row,
+      overflow: 'hidden',
+    },
+    style,
+  ];
+
+  if (!onPress) return <View style={shape}>{content}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [shape, pressed ? { opacity: 0.7 } : null]}
+    >
+      {content}
     </Pressable>
   );
 }
-
-export function SectionDivider({ label }: { label: string }) {
-  return <Text style={styles.divider}>{label}</Text>;
-}
-
-const styles = StyleSheet.create({
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(7),
-    paddingHorizontal: s(16),
-    paddingTop: s(14),
-    paddingBottom: s(6),
-  },
-  pip: { width: s(7), height: s(7), borderRadius: s(3.5) },
-  groupLabel: { ...type.groupLabel, color: colors.fg },
-  groupCount: { ...type.groupCount, marginLeft: 'auto' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(10),
-    marginHorizontal: s(13),
-    marginBottom: s(7),
-    paddingHorizontal: s(12),
-    paddingVertical: s(11),
-    backgroundColor: colors.surface,
-    borderRadius: s(12),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  rowUrgent: { borderColor: '#E7C6AE', backgroundColor: colors.urgentSoft },
-  rowPressed: { opacity: 0.6 },
-  rowBody: { flex: 1, gap: s(2) },
-  rowTitle: { ...type.rowTitle, fontWeight: '600', color: colors.fg },
-  rowSub: { ...type.rowSub },
-  rowMeta: { ...type.ago },
-  rowMetaUrgent: { color: colors.urgent },
-  divider: {
-    ...type.divider,
-    paddingHorizontal: s(16),
-    paddingTop: s(16),
-    paddingBottom: s(6),
-  },
-});

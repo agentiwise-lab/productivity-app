@@ -1,180 +1,165 @@
 /**
- * Header, tab bar and the collapsed sticky line, matching the mockup exactly.
+ * Screen chrome. There is no title bar on any screen.
  *
- * The header is centred and quiet on purpose: the screen title is the least
- * interesting thing on it, so it takes one small line with the date beside it
- * rather than a large left-aligned banner competing with the content.
+ * A dissolving title and a persistent bar were doing the same job twice, so the
+ * bar is gone: the large line is content, sitting in the scroll view with the
+ * rest of it, and it collapses into a 44pt blurred strip only once it has
+ * actually left the screen. Nothing is reserved for a header that is not there.
+ *
+ * A source board is the one exception, and only because it needs somewhere to
+ * put a back affordance.
  */
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { colors, s, type } from '../theme';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import { inset, size, space, useTheme } from '../theme';
+import { Icon } from './Icon';
+import { T } from './ui';
 
-/**
- * A title and, where it earns its place, one line of context beneath it.
- *
- * The mockup carried a hamburger and a target glyph. Neither had anywhere to
- * go, and a control that does nothing is worse than no control: it invites a
- * tap and then ignores it. They are gone until they mean something.
- */
-export function Header({
+/** The large line. Lives in the scroll view, because it is content. */
+export function ScreenHeader({
+  eyebrow,
   title,
-  subtitle,
 }: {
+  eyebrow: string;
   title: string;
-  subtitle?: string;
-  onLeft?: () => void;
-  onRight?: () => void;
-  rightGlyph?: string;
 }) {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.headerDate}>{subtitle}</Text> : null}
+      <T role="label" tone="low">
+        {eyebrow}
+      </T>
+      <T role="display" style={{ marginTop: space.xxs }} lines={2}>
+        {title}
+      </T>
     </View>
   );
 }
 
 /**
- * What the ruler becomes once you scroll. It keeps the one fact from the ruler
- * that still matters while you are reading the feed: when the next thing is,
- * and how much room you have before it.
+ * What replaces it once it has scrolled away. Absolute, above the list, and
+ * invisible until the large line has passed under it, so the two are never on
+ * screen together saying the same thing.
  */
-export function StickyDay({
-  time,
-  label,
-  free,
+export function CollapsedTitle({
+  title,
+  scrollY,
+  threshold = 64,
 }: {
-  time: string;
-  label: string;
-  free: string;
+  title: string;
+  scrollY: SharedValue<number>;
+  threshold?: number;
 }) {
+  const c = useTheme();
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [threshold - 16, threshold + 16],
+      [0, 1],
+      'clamp',
+    ),
+  }));
+
   return (
-    <View style={styles.sticky}>
-      <Text style={styles.stickyTime}>{time}</Text>
-      <Text style={styles.stickyLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={styles.stickyFree}>{free}</Text>
-    </View>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.collapsed,
+        { top: inset.top, backgroundColor: c.tabBar, borderBottomColor: c.hairline },
+        style,
+      ]}
+    >
+      {Platform.OS !== 'web' ? (
+        <BlurView
+          intensity={24}
+          tint={c.mode === 'dark' ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      <T role="heading" lines={1}>
+        {title}
+      </T>
+    </Animated.View>
   );
 }
 
-const TAB_ICONS: Record<string, React.ReactNode> = {
-  Home: (
-    <>
-      <Path d="M12 2 2 7l10 5 10-5-10-5Z" />
-      <Path d="m2 17 10 5 10-5" />
-      <Path d="m2 12 10 5 10-5" />
-    </>
-  ),
-  Sources: (
-    <>
-      <Path d="M3 3h7v7H3z" />
-      <Path d="M14 3h7v7h-7z" />
-      <Path d="M14 14h7v7h-7z" />
-      <Path d="M3 14h7v7H3z" />
-    </>
-  ),
-  Later: (
-    <>
-      <Circle cx="12" cy="12" r="10" />
-      <Path d="M12 6v6l4 2" />
-    </>
-  ),
-  You: (
-    <>
-      <Circle cx="12" cy="7" r="4" />
-      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    </>
-  ),
-};
-
-export function TabIcon({
-  name,
-  color,
-  focused,
+/**
+ * The board's bar. Keeps a back affordance, which is the whole reason it
+ * survived the cull.
+ */
+export function BoardBar({
+  title,
+  right,
+  onBack,
+  children,
 }: {
-  name: string;
-  color: string;
-  focused: boolean;
+  title: string;
+  right?: string;
+  onBack: () => void;
+  /** The source's mark, which sits between the chevron and the title. */
+  children?: React.ReactNode;
 }) {
+  const c = useTheme();
   return (
-    <View style={[styles.tabIcon, focused && styles.tabIconOn]}>
-      <Svg
-        width={s(11)}
-        height={s(11)}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {TAB_ICONS[name]}
-      </Svg>
+    <View
+      style={[
+        styles.board,
+        { backgroundColor: c.tabBar, borderBottomColor: c.hairline },
+      ]}
+    >
+      {Platform.OS !== 'web' ? (
+        <BlurView
+          intensity={24}
+          tint={c.mode === 'dark' ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      <Pressable onPress={onBack} hitSlop={12} accessibilityLabel="Back">
+        <View style={{ transform: [{ scaleX: -1 }] }}>
+          <Icon name="chevron" size={20} color={c.high} weight={1.8} />
+        </View>
+      </Pressable>
+      {children}
+      <T role="heading" lines={1} style={{ flex: 1 }}>
+        {title}
+      </T>
+      {right ? (
+        <T role="label" tone="low">
+          {right}
+        </T>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    alignItems: 'center',
-    paddingHorizontal: s(14),
-    paddingTop: s(3),
-    paddingBottom: s(5),
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
-    backgroundColor: colors.bg,
-  },
-  headerLeft: { width: s(20) },
-  headerRight: { width: s(20), alignItems: 'flex-end' },
-  headerCentre: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline' },
-  // Title and subtitle share the header without growing it: the title comes
-  // down a point and the date line sits tight beneath on its own baseline.
-  headerTitle: {
-    fontSize: s(14),
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    color: colors.fg,
-    lineHeight: s(16),
-  },
-  headerDate: { ...type.headerDate, fontSize: s(8), lineHeight: s(9) },
-  glyph: { fontSize: s(13), color: colors.dim },
-
-  sticky: {
+  header: { paddingHorizontal: space.md, paddingTop: space.xs },
+  collapsed: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: size.collapsedHeader,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: s(8),
-    paddingHorizontal: s(14),
-    paddingVertical: s(8),
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-    shadowColor: '#20242B',
-    shadowOpacity: 0.08,
-    shadowRadius: s(6),
-    shadowOffset: { width: 0, height: s(3) },
-    elevation: 3,
-    zIndex: 5,
+    paddingHorizontal: space.md,
+    borderBottomWidth: 0.5,
+    zIndex: 12,
+    overflow: 'hidden',
   },
-  stickyTime: {
-    fontFamily: 'Menlo',
-    fontSize: s(10.5),
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  stickyLabel: { flex: 1, fontSize: s(11), color: colors.fg },
-  stickyFree: { fontFamily: 'Menlo', fontSize: s(9.5), color: colors.dim },
-
-  tabIcon: {
-    width: s(15),
-    height: s(15),
-    borderRadius: s(5),
+  board: {
+    height: size.collapsedHeader,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.55,
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    borderBottomWidth: 0.5,
+    zIndex: 12,
+    overflow: 'hidden',
   },
-  tabIconOn: { opacity: 1, backgroundColor: colors.accentSoft },
 });

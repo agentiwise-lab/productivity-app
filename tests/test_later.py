@@ -116,6 +116,31 @@ def test_rows_carry_what_a_list_needs_to_render():
     assert row.occurred_at == NOW
 
 
+def test_html_escapes_are_decoded_rather_than_shown_to_the_reader():
+    """Mail subjects and snippets arrive escaped, so a plain apostrophe reaches
+    the phone as `&#39;` and a quotation mark as `&quot;`. Rendering those
+    verbatim is the app showing its plumbing in the middle of a sentence."""
+    from backend.services.later import _to_row
+    from backend.models.events import RawEvent
+
+    row = _to_row(
+        RawEvent(
+            source="gmail",
+            source_ref="gmail:m9",
+            reason="gmail_unread",
+            subject_type="Message",
+            title="Substack&#39;s AI Detector",
+            url="",
+            repo="",
+            body="Watch now | &quot;DoN&#39;T&quot; miss it &amp; more",
+            occurred_at=NOW,
+        )
+    )
+
+    assert row.title == "Substack's AI Detector"
+    assert row.summary == 'Watch now | "DoN\'T" miss it & more'
+
+
 # --- every source at once --------------------------------------------------
 
 

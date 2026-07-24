@@ -18,6 +18,7 @@ import logging
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from html import unescape
 from queue import Queue
 from typing import Any, Callable
 
@@ -47,15 +48,22 @@ class LaterRow(BaseModel):
     occurred_at: datetime | None = None
 
 
+def _text(raw: str) -> str:
+    """Mail arrives escaped for HTML, so an apostrophe reaches the phone as
+    `&#39;` and a quotation mark as `&quot;`. These lines are rendered as text
+    and never as markup, so the escaping is not protecting anything: it is just
+    plumbing showing through the middle of a sentence."""
+    return unescape(raw).strip()
+
+
 def _to_row(event: RawEvent) -> LaterRow:
     actor = getattr(event, "actor", None)
+    body = _text(event.body or "")
     return LaterRow(
         source=Source(event.source),
         source_ref=event.source_ref,
-        title=event.title,
-        summary=(event.body or "").strip().splitlines()[0][:140] or None
-        if event.body
-        else None,
+        title=_text(event.title),
+        summary=(body.splitlines()[0][:140] or None) if body else None,
         sender_name=(actor.display_name or actor.login) if actor else None,
         context_chip=event.context_chip,
         url=event.url or "",
