@@ -46,7 +46,7 @@ const api = new ApiClient(API_URL, (): Record<string, string> =>
   AUTH_MODE === 'dev' ? { 'X-User-Id': DEV_USER_ID } : {},
 );
 
-const SOURCE_LABELS: Partial<Record<Source, string>> = {
+const SOURCE_LABELS: Record<Source, string> = {
   github: 'GitHub',
   slack: 'Slack',
   calendar: 'Google Calendar',
@@ -54,6 +54,39 @@ const SOURCE_LABELS: Partial<Record<Source, string>> = {
   linear: 'Linear',
   gmail: 'Gmail',
 };
+
+/**
+ * Every source the product supports, in the order they are shown.
+ *
+ * This is the list, not whatever the API happened to return. Sources used to
+ * start empty and fill in from `/connections`, so when that call failed the
+ * screen was blank and Home claimed there was nothing connected: a network
+ * error was indistinguishable from a user who had never set anything up.
+ */
+const ALL_SOURCES: Source[] = [
+  'github',
+  'slack',
+  'calendar',
+  'linear',
+  'gmail',
+  'google_docs',
+];
+
+const SOURCE_SKELETON: SourceInfo[] = ALL_SOURCES.map((source) => ({
+  source,
+  label: SOURCE_LABELS[source],
+  status: 'disconnected',
+  count: 0,
+  urgent: 0,
+  connected_account_id: null,
+}));
+
+/** Live statuses laid over the full list, so a source the API omits still
+ *  shows as a row rather than disappearing. */
+function mergeSources(live: SourceInfo[]): SourceInfo[] {
+  const byId = new Map(live.map((info) => [info.source, info]));
+  return SOURCE_SKELETON.map((row) => byId.get(row.source) ?? row);
+}
 
 export default function App() {
   const [rows, setRows] = useState<FeedRow[]>([]);
@@ -65,7 +98,8 @@ export default function App() {
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
   const [aiOptOut, setAiOptOut] = useState<Partial<Record<Source, boolean>>>({});
 
-  const [sources, setSources] = useState<SourceInfo[]>([]);
+  const [sources, setSources] = useState<SourceInfo[]>(SOURCE_SKELETON);
+  const [sourcesFailed, setSourcesFailed] = useState(false);
   const [loadingSources, setLoadingSources] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [dashboard, setDashboard] = useState<SourceDashboard | null>(null);
@@ -78,9 +112,15 @@ export default function App() {
 
   const loadSources = useCallback(async () => {
     try {
-      setSources(await api.connections());
+      setSources(mergeSources(await api.connections()));
+      setSourcesFailed(false);
     } catch {
-      // Sources still renders its full skeleton; only the statuses are missing.
+      // The list still renders in full; every row says the status could not be
+      // read. "Not connected yet" would be a claim we cannot make.
+      setSources(
+        SOURCE_SKELETON.map((row) => ({ ...row, status: 'error' as const })),
+      );
+      setSourcesFailed(true);
     } finally {
       setLoadingSources(false);
     }
@@ -236,6 +276,7 @@ export default function App() {
                 fetchedAt={fetchedAt}
                 meetings={meetings}
                 connectedCount={connectedCount}
+                sourcesUnknown={sourcesFailed}
                 onRefresh={refresh}
                 onOpen={setSelected}
                 onAction={act}

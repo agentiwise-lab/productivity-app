@@ -55,6 +55,8 @@ interface Props {
   fetchedAt: Date | null;
   meetings: Meeting[];
   connectedCount: number;
+  /** The connection check failed, so 0 connected means unknown, not none. */
+  sourcesUnknown?: boolean;
   onRefresh: () => Promise<void>;
   onOpen: (row: FeedRow) => void;
   onAction: (row: FeedRow, action: string) => void;
@@ -68,6 +70,7 @@ export function HomeScreen({
   fetchedAt,
   meetings,
   connectedCount,
+  sourcesUnknown = false,
   onRefresh,
   onOpen,
   onAction,
@@ -123,7 +126,10 @@ export function HomeScreen({
     );
   }
 
-  if (connectedCount === 0) {
+  // Only when we know nothing is connected. If the connection check itself
+  // failed we know nothing at all, and telling a user with five live sources to
+  // "connect your first source" is worse than showing them the feed we have.
+  if (connectedCount === 0 && !sourcesUnknown) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <Header title="Today" subtitle={dateLabel} />
