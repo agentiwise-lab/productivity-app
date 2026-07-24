@@ -172,3 +172,45 @@ A further ~60 finance and crypto apps were swept, and the results sharpen the me
 India's mass-market fintech layer is **uniformly light and flat**: Jupiter, Fi, slice, Uni Cards, Groww, Zerodha Kite, Angel One, INDmoney, Navi. Jupiter's own community is still requesting dark mode.
 
 **CRED is the outlier in its own market, not the norm.** Part of why it reads as expensive locally is that nothing around it does.
+
+---
+
+## Round 5 addendum: the European and Gulf sweep, and why it closes the Type B question
+
+~70 further banking apps swept across Europe, the Gulf, Latin America and Africa. **All 28 shortlisted IDs were round-tripped against Apple's lookup endpoint**, and European and LatAm rows were judged from downloaded screenshots. Gulf and Asian rows are text-grounded only and marked lower confidence by the agent.
+
+### The finding that settles Type A vs Type B
+
+**Companies invest in the logo, the colour and the card artwork, then ship a conventional flat app underneath.**
+
+Where metal or material appears, it is confined to **a marketing card render**, and the product UI behind it reverts to a flat light list:
+
+- **Trade Republic** — a photoreal brushed-metal "Mirror" card render, and a monochrome off-white product UI
+- **N26** — the Metal card's 16g stainless steel in Charcoal Black, Quartz Rose and Slate Grey **lives only on the marketing site**
+- **Lunar** — a genuinely good matte-black debossed card, and an acid-green flat app
+- **Nubank** — photoreal purple card renders tumbling on grey, and **a flat white app body**
+- **Nexo** — a glass/chrome Bitcoin orb under raking light in marketing, white UI behind it
+
+**Also confirmed: every award and agency credit found in this sweep is a brand-identity project, not an app-design project.** No award or case study was found anywhere for a Latin American, African or Gulf banking *mobile app interface*.
+
+> **This closes the question.** Type B (real material inside the product) is not an industry standard being widely met. It is close to unique to CRED, and CRED has a physical credit card to render. **We have no physical product.** Pursuing Type B would mean inventing a hero object with no referent, at real ongoing asset cost, to match something almost nobody else achieves either.
+
+### The genuine European finds
+
+- **Deblock** (FR, id `6479202981`) — a pure-black CGI stage of stepped monolithic blocks with one spotlit photoreal brushed-silver Visa floating under soft contact shadow. **The closest thing to CRED's art direction in Europe**, and a good illustration of the one-hero-object rule.
+- **SwissBorg** (CH, id `1442483481`) — near-black to deep indigo, a mint line chart bleeding off the device edge, Swiss apostrophe numerals (`€ 106'819.16`).
+- **Investec Private Client** (ZA, id `603019723`) — strict monochrome, full-bleed zebra photography, a **serif** greeting, matte-black card with zebra-stripe engraving.
+- **C6 Bank** (BR, id `1463463143`) — near-black chrome as the *default* state, not a toggle.
+- **Liv X** (AE) — **Red Dot 2025, Interface and UX Design**, the strongest design credential in the set, but nothing concrete is documented about its visuals.
+
+**Nobody in Europe uses serif or custom display type in-product**, and the genuinely dark-canvas European products are a short list: Alpian, Revolut, bunq, SwissBorg.
+
+### Confirmed negatives worth recording
+
+- **Apple Design Awards 2026: zero finance, banking or fintech apps** across all six categories.
+- **Awwwards** banking and fintech categories contain 20+ entries, **all marketing websites rather than apps**.
+- **Toss** is confirmed light by its own published tokens: `#ffffff` canvas, `#191f28` headings, a single `#0748FF` accent, proprietary Toss Product Sans. World-class craft, and the opposite register from this brief.
+
+### Method caveat, stated by the agent
+
+Its WebSearch budget was exhausted at the start of the session and `itunes.apple.com/search` returned HTTP 403 for most of it. IDs were recovered via storefront RSS charts and `/lookup`. **"No evidence found" in that sweep means unverified, not absent.** Four Gulf unknowns still warrant a manual screenshot pass: **iz by Alinma, Zand, Kaspi, Liv X**.
