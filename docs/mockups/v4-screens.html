@@ -1,0 +1,1172 @@
+<title>v4 · screens, options and interactions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   v3.  393x852, 1 CSS px = 1 iOS pt, no scale factor.
+   Changes from v2, all from review:
+     · warm palette in both modes, light returns to the Warm Sand canvas
+     · NO header bar on any screen. The title is content and it collapses.
+     · the tier row is a real selector that swaps the list beneath it
+     · tier colour arrives as a glow from beneath, not a left edge line
+     · actions are a vertical rail bottom-right, and each one opens a
+       source-native sheet rather than committing blind
+     · no divider cards, no progress scroller
+     · You loses the AI section entirely
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pg{
+  /* warm dark, the default. R>G>B throughout so it reads warm, not brown. */
+  --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
+  --hairline:#2E2A26; --border:#3B352F;
+  --faint:#57504A; --low:#7A736C; --mid:#A79F97; --high:#F5F1EC;
+  --accent:#5FE3C0; --alarm:#FF5A4E; --onSolid:#0C0B0A;
+  --github:#A371F7; --linear:#5E6AD2; --slack:#36C5F0;
+  --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
+  --tabbg:rgba(12,11,10,.74);
+  --page:#151412; --pagefg:#EDEAE5; --pagedim:#8E8880; --pageln:#2E2A26; --phedge:#332E29;
+  background:var(--page); color:var(--pagefg); margin:0; padding:56px 32px 140px;
+  font-family:"Geist",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* warm light: the Warm Sand canvas the project already owns */
+.lightmode{
+  --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
+  --hairline:#E2DCD2; --border:#D2CABE;
+  --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
+  --accent:#0C7D63; --alarm:#C8402F; --onSolid:#FFFDF9;
+  --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
+}
+.pg *{box-sizing:border-box;}
+
+/* ── page chrome ─────────────────────────────────────────────────── */
+.pg h1{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;margin:0 0 12px;}
+.pg h2{font-family:"Archivo";font-size:24px;line-height:30px;letter-spacing:-.5px;font-weight:600;margin:0 0 8px;}
+.pg .lede{font-size:15px;line-height:24px;color:var(--pagedim);max-width:80ch;margin:0 0 8px;}
+.pg .lede b,.pg .note b{color:var(--pagefg);font-weight:600;}
+.pg .note{font-size:13px;line-height:20px;color:var(--pagedim);max-width:82ch;margin:8px 0 0;}
+.pgsec{padding:64px 0 0;border-top:1px solid var(--pageln);margin-top:64px;}
+.pgsec:first-of-type{border-top:0;margin-top:0;padding-top:0;}
+.eyebrow{font-family:"Archivo";font-size:11px;line-height:16px;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--pagedim);font-weight:600;margin:0 0 10px;}
+.rail{display:flex;gap:32px;overflow-x:auto;padding:32px 4px 24px;align-items:flex-start;}
+.rail::-webkit-scrollbar{height:10px;}
+.rail::-webkit-scrollbar-thumb{background:var(--pageln);border-radius:5px;}
+.cell{flex:none;width:393px;}
+.cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;}
+.cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
+.cap .rec{color:#5FE3C0;}
+.specrow{display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;align-items:flex-end;}
+.specitem{padding:12px 16px;border:1px solid var(--pageln);border-radius:12px;background:#0C0B0A;}
+.specitem .nm{font-family:"Geist Mono",monospace;font-size:10px;color:var(--pagedim);margin-top:8px;}
+.sw-item{width:100px;}
+.sw-chip{height:44px;border-radius:8px;border:1px solid var(--pageln);}
+.sw-nm{font-size:10px;line-height:14px;color:var(--pagedim);margin-top:5px;font-family:"Geist Mono",monospace;}
+
+/* ═══ DEVICE ═════════════════════════════════════════════════════ */
+.ph{width:393px;height:852px;border-radius:48px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;background:var(--canvas);color:var(--high);
+  border:1px solid var(--phedge);}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.055;mix-blend-mode:overlay;z-index:30;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+.sb{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 24px 8px;position:relative;z-index:14;}
+.sb .clock{font-size:15px;font-weight:600;letter-spacing:-.1px;font-variant-numeric:tabular-nums;}
+.sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:125px;height:36px;border-radius:999px;background:#000;}
+.lightmode .sb .isl{background:#141210;}
+.sb .glyphs{display:flex;align-items:center;gap:4px;}
+.bd{flex:1;overflow:hidden;position:relative;}
+.scroll{position:absolute;inset:0;overflow:hidden;}
+
+/* ═══ TYPE: seven roles, nothing else ════════════════════════════ */
+.t-hero{font-family:"Archivo";font-size:56px;line-height:56px;letter-spacing:-1.4px;font-weight:600;font-variant-numeric:tabular-nums;}
+.t-display{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;}
+.t-title{font-size:22px;line-height:28px;letter-spacing:-.4px;font-weight:600;}
+.t-heading{font-size:17px;line-height:24px;letter-spacing:-.1px;font-weight:600;}
+.t-body{font-size:15px;line-height:20px;letter-spacing:0;font-weight:400;}
+.t-secondary{font-size:13px;line-height:20px;letter-spacing:.1px;font-weight:400;}
+.t-label{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;}
+.mono{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.num{font-variant-numeric:tabular-nums;}
+.w500{font-weight:500;}
+.c-high{color:var(--high);}.c-mid{color:var(--mid);}.c-low{color:var(--low);}
+.c-faint{color:var(--faint);}.c-accent{color:var(--accent);}.c-alarm{color:var(--alarm);}
+.stack{display:flex;flex-direction:column;min-width:0;}
+.spread{display:flex;align-items:center;justify-content:space-between;}
+.grow{flex:1;min-width:0;}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* ═══ TAB BAR ════════════════════════════════════════════════════ */
+.tabbar{flex:none;height:83px;padding-bottom:34px;display:flex;position:relative;z-index:16;
+  background:var(--tabbg);backdrop-filter:blur(24px) saturate(160%);border-top:.5px solid var(--hairline);}
+.tabitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;position:relative;height:49px;}
+.tabitem .tl{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:12px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--low);}
+.tabitem.on .tl{color:var(--high);}
+.tabitem.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--accent);}
+.tabbadge{position:absolute;top:-1px;left:calc(50% + 7px);min-width:16px;height:16px;
+  border-radius:999px;background:var(--alarm);color:var(--onSolid);font-size:11px;font-weight:600;
+  display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
+
+/* ═══ HEADER: dissolving, on every screen, no bar ════════════════ */
+.hdr{padding:8px 16px 0;}
+.hdr .eb{color:var(--low);display:flex;align-items:center;gap:8px;}
+.hdr-col{height:44px;display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:var(--tabbg);backdrop-filter:blur(24px);border-bottom:.5px solid var(--hairline);
+  position:relative;z-index:12;}
+
+/* ═══ ROWS: hairline inset to the text origin, iOS convention ════ */
+.row{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 16px;position:relative;}
+.row.two{min-height:72px;}.row.one{min-height:44px;}
+.row.press{background:var(--surface);}
+.sep{height:1px;background:var(--hairline);margin-left:48px;}
+.sep.full{margin-left:0;}
+.sep.gut{margin-left:16px;margin-right:16px;}
+.sectlab{padding:0 16px;margin:32px 0 8px;color:var(--low);display:flex;align-items:center;gap:8px;}
+.sectlab.tight{margin-top:24px;}
+
+/* ═══ MARKS ══════════════════════════════════════════════════════ */
+.mark{flex:none;border-radius:8px;display:grid;place-items:center;background:var(--overlay);
+  position:relative;overflow:hidden;}
+.mark::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent);}
+.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(0,0,0,.10),transparent);}
+.mark.s16{width:16px;height:16px;border-radius:4px;}
+.mark.s20{width:20px;height:20px;border-radius:4px;}
+.mark.s24{width:24px;height:24px;border-radius:8px;}
+.mark.s32{width:32px;height:32px;border-radius:8px;}
+.mark.s44{width:44px;height:44px;border-radius:12px;}
+.avatar{border-radius:999px;background:var(--overlay);display:grid;place-items:center;
+  font-size:13px;font-weight:600;color:var(--mid);flex:none;width:32px;height:32px;}
+.avatar.s24{width:24px;height:24px;font-size:11px;}
+.avatar.s44{width:44px;height:44px;font-size:15px;}
+
+/* ═══ CHIPS: one shape, 28 tall, 12 pad, radius 8 ════════════════ */
+.chip{height:28px;padding:0 12px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;
+  font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;white-space:nowrap;}
+.chip.solid{background:var(--alarm);color:var(--onSolid);}
+.chip.solid.acc{background:var(--accent);}
+.chip.outline{border:1px solid var(--border);color:var(--mid);}
+.chip.outline.acc{border-color:var(--accent);color:var(--accent);}
+.chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
+.chip.ghost{color:var(--low);padding:0;}
+.chip.file{text-transform:none;letter-spacing:0;font-family:"Geist Mono",monospace;font-weight:400;}
+.seg{display:flex;height:32px;border-radius:999px;background:var(--overlay);padding:2px;}
+.seg i{flex:1;border-radius:999px;display:grid;place-items:center;font-style:normal;
+  font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;color:var(--low);}
+.seg i.on{background:var(--raised);color:var(--high);box-shadow:inset 0 0 0 1px var(--border);}
+
+/* ═══ TIER SELECTOR: symmetric, and it actually selects ══════════ */
+.tiersel{display:flex;gap:8px;padding:0 16px;margin-top:24px;}
+.tcell{flex:1;border-radius:12px;padding:12px;position:relative;overflow:hidden;
+  border:1px solid transparent;background:transparent;}
+.tcell .tbar{position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:999px;}
+.tcell .tn{margin-left:12px;font-variant-numeric:tabular-nums;}
+.tcell .tlb{margin-left:12px;display:block;color:var(--low);}
+.tcell.on{background:var(--surface);border-color:var(--border);}
+.tcell.on .tbar{top:0;bottom:0;}
+.tcell.on .tlb{color:var(--high);}
+.tcell.off .tn{color:var(--mid);}
+
+/* ═══ THE DAY OBJECT ═════════════════════════════════════════════ */
+.arcwrap{position:relative;height:252px;display:grid;place-items:center;margin-top:16px;}
+.daykey{position:absolute;bottom:0;display:flex;align-items:center;gap:8px;}
+.daykey .dot{width:8px;height:8px;border-radius:999px;display:block;}
+.arcglow{position:absolute;width:260px;height:260px;border-radius:999px;
+  background:radial-gradient(circle,rgba(255,90,78,.14) 0%,rgba(255,90,78,0) 62%);}
+.lightmode .arcglow{background:radial-gradient(circle,rgba(200,64,47,.09) 0%,rgba(200,64,47,0) 62%);}
+.arcnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+
+/* ═══ FEED CARD ══════════════════════════════════════════════════ */
+.fcard{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--surface);overflow:hidden;}
+.fcard .tint{position:absolute;top:0;left:0;right:0;height:320px;pointer-events:none;z-index:0;}
+/* the flamboyance: tier colour rising from the bottom edge */
+.beneath{position:absolute;left:0;right:0;bottom:0;height:340px;pointer-events:none;z-index:1;}
+.beneath.u{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(255,120,90,.46) 0%,rgba(255,90,78,.16) 42%,rgba(255,90,78,0) 74%),
+  linear-gradient(0deg,rgba(255,90,78,.16) 0%,rgba(255,90,78,0) 58%);}
+.beneath.b{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(120,240,205,.38) 0%,rgba(95,227,192,.13) 42%,rgba(95,227,192,0) 74%),
+  linear-gradient(0deg,rgba(95,227,192,.12) 0%,rgba(95,227,192,0) 58%);}
+.beneath.c{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(190,182,172,.20) 0%,rgba(167,159,151,.06) 42%,rgba(167,159,151,0) 74%);}
+.lightmode .beneath.u{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(200,64,47,.22) 0%,rgba(200,64,47,.07) 42%,rgba(200,64,47,0) 74%);}
+.lightmode .beneath.b{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(12,125,99,.20) 0%,rgba(12,125,99,.06) 42%,rgba(12,125,99,0) 74%);}
+.fbody{flex:1;padding:16px 16px 0;position:relative;z-index:4;display:flex;flex-direction:column;min-height:0;}
+.fhead{display:flex;align-items:center;gap:12px;}
+.fmid{margin-top:24px;}
+/* the action rail: vertical, bottom right, Instagram's shape */
+.frail{position:absolute;right:16px;bottom:16px;z-index:6;display:flex;flex-direction:column;
+  align-items:center;gap:12px;}
+.fbtn{display:flex;flex-direction:column;align-items:center;gap:4px;width:64px;}
+.fbtn .ring{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;
+  background:var(--overlay);border:1px solid var(--border);}
+.fbtn.pri .ring{background:var(--high);border-color:var(--high);}
+.fbtn .cap2{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;color:var(--mid);}
+.fbtn.pri .cap2{color:var(--high);}
+.fstrip{position:relative;z-index:5;padding:0 96px 16px 16px;display:flex;align-items:center;gap:8px;}
+.quote{border-left:2px solid var(--border);padding-left:12px;}
+.why{border-radius:12px;padding:12px;background:rgba(255,255,255,.04);}
+.lightmode .why{background:rgba(0,0,0,.04);}
+.quote.acc{border-left-color:var(--accent);}
+.kv{display:flex;justify-content:space-between;padding:4px 0;}
+
+/* ═══ SHEETS ═════════════════════════════════════════════════════ */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.58);z-index:18;}
+.lightmode .scrim{background:rgba(26,23,20,.32);}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:var(--raised);
+  border-radius:16px 16px 0 0;padding:0 16px 34px;overflow:hidden;}
+.sheet .swash{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
+.sheet>*{position:relative;z-index:1;}
+.grab{width:36px;height:5px;border-radius:999px;background:var(--border);margin:8px auto 16px;}
+.composer{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface);}
+.sendbtn{width:44px;height:44px;border-radius:999px;background:var(--high);display:grid;place-items:center;flex:none;}
+.bigbtn{height:48px;border-radius:12px;display:grid;place-items:center;font-size:15px;font-weight:600;letter-spacing:-.1px;}
+.bigbtn.pri{background:var(--high);color:var(--canvas);}
+.bigbtn.sec{border:1px solid var(--border);color:var(--high);}
+
+/* ═══ ACTIVITY ═══════════════════════════════════════════════════ */
+.scard{margin:0 16px 12px;background:var(--surface);border-radius:16px;padding:16px;
+  position:relative;overflow:hidden;border:1px solid var(--hairline);}
+.scard .tint{position:absolute;top:0;left:0;width:220px;height:130px;pointer-events:none;z-index:0;}
+.scard>*{position:relative;z-index:2;}
+.snums{display:flex;gap:32px;margin-top:16px;}
+.sparks{display:flex;align-items:flex-end;gap:3px;height:24px;}
+.sparks i{flex:1;background:var(--accent);border-radius:0;min-height:2px;opacity:.85;}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;}
+.tile{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:12px;}
+.acts{display:flex;gap:12px;justify-content:center;margin-top:24px;}
+.boardhead{display:flex;align-items:center;gap:12px;padding:24px 16px;position:relative;overflow:hidden;}
+.boardhead .tint{position:absolute;top:0;left:0;right:0;pointer-events:none;z-index:0;}
+.act{width:44px;height:44px;border-radius:999px;background:var(--overlay);
+  border:1px solid var(--border);display:grid;place-items:center;}
+.statusdot{width:8px;height:8px;border-radius:999px;flex:none;}
+.statusdot.live{background:var(--accent);}
+.statusdot.bad{background:var(--alarm);}
+.statusdot.off{border:1px solid var(--border);}
+
+/* ═══ LATER STRIP: preserved from the current implementation ═════ */
+.strip{display:flex;gap:8px;padding:16px 16px 0;}
+.spill{height:44px;border-radius:12px;border:1px solid var(--hairline);background:var(--surface);
+  display:flex;align-items:center;gap:8px;padding:0 12px;}
+.spill.on{border-color:var(--accent);background:var(--overlay);}
+.spill .lb{font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;color:var(--high);}
+
+/* ═══ CONTROLS ═══════════════════════════════════════════════════ */
+.sw{width:51px;height:31px;border-radius:999px;background:var(--overlay);padding:2px;display:flex;flex:none;
+  box-shadow:inset 0 0 0 1px var(--hairline);}
+.sw i{width:27px;height:27px;border-radius:999px;background:var(--faint);display:block;}
+.sw.on{background:var(--accent);box-shadow:none;}
+.sw.on i{margin-left:20px;background:var(--onSolid);}
+.bubble{min-width:20px;height:20px;border-radius:999px;background:var(--alarm);color:var(--onSolid);
+  font-size:11px;font-weight:600;display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
+.spin{width:20px;height:20px;border-radius:999px;border:2px solid var(--border);border-top-color:var(--accent);}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="i-sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M21.4 12H19M5 12H2.6M18.6 5.4l-1.7 1.7M7.1 16.9l-1.7 1.7M18.6 18.6l-1.7-1.7M7.1 7.1L5.4 5.4"/></g>
+  <g id="i-cards"><rect x="3" y="7.5" width="14" height="13" rx="2.6"/><path d="M7.2 4.4h10.4a2.6 2.6 0 0 1 2.6 2.6v10.2"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 6.8V12l3.6 2.1"/></g>
+  <g id="i-pulse"><path d="M2.8 12h4l2.4-6.4 4.4 12.8L16 12h5.2"/></g>
+  <g id="i-user"><circle cx="12" cy="8.2" r="4"/><path d="M4.2 20.4a8.2 8.2 0 0 1 15.6 0"/></g>
+  <g id="i-ext"><path d="M14 4h6v6M20 4l-8.6 8.6"/><path d="M18 14.4V19a1.6 1.6 0 0 1-1.6 1.6H5A1.6 1.6 0 0 1 3.4 19V7.6A1.6 1.6 0 0 1 5 6h4.6"/></g>
+  <g id="i-refresh"><path d="M20.4 11.2A8.4 8.4 0 1 0 18 17.6"/><path d="M20.8 5.6v6h-6"/></g>
+  <g id="i-filter"><path d="M3.6 5.6h16.8M6.8 12h10.4M10.4 18.4h3.2"/></g>
+  <g id="i-plus"><path d="M12 5.2v13.6M5.2 12h13.6"/></g>
+  <g id="i-chev"><path d="M9.4 5.6L15.8 12l-6.4 6.4"/></g>
+  <g id="i-check"><path d="M4.8 12.6l4.8 4.8L19.2 7.8"/></g>
+  <g id="i-reply"><path d="M9 6.4L3.4 12 9 17.6"/><path d="M3.4 12h9.2a8 8 0 0 1 8 8v.6"/></g>
+  <g id="i-snooze"><circle cx="12" cy="13" r="8"/><path d="M12 9.4V13l2.6 1.6M9 2.6h6"/></g>
+  <g id="i-more"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></g>
+  <g id="i-send"><path d="M21 3L10.5 13.5M21 3l-6.6 18-3.9-7.5L3 9.6 21 3Z"/></g>
+  <g id="i-cal"><rect x="3.4" y="5" width="17.2" height="16" rx="2.6"/><path d="M3.4 10h17.2M8 3v4M16 3v4"/></g>
+  <g id="i-arch"><path d="M3.4 7.4h17.2v12a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6v-12Z"/><path d="M2.6 3.6h18.8v3.8H2.6zM9.6 12h4.8"/></g>
+</defs></svg>
+
+<div class="pg">
+
+<h1>v4, built on what the backend actually does</h1>
+<p class="lede">Same discipline as v2: <b>393&times;852, 1 CSS pixel = 1 iOS point, no scale factor.</b> What changed is everything the review asked for. v2 is untouched and still on disk for comparison.</p>
+<p class="note"><b>No header bar on any screen.</b> A dissolving title and a persistent bar were doing the same job twice. <b>Warm palette in both modes</b>, and light returns to the Warm Sand canvas the project already owns. <b>The tier row is a real selector</b> that swaps the list beneath it. <b>Tier colour arrives as a glow from beneath</b> rather than a left edge line. <b>Actions are a vertical rail bottom right</b>, and each one opens a source-native sheet instead of committing blind. No divider cards, no progress scroller, and You loses the AI section.</p>
+
+<div class="specrow">
+  <div class="specitem"><div class="t-hero">56</div><div class="nm">hero &middot; 56/56/&minus;1.4 &middot; Archivo 600</div></div>
+  <div class="specitem"><div class="t-display">Display 34</div><div class="nm">display &middot; 34/40/&minus;0.7</div></div>
+  <div class="specitem"><div class="t-title">Title 22</div><div class="nm">title &middot; 22/28/&minus;0.4</div></div>
+  <div class="specitem"><div class="t-heading">Heading 17</div><div class="nm">heading &middot; 17/24/&minus;0.1 &middot; 600</div></div>
+  <div class="specitem"><div class="t-body">Body 15</div><div class="nm">body &middot; 15/20/0 &middot; 400</div></div>
+  <div class="specitem"><div class="t-secondary c-mid">Secondary 13</div><div class="nm">secondary &middot; 13/20/+0.1</div></div>
+  <div class="specitem"><div class="t-label c-low">Label 11</div><div class="nm">label &middot; 11/16/+0.8 &middot; caps</div></div>
+  <div class="specitem"><div class="mono t-secondary c-mid">10:30 &middot; 2h &middot; #4821</div><div class="nm">Geist Mono &middot; tabular &middot; machine values only</div></div>
+</div>
+
+<div class="specrow">
+  <div class="sw-item"><div class="sw-chip" style="background:#0C0B0A"></div><div class="sw-nm">canvas 0C0B0A</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#151311"></div><div class="sw-nm">surface 151311</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#1D1A17"></div><div class="sw-nm">raised 1D1A17</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#26221E"></div><div class="sw-nm">overlay 26221E</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#2E2A26"></div><div class="sw-nm">hairline 2E2A26</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#3B352F"></div><div class="sw-nm">border 3B352F</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#A79F97"></div><div class="sw-nm">mid A79F97</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#F5F1EC"></div><div class="sw-nm">high F5F1EC</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#5FE3C0"></div><div class="sw-nm">accent 5FE3C0</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#FF5A4E"></div><div class="sw-nm">alarm FF5A4E</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#F4F1EC"></div><div class="sw-nm">light canvas</div></div>
+</div>
+
+<!-- ══════════ 1 · THE DAY OBJECT ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Decided, and re-encoded</p>
+<h2>The day object</h2>
+<p class="lede">The dual ring is chosen. The review's question was the right one: <b>what did the green and the red actually mean?</b> In v3 they meant two things each. Green was <i>meetings</i> on the outer ring and <i>by you</i> on the inner one. Red was <i>now</i> on the outer ring and <i>urgent</i> on the inner one. Two collisions, on the one element that is supposed to be read at a glance.</p>
+<p class="note"><b>The fix is a rule, not a repaint. The outer ring is time, so it is monochrome. The inner ring is work, so it is the only place a tier colour appears.</b> Outer runs a four-step grey ladder: <span class="mono">hairline</span> for the day still to come, <span class="mono">border</span> for what has gone, <span class="mono">mid</span> for a meeting, and the brightest thing on the screen, <span class="mono">high</span>, for now. Inner is alarm, accent, and neutral in proportion, with a 2pt gap so three tiers are countable rather than merely proportional. <b>And the inner ring needs no legend, because the tier selector immediately below it is the legend</b>, in the same three colours and the same order.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div>
+      <div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="none"></div>
+    <div class="sectlab t-label">Next</div><div class="sep full"></div>
+    <div data-next></div>
+  </div></div>
+</div><p class="cap"><b>Dual ring, re-encoded</b>Outer: 08:00 to 20:00 clockwise, meetings brighter than elapsed, now brightest of all. Inner: 3 urgent, 3 by you, 1 can wait, matching the row underneath exactly. The 56pt count in the middle is a third fact again, not a restatement of either ring.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div>
+      <div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="urgent"></div>
+    <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
+    <div class="sep full"></div>
+    <div data-list="urgent"></div>
+  </div></div>
+</div><p class="cap"><b>With a tier selected</b>Read the alarm arc on the inner ring and the selected cell below it together: same colour, same quantity, same order. That is what makes the ring representative rather than decorative, and it is why the outer ring had to give up its hues.</p></div>
+
+</div></div>
+
+<!-- ══════════ 2 · THE TIER SELECTOR ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Interaction</p>
+<h2>The tier row actually selects</h2>
+<p class="lede">This was the clearest gap. The three counts were symmetric, which is right, but nothing happened when you touched them and nothing showed which was active. <b>Now they are a selector, and the list beneath swaps.</b> Nothing selected shows the meetings. Tap <span class="mono">3 Urgent</span> and the same space lists those three. No scroller, no second screen.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="none"></div>
+    <div class="sectlab t-label">Next</div><div class="sep full"></div>
+    <div data-next></div>
+  </div></div>
+</div><p class="cap"><b>Resting &middot; nothing selected</b>All three cells are transparent, counts at <span class="mono">mid</span>, labels at <span class="mono">low</span>. The list below is the meetings, which is what the screen is for when nothing is pressing.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="urgent"></div>
+    <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
+    <div class="sep full"></div>
+    <div data-list="urgent"></div>
+  </div></div>
+</div><p class="cap"><b>Urgent selected</b>The cell fills to <span class="mono">surface</span>, gains a border, its bar runs the full height, and the label goes to <span class="mono">high</span>. Four signals, only one of which is colour. The list below is now those three items, with the count in the section header.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="byyou"></div>
+    <div class="sectlab t-label">By you <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
+    <div class="sep full"></div>
+    <div data-list="byyou"></div>
+  </div></div>
+</div><p class="cap"><b>By you selected</b>Identical mechanics, accent instead of alarm. Tapping the selected cell again clears it and the meetings come back. The row never scrolls and never grows.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual"></div>
+    <div data-tiersel="canwait"></div>
+    <div class="sectlab t-label">Can wait <span class="grow"></span><span class="mono t-secondary c-low">1 item</span></div>
+    <div class="sep full"></div>
+    <div data-list="canwait"></div>
+    <div style="padding:32px 16px 0"><span class="t-secondary c-low">Nothing else is waiting. 12 things arrived today and went to Later.</span></div>
+  </div></div>
+</div><p class="cap"><b>Can wait selected</b>A one-item list is a one-item list. It is not padded out, and the line underneath says where everything else went, which is the honest version of an empty state.</p></div>
+
+</div></div>
+
+<!-- ══════════ 3 · THE CARD ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Decide &middot; 1 of 3</p>
+<h2>The card</h2>
+<p class="lede">Three treatments of the same item. All three drop the left edge line for <b>a glow rising from beneath in the tier colour</b>, and all three drop the two equal buttons that split the screen in half. What differs is where the actions go.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="fbody">
+      <div class="fhead"><span class="mark s44" data-mark="github"></span>
+        <span class="stack grow"><span class="t-heading">GitHub</span>
+          <span class="mono t-secondary c-low">acme/api &middot; #4821</span></span>
+        <span class="chip solid">Urgent</span></div>
+      <div class="t-display clamp3" style="margin-top:32px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div class="fmid mono t-secondary">
+        <div class="kv"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
+        <div class="sep full"></div>
+        <div class="kv"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
+        <div class="sep full"></div>
+        <div class="kv"><span class="c-low">tests/test_session.py</span><span><span class="c-high">+8</span> <span class="c-low">&minus;2</span></span></div>
+      </div>
+    </div>
+    <div class="frail">
+      <span class="fbtn pri"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
+      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span><span class="cap2">Comment</span></span>
+      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
+    </div>
+    <div class="fstrip"><span class="t-label c-high">Blocking</span>
+      <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span>
+      <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">3 files</span></div>
+  </div></div>
+</div><p class="cap"><b>A &middot; Vertical rail <span class="rec">recommended</span></b>Instagram's shape: 48pt circles stacked bottom right, 16 apart, each with an 11pt caption so the action is never a mystery glyph. The primary is filled accent, the rest are <span class="mono">overlay</span> on a border. Thumb-anchored, and it leaves the full width to the content instead of splitting it.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="fbody">
+      <div class="fhead"><span class="mark s44" data-mark="github"></span>
+        <span class="stack grow"><span class="t-heading">GitHub</span>
+          <span class="mono t-secondary c-low">acme/api &middot; #4821</span></span>
+        <span class="chip solid">Urgent</span></div>
+      <div class="t-display clamp3" style="margin-top:32px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div class="fmid mono t-secondary">
+        <div class="kv"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
+        <div class="sep full"></div>
+        <div class="kv"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Blocking</span>
+        <span class="mono t-secondary c-low">2h ago &middot; 3 files</span></div>
+      <div style="display:flex;gap:12px;padding-bottom:16px;position:relative;z-index:5">
+        <span class="bigbtn pri" style="flex:1">Approve</span>
+        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span>
+        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span>
+      </div>
+    </div>
+  </div></div>
+</div><p class="cap"><b>B &middot; Weighted bottom bar</b>One wide primary and two 48pt icon buttons. Fixes the split-in-half problem by weighting rather than by moving, and it keeps the actions on the natural reading path. Less distinctive than A and it eats the full width at the bottom.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="fbody" style="padding-top:16px">
+      <div class="fhead"><span class="mark s44" data-mark="github"></span>
+        <span class="stack grow"><span class="t-heading">GitHub</span>
+          <span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:32px"><span class="chip solid">Urgent</span></div>
+      <div class="t-display clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="flex:1"></div>
+      <div class="mono t-secondary c-low" style="padding-bottom:16px">2h ago &middot; 3 files &middot; +142 &minus;38</div>
+    </div>
+    <div style="position:absolute;left:16px;right:16px;bottom:16px;z-index:6;height:56px;border-radius:16px;
+      background:var(--overlay);border:1px solid var(--border);display:flex;align-items:center;padding:4px;gap:4px">
+      <span style="flex:1;height:48px;border-radius:12px;background:var(--accent);color:var(--onSolid);
+        display:grid;place-items:center;font-size:15px;font-weight:600">Approve</span>
+      <span style="width:48px;height:48px;border-radius:12px;display:grid;place-items:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span>
+      <span style="width:48px;height:48px;border-radius:12px;display:grid;place-items:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span>
+    </div>
+  </div></div>
+</div><p class="cap"><b>C &middot; Floating dock</b>The actions live in one floating capsule over the glow, detached from the edges. Most current-looking. The dock is a second container competing with the card, and the outer radius 16 with 4 padding forces the inner radius to 12, which is the only place in the app with a dock at all.</p></div>
+
+</div></div>
+
+<!-- ══════════ 4 · CARD PER SOURCE ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>A card for every source and tier</h2>
+<p class="lede">Drawn with treatment A. The glow colour is the tier: alarm for urgent, accent for by you, a neutral warm grey for can wait. The source tint stays a wash behind the top edge and never competes with it. <b>What changes per source is the middle block and the three rail actions</b>, taken from the matrix in <span class="mono">lib/actions.ts</span> so nothing reachable today is lost.</p>
+<div class="rail" data-cards></div>
+</div>
+
+<!-- ══════════ 5 · ACTIONS OPEN SOMETHING ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Interactions</p>
+<h2>Every action opens its own tool</h2>
+<p class="lede">Two things changed here. <b>Each sheet now carries its source's tint</b>, so a Gmail sheet and a Slack sheet are not the same black rectangle, which was the monotony the review called out. And <b>every sheet drawn below is an action the backend really performs.</b> The v3 Calendar RSVP is gone: <span class="mono">perform()</span> raises <span class="mono">UnknownAction</span> for accept.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard" data-dim>
+      <div class="tint" data-tint="gmail"></div><div class="beneath u"></div>
+      <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="gmail"></span>
+        <span class="stack grow"><span class="t-heading">Gmail</span><span class="mono t-secondary c-low">nina@brightlaw.co</span></span></div>
+        <div class="t-display clamp2" style="margin-top:32px">Contract redline back from legal</div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:78%">
+      <div class="swash" data-swash="gmail"></div>
+      <div class="grab"></div>
+      <div class="row two" style="padding:0"><span class="avatar s44">NV</span>
+        <span class="grow stack"><span class="t-heading">Nina Vasquez</span>
+          <span class="mono t-secondary c-low">nina@brightlaw.co</span></span>
+        <span class="mono t-secondary c-low">11:04</span></div>
+      <div class="sep full" style="margin:8px 0 0"></div>
+      <div class="t-title" style="margin-top:16px">Contract redline back from legal</div>
+      <div class="t-body c-mid" style="margin-top:16px">Hi Vicky,<br><br>Two changes on the liability cap and one on the termination window. Both need a decision from you before we can counter-sign.<br><br>The cap moved from 12 months of fees to 6, and termination notice is now 60 days rather than 30.</div>
+      <div style="position:absolute;left:16px;right:16px;bottom:34px;display:flex;gap:12px">
+        <span class="bigbtn pri" style="flex:1">Open in Gmail</span>
+        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-snooze"/></svg></span>
+        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span>
+      </div>
+    </div>
+  </div>
+</div><p class="cap"><b>Gmail &middot; Open</b>The whole message, since <span class="mono">body</span> is stored. The primary hands off to Gmail, because that is literally what the action does. <b>No Reply button</b>, and the sheet is red-washed rather than black.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard" data-dim>
+      <div class="tint" data-tint="slack"></div><div class="beneath u"></div>
+      <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="slack"></span>
+        <span class="stack grow"><span class="t-heading">Slack</span><span class="mono t-secondary c-low">#product</span></span></div>
+        <div class="t-display clamp2" style="margin-top:32px">Sam needs a call on the pricing tier</div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:70%">
+      <div class="swash" data-swash="slack"></div>
+      <div class="grab"></div>
+      <div class="spread"><span class="t-heading">#product</span><span class="mono t-secondary c-low">4 in thread</span></div>
+      <div class="sep full" style="margin:16px 0 0"></div>
+      <div style="margin-top:16px;display:flex;gap:12px"><span class="avatar">SO</span>
+        <span class="grow stack"><span class="spread"><span class="t-body w500">Sam Okafor</span><span class="mono t-secondary c-low">25m</span></span>
+          <span class="t-body c-mid" style="margin-top:4px">Can you confirm before the 11:00 call whether we are holding the 3-seat floor? Legal needs it today.</span></span></div>
+      <div style="margin-top:24px;display:flex;gap:12px"><span class="avatar">PR</span>
+        <span class="grow stack"><span class="spread"><span class="t-body w500">Priya Raman</span><span class="mono t-secondary c-low">18m</span></span>
+          <span class="t-body c-mid" style="margin-top:4px">Finance modelled both. 3 is fine.</span></span></div>
+      <div style="position:absolute;left:16px;right:16px;bottom:34px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <span class="chip outline">On it</span><span class="chip outline">Yes, 3 seats</span><span class="chip outline">Give me 10m</span></div>
+        <div class="composer" style="display:flex;align-items:flex-end;gap:12px">
+          <span class="grow stack"><span class="t-body c-faint">Reply to Sam&hellip;</span></span>
+          <span class="sendbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+</div><p class="cap"><b>Slack &middot; Reply</b>The only source with a real reply. <span class="mono">_send</span> posts to the thread using <span class="mono">raw.thread_ts</span>, and an empty reply is rejected server-side, so the send button stays inert until there is text. Quick replies sit above the composer where the thumb already is.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard" data-dim>
+      <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+      <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="github"></span>
+        <span class="stack grow"><span class="t-heading">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+        <div class="t-display clamp2" style="margin-top:32px">Fix the auth race in the session refresh</div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:58%">
+      <div class="swash" data-swash="github"></div>
+      <div class="grab"></div>
+      <div class="t-title">Approve this pull request</div>
+      <div class="t-secondary c-mid" style="margin-top:8px">This submits a review, not a comment. An approval is what unblocks the merge.</div>
+      <div class="sep full" style="margin:16px 0 0"></div>
+      <div class="row two" style="padding:0"><span class="avatar">SO</span>
+        <span class="grow stack"><span class="t-body w500">Sam Okafor</span>
+          <span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div class="sep full"></div>
+      <div class="composer" style="margin-top:16px"><span class="t-body c-faint">Add a note (optional)</span></div>
+      <div style="position:absolute;left:16px;right:16px;bottom:34px">
+        <span class="bigbtn pri" style="display:grid">Approve</span>
+        <span class="bigbtn sec" style="display:grid;margin-top:12px">Open in GitHub</span></div>
+    </div>
+  </div>
+</div><p class="cap"><b>GitHub &middot; Approve</b>The comment in <span class="mono">_approve</span> is worth honouring in the copy: it submits a review rather than posting a comment, because a comment reading "approved" leaves the pull request just as blocked. <b>Request changes is not drawn</b>, since only approve is implemented.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard" data-dim>
+      <div class="tint" data-tint="linear"></div><div class="beneath b"></div>
+      <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="linear"></span>
+        <span class="stack grow"><span class="t-heading">Linear</span><span class="mono t-secondary c-low">ENG-412</span></span></div>
+        <div class="t-display clamp2" style="margin-top:32px">Ship the token layer for dark mode</div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:52%">
+      <div class="swash" data-swash="linear"></div>
+      <div class="grab"></div>
+      <div class="t-title">Snooze until</div>
+      <div class="t-secondary c-mid" style="margin-top:8px">Snoozing touches nothing upstream. It is your decision to look later, not a statement to anyone else.</div>
+      <div class="sep full" style="margin:16px 0 0"></div>
+      <div class="row" style="padding:0"><span class="t-body grow">This evening</span><span class="mono t-secondary c-low">18:00</span></div>
+      <div class="sep"></div>
+      <div class="row" style="padding:0"><span class="t-body grow">Tomorrow morning</span><span class="mono t-secondary c-low">Fri 09:00</span></div>
+      <div class="sep"></div>
+      <div class="row" style="padding:0"><span class="t-body grow">Next week</span><span class="mono t-secondary c-low">Mon 09:00</span></div>
+      <div class="sep"></div>
+      <div class="row" style="padding:0"><span class="t-body grow">Pick a time</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+      <div class="sep"></div>
+    </div>
+  </div>
+</div><p class="cap"><b>Snooze, on any source</b>The one action that works everywhere, and the only one v3 never drew. The copy is taken from the docstring on <span class="mono">snooze()</span>, because the reassurance that nothing is sent upstream is the whole reason the action feels safe.</p></div>
+
+</div></div>
+
+<!-- ══════════ 6 · LATER ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>Later</h2>
+<p class="lede">Structure preserved exactly as built: <b>one source at a time from the strip</b>, rows streaming in as they arrive, <span class="mono">sender: title</span> with the summary underneath, age on the right, and the footnote that says it is read live and never stored. Only the UI changed. Everything the screen shows today, it still shows.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="later">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="strip" data-strip="gmail"></div>
+    <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
+    <div class="sep full"></div>
+    <div data-later></div>
+  </div></div>
+</div><p class="cap"><b>Later &middot; loaded</b>Rows are 72pt, hairlines inset to the text origin rather than running the full width, which is the iOS convention and the single biggest reason the old list read as primitive. The age column is Geist Mono, tabular, right-aligned, so it forms a real column instead of ragged text.</p></div>
+
+<div class="cell"><div class="ph" data-tab="later">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="strip" data-strip="slack"></div>
+    <div class="sectlab t-label tight">Slack <span class="grow"></span><span class="mono t-secondary c-low">counting&hellip;</span></div>
+    <div class="sep full"></div>
+    <div data-later="slack"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:32px">
+      <span class="spin"></span>
+      <span class="t-secondary c-mid">118 from all sources so far</span>
+      <span class="t-secondary c-low" style="padding:0 48px;text-align:center">Reading every source at once.</span></div>
+  </div></div>
+</div><p class="cap"><b>Later &middot; still streaming</b>The current screen appends batches as they land and shows a running total, because a list that appears only at the end reads as broken. That behaviour is kept, with the count in the section header going to <span class="mono">counting&hellip;</span> so the header does not claim a total it does not have.</p></div>
+
+<div class="cell"><div class="ph" data-tab="later">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="strip" data-strip="linear"></div>
+    <div style="padding:48px 16px 0">
+      <div class="t-title">Nothing waiting here</div>
+      <div class="t-body c-mid" style="margin-top:8px">Everything from Linear either needed you, and is on Your day, or you have already dealt with it.</div>
+    </div>
+  </div></div>
+</div><p class="cap"><b>Later &middot; empty</b>The current copy, kept almost verbatim, with "Home" updated to "Your day". No placeholder rows and no skeleton that resolves into nothing.</p></div>
+
+</div></div>
+
+<!-- ══════════ 7 · ACTIVITY ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>Activity</h2>
+<p class="lede">Two changes. <b>Only connected sources appear</b>, because connection state belongs in You and showing a dead source here made the tab half a settings screen. And <b>the summary numbers were eating the board</b>: a 56pt hero, a row of glyphs and a 2&times;2 tile grid spent about 470pt before a single listing row. Compacted to roughly 290, which hands the difference to the list.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="activity">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Activity</div></div>
+    <div style="height:24px"></div>
+    <div data-activity></div>
+  </div></div>
+</div><p class="cap"><b>Activity &middot; root</b>One card per <i>connected</i> source, each tappable through to its board. The status word is gone and a chevron replaces it, since every card here is connected by definition. Sparkline is the last 30 days; the three numbers are what that source is asking of you.</p></div>
+
+<div class="cell"><div class="ph" data-tab="activity">
+  <div class="bd"><div class="scroll">
+    <div class="hdr-col"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><use href="#i-chev"/></svg>
+      <span class="mark s24" data-mark="github"></span><span class="t-heading grow">GitHub</span>
+      <span class="t-label c-low">30 days</span></div>
+    <div class="boardhead">
+      <div class="tint" data-tint="github" style="height:140px"></div>
+      <div class="stack grow" style="position:relative"><span class="t-display num">12</span>
+        <span class="t-label c-low" style="margin-top:4px">Open pull requests</span></div>
+      <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
+      <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span>
+    </div>
+    <div class="sep full"></div>
+    <div class="row one"><span class="t-body grow">Reviews on you</span>
+      <span class="t-secondary c-low">2 blocking</span><span class="mono t-heading" style="width:48px;text-align:right">3</span></div>
+    <div class="sep gut"></div>
+    <div class="row one"><span class="t-body grow">Merged</span>
+      <span class="t-secondary c-low">+4 vs June</span><span class="mono t-heading" style="width:48px;text-align:right">28</span></div>
+    <div class="sep gut"></div>
+    <div class="row one"><span class="t-body grow">Your pull requests</span>
+      <span class="t-secondary c-low">1 has conflicts</span><span class="mono t-heading" style="width:48px;text-align:right">5</span></div>
+    <div class="sep gut"></div>
+    <div class="row one"><span class="t-body grow">Commits</span>
+      <span class="t-secondary c-low">across 6 repos</span><span class="mono t-heading" style="width:48px;text-align:right">214</span></div>
+    <div class="sep full"></div>
+    <div class="sectlab t-label tight">Busiest repositories</div><div class="sep full"></div>
+    <div data-break></div>
+  </div></div>
+</div><p class="cap"><b>Activity &middot; board</b>Every <span class="mono">headline</span> stat keeps its <span class="mono">label</span>, <span class="mono">detail</span> and <span class="mono">value</span>, on one 44pt line instead of a three-line tile. Values are Geist Mono in a fixed 48pt column so they align whatever their width. The saving goes straight into the list, which is what the tab is for.</p></div>
+
+<div class="cell"><div class="ph" data-tab="activity">
+  <div class="bd"><div class="scroll">
+    <div class="hdr-col"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><use href="#i-chev"/></svg>
+      <span class="mark s24" data-mark="calendar"></span><span class="t-heading grow">Calendar</span>
+      <span class="t-label c-low">30 days</span></div>
+    <div class="boardhead">
+      <div class="tint" data-tint="calendar" style="height:140px"></div>
+      <div class="stack grow" style="position:relative"><span class="t-display num">38h</span>
+        <span class="t-label c-low" style="margin-top:4px">In meetings</span></div>
+      <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
+      <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal"/></svg></span>
+    </div>
+    <div class="sep full"></div>
+    <div class="row one"><span class="t-body grow">Meetings</span>
+      <span class="t-secondary c-low">2.8 a day</span><span class="mono t-heading" style="width:48px;text-align:right">62</span></div>
+    <div class="sep gut"></div>
+    <div class="row one"><span class="t-body grow">Longest day</span>
+      <span class="t-secondary c-low">Tue 15 Jul</span><span class="mono t-heading" style="width:48px;text-align:right">6h</span></div>
+    <div class="sep gut"></div>
+    <div class="row one"><span class="t-body grow">Organised by you</span>
+      <span class="t-secondary c-low">of 62</span><span class="mono t-heading" style="width:48px;text-align:right">14</span></div>
+    <div class="sep full"></div>
+    <div class="sectlab t-label tight">Most frequent</div><div class="sep full"></div>
+    <div class="row two"><span class="mark s24" data-mark="calendar"></span>
+      <span class="grow stack"><span class="t-body trunc">Weekly product sync</span><span class="t-secondary c-low">every Monday, 60m</span></span>
+      <span class="mono t-secondary c-mid">4</span></div>
+    <div class="sep"></div>
+    <div class="row two"><span class="mark s24" data-mark="calendar"></span>
+      <span class="grow stack"><span class="t-body trunc">1:1 with Sam</span><span class="t-secondary c-low">every Thursday, 30m</span></span>
+      <span class="mono t-secondary c-mid">4</span></div>
+    <div class="sep"></div>
+    <div style="padding:24px 16px 0"><span class="t-secondary c-low">These rows have no url, so they carry no link glyph and no press state. That is the rule the current screen already uses when it withholds the chevron.</span></div>
+  </div></div>
+</div><p class="cap"><b>Activity &middot; a board whose rows do not link</b>Calendar frequency lines are summaries with nowhere to go. They render inert, which is the behaviour already in <span class="mono">SourceDetailScreen</span>. Worth drawing because it is the case that proves the link glyph means something.</p></div>
+
+</div></div>
+
+<!-- ══════════ 8 · YOU ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>You</h2>
+<p class="lede">The AI section is gone. Summarising and ranking is what the product <i>is</i>, so asking permission per source framed the core behaviour as an optional extra. <b>What remains is notifications and connections.</b> There is no "Fix" button: a connection is either live, or it needs connecting.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="you">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+    <div class="sectlab t-label">Notifications</div><div class="sep full"></div>
+    <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
+      <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
+    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
+    <div class="sep full"></div>
+    <div class="sectlab t-label">Connections <span class="bubble">1</span><span class="grow"></span>
+      <span style="display:flex;align-items:center;gap:4px;color:var(--accent)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><use href="#i-plus"/></svg>Add</span></div>
+    <div class="sep full"></div>
+    <div data-conn></div>
+    <div class="row" style="margin-top:24px"><span class="t-body c-mid grow">Sign out</span></div>
+    <div class="sep full"></div>
+  </div></div>
+</div><p class="cap"><b>You</b>Two sections. The notification block is one row, one toggle, one subtext line, with the level appearing only when it is on. The connections bubble counts only what needs action, so an optional source that was never connected never badges.</p></div>
+
+<div class="cell"><div class="ph" data-tab="you">
+  <div class="bd">
+    <div class="scroll">
+      <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+      <div class="sectlab t-label">Notifications</div><div class="sep full"></div>
+      <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
+        <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:52%">
+      <div class="grab"></div>
+      <div class="t-title">Add a connection</div>
+      <div class="t-secondary c-mid" style="margin-top:8px">This opens the provider's own sign-in. Nothing is stored here beyond the connection itself.</div>
+      <div style="height:24px"></div>
+      <div class="sep full"></div>
+      <div class="row" style="padding:0"><span class="mark s24" data-mark="calendar"></span><span class="t-body grow">Google Calendar</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+      <div class="sep"></div>
+      <div class="row" style="padding:0"><span class="mark s24" data-mark="gdocs"></span><span class="t-body grow">Google Docs</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+      <div class="sep"></div>
+    </div>
+  </div>
+</div><p class="cap"><b>Add a connection</b>Only sources that are not connected. The note about the provider's own sign-in lives here, where it is relevant, rather than at the bottom of a whole tab.</p></div>
+
+</div></div>
+
+<!-- ══════════ 9 · WARM LIGHT ══════════ -->
+<div class="pgsec">
+<p class="eyebrow">The alternate</p>
+<h2>Light, and warm</h2>
+<p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0C7D63</span> and the alarm to <span class="mono">#C8402F</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
+<div class="rail lightmode">
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="arcwrap" data-day="dual" data-light="1"></div>
+    <div data-tiersel="urgent"></div>
+    <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
+    <div class="sep full"></div>
+    <div data-list="urgent"></div>
+  </div></div>
+</div><p class="cap"><b>Your day, warm light</b>Same geometry, same type, same spacing. Only the ladder and the two hues move, and the ladder is warm at every step.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="fbody">
+      <div class="fhead"><span class="mark s44" data-mark="github"></span>
+        <span class="stack grow"><span class="t-heading">GitHub</span>
+          <span class="mono t-secondary c-low">acme/api &middot; #4821</span></span>
+        <span class="chip solid">Urgent</span></div>
+      <div class="t-display clamp3" style="margin-top:32px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div class="fmid mono t-secondary">
+        <div class="kv"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
+        <div class="sep full"></div>
+        <div class="kv"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
+      </div>
+    </div>
+    <div class="frail">
+      <span class="fbtn pri"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
+      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span><span class="cap2">Comment</span></span>
+      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
+    </div>
+    <div class="fstrip"><span class="t-label c-high">Blocking</span>
+      <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span></div>
+  </div></div>
+</div><p class="cap"><b>Feed card, warm light</b>The glow from beneath drops from 30% to 16%, because a light field carries a tint much further before it stops reading as a glow and starts reading as a fill.</p></div>
+
+<div class="cell"><div class="ph" data-tab="later">
+  <div class="bd"><div class="scroll">
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="strip" data-strip="gmail"></div>
+    <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
+    <div class="sep full"></div>
+    <div data-later></div>
+  </div></div>
+</div><p class="cap"><b>Later, warm light</b>On sand, the inset hairline does all the separating work and no row needs a box, a border or a fill.</p></div>
+
+</div></div>
+
+</div>
+
+<script>
+/* ═══ brand marks, Simple Icons paths (CC0) ═══════════════════════ */
+const MARKS={
+ github:{c:'#A371F7',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
+ slack:{c:'#36C5F0',p:'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z'},
+ linear:{c:'#5E6AD2',p:'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z'},
+ gmail:{c:'#EA4335',p:'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z'},
+ gdocs:{c:'#4285F4',p:'M14 2H6.4C5.1 2 4 3.1 4 4.4v15.2C4 20.9 5.1 22 6.4 22h11.2c1.3 0 2.4-1.1 2.4-2.4V8l-6-6zm-1 7V3.6L18.4 9H13zM8 12.4h8v1.4H8v-1.4zm0 3.2h8V17H8v-1.4zM8 9h4v1.4H8V9z'},
+ calendar:{c:'#34A853',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
+};
+const TINT={github:'163,113,247',slack:'54,197,240',linear:'94,106,210',
+            gmail:'234,67,53',gdocs:'66,133,244',calendar:'52,168,83'};
+function markSvg(id,box){const m=MARKS[id];return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="${m.c}"><path d="${m.p}"/></svg>`;}
+function paint(root=document){
+ root.querySelectorAll('[data-mark]').forEach(el=>{
+  if(el.dataset.done)return; el.dataset.done=1;
+  const box=el.classList.contains('s44')?24:el.classList.contains('s32')?18:
+            el.classList.contains('s24')?14:el.classList.contains('s20')?12:11;
+  el.innerHTML=markSvg(el.dataset.mark,box);});
+ root.querySelectorAll('[data-swash]').forEach(el=>{
+  el.style.background=`linear-gradient(180deg,rgba(${TINT[el.dataset.swash]},.18),rgba(${TINT[el.dataset.swash]},0) 100%)`;});
+ root.querySelectorAll('[data-tint]').forEach(el=>{
+  el.style.background=`radial-gradient(120% 80% at 12% 0%,rgba(${TINT[el.dataset.tint]},.16),rgba(${TINT[el.dataset.tint]},0) 60%)`;});
+}
+
+/* ═══ the day object ══════════════════════════════════════════════
+   Ring = THE DAY, 08:00 to 20:00 clockwise. The number inside is what
+   needs you, which is a different fact from the ring, so the hero is
+   never a restatement of the tier row directly below it.            */
+const DAY_START=8,DAY_H=12,NOW=9+41/60;
+const MEETINGS=[[10.5,11.25],[14,14.5],[16,17]];
+const frac=h=>(h-DAY_START)/DAY_H;
+function dayDual(light){
+ const acc=light?'#0C7D63':'#5FE3C0', alm=light?'#C8402F':'#FF5A4E';
+ const track=light?'#E2DCD2':'#2E2A26';
+ const past =light?'#D2CABE':'#3B352F';
+ const quiet=light?'#B8AFA2':'#57504A';   // can wait: neutral, but still countable
+ const meet =light?'#5E564E':'#A79F97';
+ const now  =light?'#1A1714':'#F5F1EC';
+ const R1=88,R2=66,C1=2*Math.PI*R1,C2=2*Math.PI*R2;
+ const arc=(r,c,from,to,col,w)=>{const a=from*c,l=Math.max(0,(to-from)*c);
+  return `<circle cx="96" cy="96" r="${r}" fill="none" stroke="${col}" stroke-width="${w}"
+   stroke-dasharray="${l} ${c-l}" stroke-dashoffset="${-a}" transform="rotate(-90 96 96)"/>`;};
+ let s=`<circle cx="96" cy="96" r="${R1}" fill="none" stroke="${track}" stroke-width="5"/>`;
+ s+=arc(R1,C1,0,frac(NOW),past,5);
+ MEETINGS.forEach(([a,b])=>{s+=arc(R1,C1,frac(a),frac(b),meet,5);});
+ s+=`<g transform="rotate(${frac(NOW)*360} 96 96)"><circle cx="96" cy="8" r="5" fill="${now}"/></g>`;
+ s+=`<circle cx="96" cy="96" r="${R2}" fill="none" stroke="${track}" stroke-width="16"/>`;
+ const g=0.008;
+ s+=arc(R2,C2,0,3/7-g,alm,16)+arc(R2,C2,3/7,6/7-g,acc,16)+arc(R2,C2,6/7,1-g,quiet,16);
+ return `<svg width="192" height="192" viewBox="0 0 192 192">${s}</svg>`;
+}
+document.querySelectorAll('[data-day]').forEach(el=>{
+ const light=el.dataset.light;
+ el.innerHTML=`<div class="arcglow"></div>
+  <div style="position:relative">${dayDual(light)}</div>
+  <div class="arcnum"><div class="t-hero">7</div>
+   <div class="t-label c-low" style="margin-top:4px">need you</div></div>
+  <div class="daykey"><span class="t-label c-low">Your day</span>
+   <span class="dot" style="background:var(--mid)"></span><span class="t-label c-low">Meeting</span>
+   <span class="dot" style="background:var(--high)"></span><span class="t-label c-low">Now</span></div>`;
+});
+document.querySelectorAll('[data-daybars]').forEach(el=>{
+ let t='';for(let i=0;i<48;i++){const h=DAY_START+(i/48)*DAY_H;
+  const inMeet=MEETINGS.some(([s,e])=>h>=s&&h<e);
+  const col=Math.abs(h-NOW)<DAY_H/96?'var(--alarm)':inMeet?'var(--accent)':h<NOW?'var(--border)':'var(--hairline)';
+  t+=`<i style="flex:1;height:${inMeet?44:h<NOW?20:12}px;background:${col};display:block"></i>`;}
+ el.outerHTML=t;
+});
+
+/* ═══ the tier selector ═══════════════════════════════════════════ */
+const TIERS=[{k:'urgent',n:3,l:'Urgent',c:'var(--alarm)'},
+             {k:'byyou',n:3,l:'By you',c:'var(--accent)'},
+             {k:'canwait',n:1,l:'Can wait',c:'var(--border)'}];
+document.querySelectorAll('[data-tiersel]').forEach(el=>{
+ const sel=el.dataset.tiersel;
+ el.outerHTML='<div class="tiersel">'+TIERS.map(t=>{
+  const on=t.k===sel;
+  return `<div class="tcell ${on?'on':'off'}"><span class="tbar" style="background:${t.c}"></span>
+   <div class="t-title tn">${t.n}</div><span class="t-label tlb">${t.l}</span></div>`;}).join('')+'</div>';
+});
+
+/* ═══ list rows ═══════════════════════════════════════════════════ */
+const ITEMS={
+ urgent:[
+  {s:'github',t:'Fix the auth race in session refresh',sub:'Sam requested changes and the deploy is blocked',m:'acme/api',age:'2h'},
+  {s:'slack',t:'Sam needs a call on the pricing tier',sub:'Confirm the 3-seat floor before the 11:00 call',m:'#product',age:'25m'},
+  {s:'gmail',t:'Contract redline back from legal',sub:'Two changes on the liability cap need a decision',m:'nina@',age:'1h'}],
+ byyou:[
+  {s:'linear',t:'Ship the token layer for dark mode',sub:'Assigned by Priya, blocks four issues',m:'ENG-412',age:'3d'},
+  {s:'linear',t:'Audit every empty state',sub:'No placeholder rows anywhere',m:'ENG-388',age:'5d'},
+  {s:'calendar',t:'Design review',sub:'3 others, 1 has not replied',m:'10:30',age:'49m'}],
+ canwait:[
+  {s:'gdocs',t:'Priya commented on the pricing section',sub:'Should we lead with the triage story here?',m:'Q3 brief',age:'4h'}],
+};
+function rowHtml(it,tier){
+ const bar=tier==='urgent'?'var(--alarm)':tier==='byyou'?'var(--accent)':null;
+ return `<div class="row two"${bar?` style="box-shadow:inset 3px 0 0 ${bar}"`:''}>
+  <span class="mark s24" data-mark="${it.s}"></span>
+  <span class="grow stack"><span class="t-body trunc">${it.t}</span>
+   <span class="t-secondary c-low trunc">${it.sub}</span></span>
+  <span class="stack" style="align-items:flex-end;gap:2px">
+   <span class="mono t-secondary c-mid">${it.age}</span>
+   <span class="mono t-secondary c-faint" style="font-size:11px">${it.m}</span></span></div>`;
+}
+document.querySelectorAll('[data-list]').forEach(el=>{
+ const k=el.dataset.list;
+ el.outerHTML=ITEMS[k].map(it=>rowHtml(it,k)).join('<div class="sep"></div>')+'<div class="sep"></div>';
+});
+document.querySelectorAll('[data-next]').forEach(el=>{
+ el.outerHTML=`
+ <div class="row two"><span class="mono t-heading c-accent" style="width:52px">10:30</span>
+  <span class="grow stack"><span class="t-body">Design review</span>
+   <span class="t-secondary c-low">3 others &middot; Google Meet</span></span>
+  <span class="mono t-secondary c-low">45m</span></div>
+ <div class="sep" style="margin-left:68px"></div>
+ <div class="row two"><span class="mono t-heading c-mid" style="width:52px">14:00</span>
+  <span class="grow stack"><span class="t-body">1:1 with Sam</span>
+   <span class="t-secondary c-low">recurring &middot; every Thursday</span></span>
+  <span class="mono t-secondary c-low">30m</span></div>
+ <div class="sep full"></div>
+ <div style="padding:16px"><span class="t-secondary c-mid">2h 15m free before 10:30</span></div>`;
+});
+
+/* ═══ Later, preserving the current shape ═════════════════════════ */
+const LATER={
+ gmail:[
+  {a:'Stripe',t:'Your invoice for July is ready',sub:'Receipt for INV-4821, no action needed',age:'2h'},
+  {a:'GitHub',t:'[acme/api] 14 new commits to main',sub:'Digest of everything merged since Tuesday',age:'5h'},
+  {a:'Pangram Pangram',t:'Your licence is confirmed',sub:'Cirka and Gilroy, desktop and app embedding',age:'1d'},
+  {a:'Linear',t:'Weekly project digest',sub:'Design System moved 6 issues to Done',age:'1d'},
+  {a:'Every',t:'The knowledge economy is eating itself',sub:'Newsletter, no reply expected',age:'2d'},
+  {a:'Vercel',t:'Deployment succeeded for productivity-app',sub:'Preview build from branch main',age:'2d'}],
+ slack:[
+  {a:'#design-system',t:'Thread on the icon family decision',sub:'Phosphor won on the fill variant argument',age:'4h'},
+  {a:'#general',t:'Lunch order for Thursday',sub:'You were not mentioned',age:'6h'},
+  {a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d'}],
+};
+document.querySelectorAll('[data-later]').forEach(el=>{
+ const rows=LATER[el.dataset.later||'gmail'];
+ el.outerHTML=rows.map(r=>`
+  <div class="row two"><span class="mark s24" data-mark="${el.dataset.later==='slack'?'slack':'gmail'}"></span>
+   <span class="grow stack">
+    <span class="t-body trunc"><span class="w500">${r.a}:</span> ${r.t}</span>
+    <span class="t-secondary c-low trunc">${r.sub}</span></span>
+   <span class="mono t-secondary c-low">${r.age}</span>
+   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div>`)
+  .join('<div class="sep"></div>')+'<div class="sep"></div>'+
+  `<div style="padding:24px 16px 0"><span class="t-secondary c-low">${rows.length} from ${el.dataset.later==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
+});
+const STRIP=[['gmail','Gmail'],['slack','Slack'],['linear','Linear'],['github','GitHub']];
+document.querySelectorAll('[data-strip]').forEach(el=>{
+ const on=el.dataset.strip;
+ el.innerHTML=STRIP.map(([id,label])=>`<span class="spill${id===on?' on':''}">
+  <span class="mark s16" data-mark="${id}"></span>${id===on?`<span class="lb">${label}</span>`:''}</span>`).join('');
+});
+
+/* ═══ Activity root ═══════════════════════════════════════════════ */
+const SRC=[
+ {id:'github',n:'GitHub',st:'live',a:['47','Events'],b:['12','Open'],c:['3','Yours'],
+  sp:[30,55,40,80,35,100,60,25,45,70,50,85]},
+ {id:'slack',n:'Slack',st:'live',a:['218','Messages'],b:['9','Mentions'],c:['2','Yours'],
+  sp:[60,80,45,30,90,70,100,55,35,65,75,40]},
+ {id:'gmail',n:'Gmail',st:'live',a:['312','Received'],b:['64','Unread'],c:['1','Yours'],
+  sp:[45,60,85,40,70,55,95,50,65,80,35,60]},
+];
+document.querySelectorAll('[data-activity]').forEach(el=>{
+ el.innerHTML=SRC.map(s=>{
+  return `<div class="scard">
+   <div class="tint" style="background:radial-gradient(100% 100% at 0% 0%,rgba(${TINT[s.id]},.14),rgba(${TINT[s.id]},0) 65%)"></div>
+   <div class="spread"><span style="display:flex;gap:12px;align-items:center">
+    <span class="mark s32" data-mark="${s.id}"></span><span class="t-heading">${s.n}</span></span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+   <div class="snums">
+    <div><div class="t-title num">${s.a[0]}</div><div class="t-label c-low">${s.a[1]}</div></div>
+    <div><div class="t-title num">${s.b[0]}</div><div class="t-label c-low">${s.b[1]}</div></div>
+    <div><div class="t-title num c-accent">${s.c[0]}</div><div class="t-label c-low">${s.c[1]}</div></div></div>
+   <div class="sparks" style="margin-top:16px">${s.sp.map(h=>`<i style="height:${h}%"></i>`).join('')}</div></div>`;
+ }).join('');
+});
+document.querySelectorAll('[data-break]').forEach(el=>{
+ const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15']];
+ el.outerHTML=rows.map(([a,b,c])=>`<div class="row two">
+  <span class="mark s24" data-mark="github"></span>
+  <span class="grow stack"><span class="t-body trunc">${a}</span><span class="t-secondary c-low trunc">${b}</span></span>
+  <span class="mono t-secondary c-mid">${c}</span>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div>`)
+  .join('<div class="sep"></div>')+'<div class="sep"></div>';
+});
+
+/* ═══ You, connections ════════════════════════════════════════════ */
+document.querySelectorAll('[data-conn]').forEach(el=>{
+ const rows=[['github','GitHub','live','Syncing · 3 need you'],['slack','Slack','live','Syncing · 2 need you'],
+             ['gmail','Gmail','live','Syncing · 64 in Later'],['linear','Linear','off','Never connected']];
+ el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="row two">
+  <span class="mark s24" data-mark="${id}"></span>
+  <span class="grow stack"><span class="t-body">${n}</span><span class="t-secondary c-low">${sub}</span></span>
+  ${st==='live'?'<span class="statusdot live"></span><span class="t-label c-low">Live</span>'
+              :'<span class="chip outline acc">Connect</span>'}</div>`)
+  .join('<div class="sep"></div>')+'<div class="sep"></div>';
+});
+
+/* ═══ cards, one per source ═══════════════════════════════════════ */
+const CARDS=[
+ {src:'github',name:'GitHub',ctx:'acme/api · #4821',tier:'u',tag:'Urgent',
+  title:'Fix the auth race in the session refresh',
+  body:'Sam requested changes and the deploy to staging is blocked behind it.',
+  mid:`<div class="fmid why"><div class="t-label c-mid">Why this is urgent</div>
+   <div class="t-body c-high" style="margin-top:8px">Changes requested on a pull request you own, and two issues are waiting behind it.</div></div>`,
+  acts:[['Approve','i-check',1],['Comment','i-reply',0],['Snooze','i-snooze',0]],
+  strip:['Blocking','2h ago','#4821'],
+  cap:'<b>GitHub &middot; review</b>Approve and Comment are the only two actions the backend really implements for GitHub, and both are here. The middle block is <span class="mono">reason</span>, a real field that until now only appeared inside the detail sheet. <b>The diff stat from v3 is gone: <span class="mono">FeedRow</span> carries no file list and no line counts, so drawing them was inventing data.</b>'},
+ {src:'slack',name:'Slack',ctx:'#product',tier:'u',tag:'Urgent',
+  title:'Sam needs a call on the pricing tier',
+  body:null,
+  mid:`<div class="fmid quote acc"><div class="spread"><span class="t-body w500">Sam Okafor</span><span class="mono t-secondary c-low">25m ago</span></div>
+   <div class="t-body c-mid clamp3" style="margin-top:4px">Can you confirm before the 11:00 call whether we are holding the 3-seat floor? Legal needs it today.</div></div>`,
+  acts:[['Reply','i-reply',1],['Read','i-check',0],['Snooze','i-snooze',0]],
+  strip:['Mentioned you','25m ago','#product'],
+  cap:'<b>Slack &middot; mention</b>The one source where all three actions hit a real API: <span class="mono">reply</span> posts to the thread, <span class="mono">mark_read</span> calls Slack, <span class="mono">snooze</span> is local. The quote is <span class="mono">body</span>, which we already store.'},
+ {src:'gmail',name:'Gmail',ctx:'nina@brightlaw.co',tier:'u',tag:'Urgent',
+  title:'Contract redline back from legal',
+  body:'Two changes on the liability cap and one on the termination window, both needing a decision from you.',
+  mid:`<div class="fmid" style="display:flex;align-items:center;gap:12px">
+   <span class="avatar">NV</span><span class="stack grow"><span class="t-body w500">Nina Vasquez</span>
+   <span class="mono t-secondary c-low">nina@brightlaw.co</span></span></div>`,
+  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-check',0]],
+  strip:['Waiting on you','1h ago','Gmail'],
+  cap:'<b>Gmail</b><b>No Reply button, because there is no Gmail reply.</b> <span class="mono">_send</span> raises <span class="mono">UnknownAction</span> for anything that is not Slack or GitHub. Open deep-links into Gmail, Snooze is local, Read dismisses locally. Adding a real reply is a backend job, not a drawing job.'},
+ {src:'linear',name:'Linear',ctx:'ENG-412',tier:'b',tag:'By you',
+  title:'Ship the token layer for dark mode',
+  body:'Assigned to you by Priya. Blocks four issues in the Design System project.',
+  mid:`<div class="fmid" style="display:flex;gap:32px">
+   <span class="stack"><span class="t-label c-low">Due</span><span class="t-body" style="margin-top:4px">Today, 18:00</span></span>
+   <span class="stack"><span class="t-label c-low">Project</span><span class="t-body" style="margin-top:4px">Design System</span></span></div>`,
+  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-check',0]],
+  strip:['Due today','assigned 3d ago','ENG-412'],
+  cap:'<b>Linear &middot; by you</b>The accent tier. <span class="mono">actionsFor</span> currently offers Comment here, but <span class="mono">_send</span> rejects Linear, so tapping it would fail. Open and Snooze are what actually work. The middle block is <span class="mono">deadline</span> and <span class="mono">context_chip</span>, both real.'},
+ {src:'calendar',name:'Calendar',ctx:'Google Meet',tier:'b',tag:'By you',
+  title:'Design review',
+  body:null,
+  mid:`<div class="fmid"><div class="t-hero">10:30</div>
+   <div class="t-body c-mid" style="margin-top:8px">45 minutes, starting in 49</div></div>`,
+  acts:[['Open','i-ext',1],['Snooze','i-snooze',0]],
+  strip:['In 49 minutes','45m','10:30–11:15'],
+  cap:'<b>Calendar &middot; rsvp</b><b>Only two actions, because Accept does not exist.</b> <span class="mono">actionsFor</span> returns it and <span class="mono">perform</span> raises <span class="mono">UnknownAction</span>. The v3 RSVP sheet with Yes, Maybe and No was drawing a feature that has not been built.'},
+ {src:'gdocs',name:'Google Docs',ctx:'Q3 positioning brief',tier:'c',tag:'Can wait',
+  title:'Priya commented on the pricing section',
+  body:null,
+  mid:`<div class="fmid quote"><div class="spread"><span class="t-body w500">Priya Raman</span><span class="mono t-secondary c-low">4h ago</span></div>
+   <div class="t-body c-mid clamp3" style="margin-top:4px">Should we lead with the triage story here rather than the integrations list?</div></div>`,
+  acts:[['Open','i-ext',0],['Snooze','i-snooze',0],['Read','i-check',0]],
+  strip:['No deadline','4h ago','1 of 2 threads'],
+  cap:'<b>Google Docs &middot; can wait</b>The quietest tier: a neutral glow rather than a hue, a ghost chip, and <b>no filled button at all</b>. Reply is offered by <span class="mono">actionsFor</span> and rejected by the backend, so it is not drawn.'},
+];
+const cardsRail=document.querySelector('[data-cards]');
+if(cardsRail) cardsRail.innerHTML=CARDS.map(c=>`
+ <div class="cell"><div class="ph" data-tab="feed"><div class="bd"><div class="fcard">
+  <div class="tint" data-tint="${c.src}"></div><div class="beneath ${c.tier}"></div>
+  <div class="fbody">
+   <div class="fhead"><span class="mark s44" data-mark="${c.src}"></span>
+    <span class="stack grow"><span class="t-heading">${c.name}</span>
+     <span class="mono t-secondary c-low">${c.ctx}</span></span>
+    <span class="chip ${c.tier==='u'?'solid':c.tier==='b'?'outline acc':'ghost'}">${c.tag}</span></div>
+   <div class="t-display clamp3" style="margin-top:32px">${c.title}</div>
+   ${c.body?`<div class="t-body c-mid clamp3" style="margin-top:16px">${c.body}</div>`:''}
+   ${c.mid}
+  </div>
+  <div class="frail">${c.acts.map(([l,i,pri])=>`
+   <span class="fbtn${pri?' pri':''}"><span class="ring">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${pri?'var(--canvas)':'var(--high)'}"
+     stroke-width="${pri?2.2:1.8}" stroke-linecap="round" stroke-linejoin="round"><use href="#${i}"/></svg></span>
+    <span class="cap2">${l}</span></span>`).join('')}</div>
+  <div class="fstrip"><span class="t-label c-high">${c.strip[0]}</span>
+   <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">${c.strip[1]}</span>
+   <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">${c.strip[2]}</span></div>
+ </div></div></div><p class="cap">${c.cap}</p></div>`).join('');
+
+/* ═══ status bar + tab bar, injected so every phone is identical ══ */
+const SBGLYPH=`<span class="glyphs">
+ <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+ <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 11.4 6.3 8.9a3.4 3.4 0 0 1 4.4 0l-2.2 2.5Z"/><path d="M8.5 4.4c1.9 0 3.7.7 5 2l1.5-1.7A9.4 9.4 0 0 0 8.5 2 9.4 9.4 0 0 0 2 4.7l1.5 1.7a7.4 7.4 0 0 1 5-2Z"/><path d="M8.5 7.2c1.1 0 2.2.4 3 1.2l1.4-1.6a6.6 6.6 0 0 0-8.8 0l1.4 1.6a4.4 4.4 0 0 1 3-1.2Z"/></svg>
+ <svg width="27" height="13" viewBox="0 0 27 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.6" stroke="currentColor" stroke-opacity=".45"/><rect x="2" y="2" width="16" height="9" rx="2.2" fill="currentColor"/><path d="M24.5 4.6a2.4 2.4 0 0 1 0 3.8V4.6Z" fill="currentColor" fill-opacity=".45"/></svg>
+</span>`;
+const TABS=[['day','Day','i-sun'],['feed','Feed','i-cards'],['later','Later','i-clock'],
+            ['activity','Activity','i-pulse'],['you','You','i-user']];
+document.querySelectorAll('.ph').forEach(ph=>{
+ const cur=ph.dataset.tab;
+ ph.insertAdjacentHTML('afterbegin',
+  `<div class="grain"></div><div class="sb"><span class="isl"></span>
+   <span class="clock">9:41</span>${SBGLYPH}</div>`);
+ ph.insertAdjacentHTML('beforeend','<div class="tabbar">'+TABS.map(([id,label,icon])=>{
+  const on=id===cur;
+  return `<div class="tabitem${on?' on':''}">
+   <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="${on?'var(--high)':'var(--low)'}"
+    stroke-width="${on?2.2:1.6}" stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"/></svg>
+   <span class="tl">${label}</span>${id==='feed'?'<span class="tabbadge">3</span>':''}</div>`;}).join('')+'</div>');
+});
+document.querySelectorAll('[data-dim]').forEach(el=>el.style.filter='brightness(.5)');
+paint();
+</script>
