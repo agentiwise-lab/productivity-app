@@ -93,6 +93,7 @@ export function LaterScreen({ api }: { api: ApiClient }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.stripBox}
         contentContainerStyle={styles.strip}
       >
         {SOURCES.map((entry) => {
@@ -171,11 +172,15 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   strip: {
     flexDirection: 'row',
+    // Without this the pills stretch to the scroll view's full height, because
+    // a horizontal ScrollView stretches its children on the cross axis.
+    alignItems: 'center',
     gap: s(6),
     paddingHorizontal: s(13),
     paddingTop: s(9),
     paddingBottom: s(3),
   },
+  stripBox: { flexGrow: 0, flexShrink: 0 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
