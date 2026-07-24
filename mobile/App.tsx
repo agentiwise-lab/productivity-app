@@ -141,6 +141,10 @@ function Shell() {
   const [sourcesFailed, setSourcesFailed] = useState(false);
   const [loadingSources, setLoadingSources] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  // The calendar loads on its own track, separate from the feed. Day used the
+  // feed's loading flag, so the moment the feed arrived it decided the calendar
+  // was empty and flashed "no meetings" before the calendar had answered.
+  const [dayLoading, setDayLoading] = useState(true);
   const [dashboard, setDashboard] = useState<SourceDashboard | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
 
@@ -189,6 +193,8 @@ function Shell() {
     } catch {
       // An unreadable calendar leaves the ring empty rather than inventing a
       // schedule, which would make the free-time figure a lie.
+    } finally {
+      setDayLoading(false);
     }
   }, []);
 
@@ -352,6 +358,7 @@ function Shell() {
               <YourDayScreen
                 rows={rows}
                 loading={loading}
+                dayLoading={dayLoading}
                 stale={stale}
                 fetchedAt={fetchedAt}
                 meetings={meetings}
@@ -364,7 +371,10 @@ function Shell() {
               />
             )}
           </Tab.Screen>
-          <Tab.Screen name="Feed" options={{ title: 'Feed' }}>
+          {/* The route stays "Feed" so its glyph and navigation keep resolving;
+              only the label the user reads changes. These are things to act on,
+              not a feed to scroll. */}
+          <Tab.Screen name="Feed" options={{ title: 'To-dos' }}>
             {() => (
               <FeedScreen
                 rows={rows}

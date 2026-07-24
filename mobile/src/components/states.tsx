@@ -115,38 +115,6 @@ export function Clear({
   );
 }
 
-/**
- * The empty state of the meetings section on Day, which is a different claim
- * from an empty feed.
- *
- * "You are clear for today" was appearing here with urgent and by-EOD items
- * still waiting in the ring directly above it, because the meetings list being
- * empty is not the day being empty. This talks about the calendar, and then, if
- * anything still needs the reader, points them at it rather than at Later.
- */
-export function NoMeetingsLeft({
-  counts,
-}: {
-  counts: { urgent: number; byEod: number; canWait: number };
-}) {
-  const pressing = counts.urgent + counts.byEod;
-  const total = pressing + counts.canWait;
-  const body =
-    total === 0
-      ? 'Nothing on your calendar, and nothing waiting on you either.'
-      : pressing > 0
-        ? `Nothing on your calendar. ${line(counts)} still on you: pick a category above.`
-        : `Nothing on your calendar. ${counts.canWait} can wait, above.`;
-  return <Explain title="No meetings left today" body={body} top={space.lg} />;
-}
-
-function line(counts: { urgent: number; byEod: number }): string {
-  const parts: string[] = [];
-  if (counts.urgent) parts.push(`${counts.urgent} urgent`);
-  if (counts.byEod) parts.push(`${counts.byEod} by end of day`);
-  return parts.join(', ');
-}
-
 export function NothingConnected({ onConnect }: { onConnect: () => void }) {
   return (
     <Explain

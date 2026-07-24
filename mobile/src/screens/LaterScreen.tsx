@@ -163,9 +163,11 @@ export function LaterScreen({
           count={loading ? null : `${rows.length} items`}
         />
 
-        {rows.map((row) => (
+        {/* `source_ref` is a thread id, and a thread with two unread messages
+            arrives twice, so the index keeps the key unique. */}
+        {rows.map((row, index) => (
           <Row
-            key={row.source_ref}
+            key={`${row.source_ref}-${index}`}
             category="later"
             leading={<BrandMark source={row.source} size={32} />}
             title={

@@ -27,7 +27,7 @@ import {
 import { Row } from '../components/ListRow';
 import { BrandMark } from '../components/BrandMark';
 import { SectionLabel, T } from '../components/ui';
-import { Clear, NoMeetingsLeft, NothingConnected, Skeleton, StaleBanner } from '../components/states';
+import { Clear, NothingConnected, Skeleton, StaleBanner } from '../components/states';
 import { ago, deadlineLabel } from '../lib/time';
 import { listSubtitle, primaryLine } from '../lib/rowText';
 import type { FeedRow } from '../api/types';
@@ -37,6 +37,9 @@ const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 interface Props {
   rows: FeedRow[];
   loading: boolean;
+  /** The calendar's own loading, so the meetings section shows a skeleton until
+   *  it has answered rather than flashing "no meetings" while it is still out. */
+  dayLoading: boolean;
   stale: boolean;
   fetchedAt: Date | null;
   meetings: Meeting[];
@@ -51,6 +54,7 @@ interface Props {
 export function YourDayScreen({
   rows,
   loading,
+  dayLoading,
   stale,
   fetchedAt,
   meetings,
@@ -96,6 +100,13 @@ export function YourDayScreen({
     return meetings
       .filter((meeting) => meeting.end > now)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [meetings]);
+
+  // Only today's meetings count toward the summary, in the device's own day: the
+  // calendar window can spill an hour either side of midnight.
+  const todayMeetings = useMemo(() => {
+    const today = new Date().toDateString();
+    return meetings.filter((m) => m.start.toDateString() === today);
   }, [meetings]);
 
   const heldBack = rows.length - live.length;
@@ -163,17 +174,39 @@ export function YourDayScreen({
                   ))
                 )}
               </>
+            ) : dayLoading && meetings.length === 0 ? (
+              // The calendar has not answered yet: a skeleton, never an early
+              // "no meetings" that a moment later turns out to be wrong.
+              <>
+                <SectionLabel label="Today" />
+                <Skeleton rows={2} />
+              </>
             ) : (
               <>
-                {/* No heading over an empty section. "Next" above "You are
-                    clear for today" is a label for a list that is not there. */}
-                {ahead.length > 0 || loading ? <SectionLabel label="Next" /> : null}
-                {loading && meetings.length === 0 ? (
-                  <Skeleton rows={2} />
-                ) : ahead.length === 0 ? (
-                  <NoMeetingsLeft counts={counts} />
-                ) : (
+                {/* Always a plain summary of the day, whether or not anything is
+                    left on it: how many meetings today, and what is next. When
+                    the calendar is clear but items remain, it points at the
+                    categories above rather than leaving the screen blank. */}
+                <View
+                  style={{
+                    paddingHorizontal: space.md,
+                    marginTop: space.lg,
+                    marginBottom: space.xs,
+                  }}
+                >
+                  <T role="body" tone="mid">
+                    {daySummary(todayMeetings, ahead)}
+                  </T>
+                  {ahead.length === 0 ? (
+                    <T role="secondary" tone="low" style={{ marginTop: space.xs }}>
+                      {workPrompt(counts)}
+                    </T>
+                  ) : null}
+                </View>
+
+                {ahead.length > 0 ? (
                   <>
+                    <SectionLabel label="Next" tight />
                     {ahead.map((meeting, index) => (
                       <Row
                         key={`${meeting.title}-${index}`}
@@ -196,13 +229,8 @@ export function YourDayScreen({
                         meta={duration(meeting)}
                       />
                     ))}
-                    <View style={{ padding: space.md }}>
-                      <T role="secondary" tone="mid">
-                        {freeLine(ahead)}
-                      </T>
-                    </View>
                   </>
-                )}
+                ) : null}
               </>
             )}
           </>
@@ -253,16 +281,45 @@ function durationLine(meeting: Meeting) {
 }
 
 /**
- * Derived from the same meetings drawn above, so the picture and the number
- * cannot disagree.
+ * One plain line about the day: how many meetings it holds and what comes next,
+ * derived from the same array the ring and the list draw, so they cannot
+ * disagree. Shown whether or not anything is still to come, which is what makes
+ * an empty afternoon read as "done for the day" rather than as a broken screen.
  */
-function freeLine(meetings: Meeting[], now = new Date()): string {
-  const next = meetings
-    .filter((meeting) => meeting.start > now)
-    .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
-  if (!next) return 'Nothing else in the calendar today.';
+/**
+ * The line under the day summary when the calendar is clear: it points at the
+ * work still waiting in the categories above, so an empty afternoon is an
+ * invitation to clear the queue rather than a blank half-screen.
+ */
+function workPrompt(counts: {
+  urgent: number;
+  byEod: number;
+  canWait: number;
+}): string {
+  const pressing = counts.urgent + counts.byEod;
+  const total = pressing + counts.canWait;
+  if (total === 0) return 'Nothing is waiting on you. Enjoy the quiet.';
+  const what =
+    pressing > 0
+      ? `${pressing} still ${pressing === 1 ? 'needs' : 'need'} you`
+      : `${counts.canWait} can wait`;
+  return `Pick a category above to work through what is left: ${what}.`;
+}
+
+function daySummary(today: Meeting[], ahead: Meeting[], now = new Date()): string {
+  const count =
+    today.length === 0
+      ? 'No meetings today'
+      : `${today.length} ${today.length === 1 ? 'meeting' : 'meetings'} today`;
+
+  const next = ahead[0];
+  if (!next) {
+    return today.length === 0 ? count : `${count}, all done`;
+  }
+
   const gap = Math.round((next.start.getTime() - now.getTime()) / 60000);
-  const label =
-    gap >= 60 ? `${Math.floor(gap / 60)}h ${gap % 60}m` : `${Math.max(0, gap)}m`;
-  return `${label} free before ${clock(next.start)}`;
+  if (gap <= 0) return `${count}, next now`;
+  const wait =
+    gap >= 60 ? `${Math.floor(gap / 60)}h ${gap % 60}m` : `${gap}m`;
+  return `${count}, next in ${wait}`;
 }
