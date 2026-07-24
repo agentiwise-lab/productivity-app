@@ -20,11 +20,19 @@ export function subtext(row: {
   const body = row.body?.trim();
   if (!body) return null;
 
-  // First non-empty line, so a description with its own paragraphs does not
-  // arrive as one run-on sentence.
+  // First line with actual words in it. Linear descriptions open with a
+  // markdown heading, so the raw first line renders as "## V1 Unit 5" on a card
+  // that is already showing that title.
   const first = body
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^#{1,6}\s*/, '')       // heading
+        .replace(/^[-*+]\s+/, '')        // bullet
+        .replace(/^>\s*/, '')            // quote
+        .trim(),
+    )
     .find((line) => line.length > 0);
   return first ? first.slice(0, 140) : null;
 }

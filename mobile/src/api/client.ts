@@ -27,6 +27,13 @@ const TIMEOUT_MS = 12000;
  * "this page is broken" rather than "this page is slow".
  */
 const DASHBOARD_TIMEOUT_MS = 60000;
+/**
+ * A refresh pulls every source, and Gmail alone pages through every unread
+ * message in the window: about 40s on a mailbox with a few hundred. At the
+ * shared budget the client aborted its own refresh every time, so the feed only
+ * ever updated when something else happened to write to it.
+ */
+const REFRESH_TIMEOUT_MS = 180000;
 
 export type FeedResult = {
   rows: FeedRow[];
@@ -150,7 +157,11 @@ export class ApiClient {
   }
 
   refresh(): Promise<RefreshResult> {
-    return this.request<RefreshResult>('/feed/refresh', { method: 'POST' });
+    return this.request<RefreshResult>(
+      '/feed/refresh',
+      { method: 'POST' },
+      REFRESH_TIMEOUT_MS,
+    );
   }
 
   act(itemId: string, body: string) {
