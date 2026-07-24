@@ -1,16 +1,16 @@
 # Implementation plan
 
 **Date:** 2026-07-24
-**Design source of truth:** [`mockups/v4-screens.html`](mockups/v4-screens.html), drawn at true device size.
-**Rules:** [`design-system-v2.md`](design-system-v2.md), amended by §1 below.
+**Specification:** [`mockups/v4-screens.html`](mockups/v4-screens.html). Drawn at 393&times;852 with **1 CSS pixel = 1 iOS point**, so every number in it is the number that ships.
+**Rules:** [`design-system-v2.md`](design-system-v2.md), amended by §2 of this document where they disagree.
 
-Two phases, deliberately separated. **Phase 1 changes only the UI and touches no backend contract.** Phase 2 extends the backend for things the redesign surfaced that do not exist yet. Phase 1 is shippable on its own.
+Three phases. **Phase 0 is a live bug and goes first.** Phase 1 is the UI. Phase 2 is the backend work the redesign surfaced, and it is **in scope**, not deferred.
 
 ---
 
-## 0. A bug found while writing this, which outranks everything below
+## 0. A live bug, which outranks everything below
 
-`ActionBody.action` defaults to `"comment"` ([`backend/main.py:87`](../backend/main.py)), and the client never sends an action name:
+`ActionBody.action` defaults to `"comment"` ([`backend/main.py:87`](../backend/main.py)) and the client never sends an action name:
 
 ```ts
 // mobile/src/api/client.ts
@@ -22,32 +22,43 @@ act(itemId: string, body: string) {
 }
 ```
 
-**So every action routed through `api.act()` is performed as `comment`.** Tapping **Approve** posts a comment instead of submitting a review, which is exactly the failure `_approve`'s own docstring was written to prevent:
+**Every action routed through `api.act()` is performed as `comment`.** Tapping **Approve** posts a comment instead of submitting a review, which is exactly the failure `_approve`'s own docstring exists to prevent:
 
 > "Submitting a review, not posting a comment. A comment reading 'approved' leaves the pull request just as blocked as before."
 
-It is worse than that. The card calls `onAction(row, action.id)` with no body, so the request carries `body: ""`, and `_send` rejects empty text with `ActionFailed("an empty reply is not a reply")`. That surfaces as a 409 and the app restores the row with *"That didn't go through"*.
+Worse: the card calls `onAction(row, action.id)` with no body, so the request carries `body: ""`, `_send` rejects empty text with `ActionFailed("an empty reply is not a reply")`, and the user sees a 409 and *"That didn't go through"*. **Approve is broken end to end.**
 
-**Read from the code, not reproduced against a running server.** Confirm with one integration test before fixing, then fix by sending the action name:
+**Read from code, not reproduced against a server.** Write the failing integration test first, then:
 
 ```ts
 act(itemId: string, action: string, body = '') {
   return this.request<FeedRow>(`/feed/${itemId}/actions`, {
-    method: 'POST',
-    body: JSON.stringify({ action, body }),
+    method: 'POST', body: JSON.stringify({ action, body }),
   });
 }
 ```
 
-and drop the `action` default on `ActionBody` so a missing action is a 422 rather than a silent comment.
-
-This is a one-line client fix plus a contract tightening, it is independent of the redesign, and **it should go first.**
+and drop the default on `ActionBody.action` so a missing action is a 422 rather than a silent comment.
 
 ---
 
-## 1. Colour, amended
+## 1. The fidelity contract
 
-[`design-system-v2.md` §1](design-system-v2.md) specified one accent and one alarm. **That is now six hues, and every one of them names a category.**
+**The mockup is the specification, not an illustration of one.** It is drawn at true device size specifically so that implementation is transcription rather than interpretation.
+
+1. **Every value is transcribed, never re-derived.** Padding, gap, radius, height, font size, line height, tracking, opacity, gradient stop. If a number appears in `v4-screens.html`, that exact number ships. If a number is needed that is not there, the mockup is wrong and gets fixed first.
+2. **`SCALE` and `s()` are deleted.** Every size in the app today is a 272pt mockup measurement times 1.379, which is why nothing lands on a whole point. There is no multiplier in v4 and there must be none in the code.
+3. **No component invents a colour.** Six hues, two exemptions, and the neutral ladder. §2.
+4. **The verification script ships as a test.** The checks that ran against the mockup run against the built app: spacing on the scale, radii on the ramp, type on the seven roles, no non-inset shadow, no content past the fold or under a fixed footer, no control under 28pt, no colour off the palette.
+5. **Compare on device, not in a simulator screenshot.** Side by side with the mockup at the same physical size, in both modes.
+
+The only values permitted off the spacing scale are the two OS insets, **54pt** for the status bar and **34pt** for the home indicator.
+
+---
+
+## 2. Tokens
+
+### Colour: six hues, each naming a category
 
 | Token | Dark | Light | Means |
 |---|---|---|---|
@@ -56,197 +67,211 @@ This is a one-line client fix plus a contract tightening, it is independent of t
 | `canWait` | `#AB7FF8` | `#7144CC` | Neither |
 | `later` | `#F2B366` | `#96631F` | Arrived, did not need you |
 | `none` | `#7FA6D9` | `#3E6EA8` | A row with no category at all |
-| `summary` | `#C9B79A` | `#6E5A40` | A card that totals something |
+| `summary` | `#C9B79A` | `#6E5A40` | A card that totals rather than lists |
 
-**Colour is the category and never the source.** A source is already named by its own brand mark sitting beside the text, so spending a hue on it says nothing new and costs the one thing hue is good for.
+**Colour is the category and never the source.** A source is already named by its brand mark beside the text, so a source hue says nothing new and spends the one thing hue is good for.
 
-The four tiers are the categories proper. The last two exist because plenty of rows have no category: a meeting, a repository in a breakdown, a connected account. Those need to be told apart from each other and from a tiered row, so they take `none`. Cards that total something rather than listing it take `summary`. **Neither ever shares a screen with a tier colour**, so neither can be mistaken for one.
+The last two exist because plenty of rows have no category: a meeting, a repository, a connected account. **Neither ever shares a screen with a tier hue**, so neither can be misread as one.
 
-The four tiers were tuned twice: lightened, because the violet had arrived deep and saturated beside a light mint and read as a different class of signal; then brought **75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless.
+### Neutral ladder
 
-### Light is sage teal, not white
+| Token | Dark | Light (sage teal) |
+|---|---|---|
+| `canvas` | `#0C0B0A` | `#DCE6E5` |
+| `surface` | `#151311` | `#EAF1F0` |
+| `raised` | `#1D1A17` | `#F2F7F6` |
+| `overlay` | `#26221E` | `#CBDAD9` |
+| `hairline` | `#2E2A26` | `#BFD0CF` |
+| `border` | `#3B352F` | `#A8BEBD` |
+| `faint` | `#57504A` | `#86A09F` |
+| `low` | `#888179` | `#566E6D` |
+| `mid` | `#A79F97` | `#3E5453` |
+| `high` | `#F5F1EC` | `#12201F` |
+| `onSolid` | `#0C0B0A` | `#FFFDF9` |
 
-Light was a bright warm white and it glared. The neutral ladder is now the **sage teal from `ad_analytics`**, whose own tokens name it *weathered copper* in a Dusty Earth palette: `--accent-spend: #6B9B9A`, hue 179 at 19% saturation. That mutedness is the whole character, and the first attempt at this leaned green where theirs holds green and blue nearly equal.
+Dark runs warm, R above G above B at every step. Light is the **sage teal from `ad_analytics`**, whose own tokens name it *weathered copper*: `--accent-spend: #6B9B9A`, hue 179 at 19% saturation. That mutedness is the character.
 
-| Token | Light |
-|---|---|
-| `canvas` | `#DCE6E5` |
-| `surface` | `#EAF1F0` |
-| `raised` | `#F2F7F6` |
-| `overlay` | `#CBDAD9` |
-| `hairline` | `#BFD0CF` |
-| `border` | `#A8BEBD` |
-| `faint` | `#86A09F` |
-| `low` | `#566E6D` |
-| `mid` | `#3E5453` |
-| `high` | `#12201F` |
+**Contrast, measured, all clearing AA.** Chip text on the six fills: dark 6.7 to 12.6, light 4.7 to 6.5. Body text on `surface`: dark 4.8 to 16.5, light 4.8 to 14.6.
 
-**The six category hues are unchanged in role.** Only the replacement for white moved.
-
-Changing the canvas broke four things a colour swap alone would not have surfaced, all now fixed: three chips hardcoded near-black text, which is right on a light fill and wrong on a dark one; the Later and summary fills were too light for white text at 3.5:1 and 4.4:1; tertiary text sat at 3.7:1; and the day ring carried five hardcoded hexes from the retired warm palette.
-
-**Every chip and text pair clears AA in both modes.** Dark chips 6.7 to 12.6, light chips 4.7 to 6.5, light body text 4.8 to 14.6. The light values sit closest to the floor, so **re-measure before changing any light fill.**
-
-### A full-screen card bleeds to the top
-
-A Feed card is the whole screen, so a gradient that starts below the status bar draws a seam across a single surface. The card now runs edge to edge including under the status bar, which floats over it and sits above every sheet, as it does on iOS. Content keeps its inset: the card body pads 54pt for the bar plus the usual 16.
-
-The two OS constants, **54pt at the top and 34pt at the bottom**, are the only values allowed off the spacing scale, for the same reason the home indicator always was.
-
-### What colours a row
-
-| List | Colour |
-|---|---|
-| Feed, and a selected tier on Your day | its tier |
-| Later, every row, and its source selector | `later` |
-| Meetings on Your day | `none` |
-| Activity breakdowns, connections in You | `none` |
-| Activity stat cards and source cards | `summary` |
-
-Each row carries the hue twice: a **3pt bar on the leading edge** and a **wash running in from the left at 16%**. The screen behind stays the plain canvas, matt black in dark and sage in light. Nothing is tinted except the card itself.
-
-The one exception is a Feed card, which *is* the screen, so its bloom and tint cover the whole surface.
-
-**Rejected along the way, and worth recording so it is not retried.** Colouring untiered rows by their source: Later filters to one source at a time, so every row came out the same colour and nothing was differentiated. Grouping Later by day to compensate: structure papering over a colour problem, and it put a header between every two rows.
+Writing this plan is what caught the last failure: dark `low` was `#7A736C` and measured **4.0:1** on `surface`, under the floor, so it is now `#888179` at 4.8. **Every text and fill pair is measured, not assumed, and both floors sit at 4.8, so re-measure before changing any of them.**
 
 ### Two exemptions, and only two
 
-- **Brand marks keep their own colours.** Tried monochrome and rejected. A mark is identity, not category, and it never occupies a position where a category signal lives. **Do not desaturate the source icons during implementation**, anywhere.
-- **Data visualisation may use `byEod`.** The Activity sparklines were neutral by the letter of the rule and looked dead. A sparkline encodes a quantity over time and cannot be read as a priority.
+- **Brand marks keep their own colours.** Tried monochrome and rejected. A mark is identity, not category, and never occupies a position where a category signal lives. **Do not desaturate source icons anywhere**: not in the Feed, Later, Activity, You, or a sheet.
+- **Data visualisation may use `byEod`.** Activity sparklines were neutral by the letter of the rule and looked dead.
 
-A verification pass over all 31 phones reports zero colours outside the neutral ladder, these six hues, and the two exemptions.
+### Rejected, recorded so it is not retried
+
+- **Colouring untiered rows by source.** Later filters to one source at a time, so every row came out identical and nothing was differentiated.
+- **Grouping Later by day.** Structure papering over a colour problem, and it put a header between every two rows.
+- **Monochrome brand marks.** Lost identity for a rule that marks were never breaking.
+
+### Type: seven roles
+
+| Role | Size / line / tracking | Weight | Face |
+|---|---|---|---|
+| `hero` | 56 / 56 / &minus;1.4 | 600 | Archivo |
+| `display` | 34 / 40 / &minus;0.7 | 600 | Archivo |
+| `title` | 22 / 28 / &minus;0.4 | 600 | Geist |
+| `heading` | 17 / 24 / &minus;0.1 | 600 | Geist |
+| `body` | 15 / 20 / 0 | 400 | Geist |
+| `secondary` | 13 / 20 / +0.1 | 400 | Geist |
+| `label` | 11 / 16 / +0.8, uppercase | 600 | Archivo, `font-stretch: 88%` |
+
+Tracking is **dp, not em**: RN's `letterSpacing` is density-independent pixels, and these are already converted. `Geist Mono` with `tabular-nums` for machine values only: counts, times, ages, IDs, refs.
+
+**Dynamic Type:** `body`, `secondary`, `heading`, `title` scale fully; `hero`, `display`, `label` clamp at 1.3&times;. `allowFontScaling={false}` is banned except on `hero`.
+
+### Spacing, radii
+
+```
+spacing   4  8  12  16  24  32  48  96      (+ OS insets 54, 34)
+radii     4  8  12  16  pill                 nested: inner = outer − padding
+```
 
 ---
 
-## 2. Phase 1: UI only
+## 3. Components, with exact geometry
 
-No API change, no new fields, no new endpoints. Ordered so the riskiest assumption is tested first.
+Transcribed from the mockup. These are the numbers.
 
-### 1.1 Token layer
+| Component | Spec |
+|---|---|
+| **Tab bar** | 49 + 34 = 83 tall. Icon 25&times;25, Phosphor, `regular` unselected / `fill` selected. Label `label` role, 12 line height. Selected: 24&times;2 bar at top centre in `high`, radius 0 0 2 2. Background `canvas` at 74% with `blur(24) saturate(160%)`, `.5` top hairline. **No count badge.** |
+| **Row** (`lrow`) | Margin `0 16 8`. Padding 12. Radius 12. `surface`. Min height 64. Gap 12. Leading category bar 3 wide, full height, z 2. Category wash 120 wide from the left at 16%, z 0. Trailing meta column right-aligned, gap 2. |
+| **Section label** | Padding `0 16`, margin `32 0 8`. `label` role in `low`. Tight variant margin-top 24. |
+| **Chip** | Height 28, padding `0 12`, radius 8, gap 8, `label` role. Solid: category fill, `onSolid` text. Outline: `border` stroke, `mid` text. Ghost: no stroke or fill, `low` text. **28 is the only chip height**; never scale one down. |
+| **Segmented** | Height 32, radius pill, `overlay`, padding 2. Selected: `raised` + inset 1 `border`. |
+| **Toggle** | 51&times;31, radius pill, padding 2, knob 27. Off: `overlay` + inset 1 `hairline`, knob `faint`. On: `high`, knob `canvas`. |
+| **Brand mark** | 16/4, 20/4, 24/8, 32/8, 44/12 (size / radius). `overlay` tile, 1px specular top edge at 20% white. Glyph 11/12/14/18/24. |
+| **Tier cell** | Flex 1, padding 12, radius 12, 1px transparent border. Bar 3 wide, inset 12 top and bottom. Selected: `surface` fill, `border`, bar runs full height, label to `high`. Glyph 20, top row spread with the count. |
+| **Day arc** | Wrap 252 tall, margin-top 16. SVG 192. Outer r 88 stroke 5, inner r 66 stroke 16, 0.008 gap between tier arcs. Window 08:00 to 20:00 clockwise. Now marker r 5 in `high`. Glow 260 circle, radial `urgent` 14% to 0 at 62%. |
+| **Feed card** | Full bleed including under the status bar. Body padding `70 16 0` (54 inset + 16). |
+| **Bloom** | 340 tall from the bottom. Two layers: `radial-gradient(150% 74% at 50% 110%, hue .50, hue .16 at 42%, transparent 74%)` plus `linear-gradient(0deg, hue .16, transparent 58%)`. Per category: urgent .50/.16, byEod .42/.13, later .40/.13, canWait .34/.11. Light halves every stop. |
+| **Action rail** | Absolute right 16, bottom 16, column, gap 12. Item 64 wide, gap 4. Glyph box 48. **No ring, border or fill.** Primary glyph 30 stroke 2 in `high`; others 26 stroke 1.7 in `mid`. Caption `label`, primary `high` others `mid`. |
+| **Sheet** | Radius `16 16 0 0`, `raised`, padding `0 16 34`. Grabber 36&times;5 pill in `border`, margin `8 auto 16`. Category wash 220 tall at the top, 20% to 0. Detents medium and large. |
+| **Big button** | Height 48, radius 12. Primary `high` fill with `canvas` text. Secondary 1px `border`, `high` text. |
+| **Composer** | 1px `border`, radius 12, padding 12, `surface`. Send button 44 circle in `high`. |
+| **Summary card** | Radius 12, padding 12, `surface`, `summary` tint at 16% on a 135&deg; gradient. Grid 2 columns, gap 8. |
+| **Source card** | Margin `0 16 12`, padding 16, radius 16, 1px `hairline`, `summary` tint 220&times;130 from the top-left. |
+| **Circular action** | 44 circle, `overlay`, 1px `border`, glyph 20 stroke 1.7 in `high`. |
+| **Grain** | Tiled 140px `feTurbulence` at `baseFrequency .85`, 3 octaves, **5.5% opacity, `overlay` blend**, over the whole screen at z 30. |
+| **Separator** | `StyleSheet.hairlineWidth` in `hairline`. Inset to the text origin, never full width, wherever rows are not cards. |
 
-Replace `mobile/src/theme.ts` with `mobile/src/theme/`, per [`design-system-v2.md` §11](design-system-v2.md).
+---
 
-**Delete `SCALE` and `s()`.** Every size in the app is currently a mockup measurement times 1.379, which is why nothing lands on a whole point. v4 is drawn at 1 pixel to 1 point, so its numbers transfer directly.
+## 4. Screens, complete inventory
 
-Add: `react-native-reanimated`, `react-native-gesture-handler`, `expo-haptics`, `expo-linear-gradient`, `expo-blur`, `expo-font`, `phosphor-react-native`.
+Every screen and state drawn in the mockup. **Nothing here is optional**; anything cut should be cut deliberately and recorded.
 
-Fonts: Geist, Geist Mono, Archivo, Instrument Serif, all OFL, embedded via the `expo-font` config plugin. **Register each weight as its own family** and verify on a real iOS build, because a font-name mismatch fails silently on iOS while working on Android.
+### Chrome
+- **No title bar on any screen.** The large line is content and collapses to 17pt in a 44pt blurred bar on scroll. A source board keeps its collapsed bar because it needs a back affordance.
 
-### 1.2 Tab bar and icons
-
-Five tabs: Day, Feed, Later, Activity, You. Hand-built via the `tabBar` prop on `@react-navigation/bottom-tabs`, which the app already uses, so Expo's alpha `NativeTabs` never enters the picture.
-
-Phosphor icons, `regular` unselected and `fill` selected, 25×25, 49pt bar plus 34pt inset. **The current icons are empty squares and circles**, so this is the single highest-leverage visible change in the app.
-
-### 1.3 One Feed card, end to end
-
-The tracer bullet. Build the GitHub urgent card: monochrome mark, solid tier chip, 34pt title, `summary` body, the `reason` block, the bloom from beneath, and the bare-icon vertical rail. **Stop here and look at it on a device before building anything else.**
-
-### 1.4 Feed tab
-
-New screen. Full-screen cards, horizontal swipe, grouped Urgent, By EOD, Can wait, **and Later**, which reaches the Feed in full: snoozed, no date set and handled. A Later card carries the sand hue and a **Bring back** action, the only one unique to that group.
-
-**No count badge on the Feed tab.** A number on a tab you have not opened is a demand, and the tier row on Your day already says how much is waiting. Gestures track the finger 1:1 and are reversible mid-flight. Actions open source sheets rather than committing blind. No divider cards and no progress rail.
-
-### 1.5 Headers, on every screen
-
-**No screen has a title bar, and no large title repeats its own tab name.** The tab bar already says where you are, so spending 68pt to say it again is the redundancy the dissolving header was meant to remove.
-
-| Screen | Eyebrow, 11pt | Large line, 34pt |
+| Screen | Eyebrow | Large line |
 |---|---|---|
-| Your day | the date | **`Good morning, Vicky`**, varying by hour |
+| Your day | the date | `Good morning, Vicky`, by hour |
+| Feed | none | none, the card is the screen |
+| Later | `Last 30 days` | `137 did not need you` |
 | Activity | `Last 30 days` | `3 sources connected` |
 | You | the email | the user's name |
-| Later | `Last 30 days` | `137 did not need you` |
 
-**No exceptions, including Later.** It kept its name for one round on the argument that "Later" states what the list means, and that was wrong: the tab bar says Later, so the title said it twice. It now leads with the count, which is the one fact the screen has that the tab bar does not.
+- **Status bar**: real signal, wifi and battery glyphs. Sits at z 24, above every sheet, as on iOS.
 
-The line collapses to 17pt in a 44pt blurred bar on scroll, and a source board keeps its collapsed bar permanently because it needs a back affordance.
+### Your day
+Dual ring, tier selector, list. **Outer ring is time and monochrome** on a four-step grey ladder; **inner ring is work and the only place a tier hue appears**, matching the selector below it in colour, order and proportion, which is why the ring needs no legend.
 
-### 1.6 Your day
+Tier selector: three symmetric cells, each with its **category glyph**, count and label. Selecting swaps the list beneath from meetings to that tier's items and puts the count in the section header. Selecting again clears it. Four selection signals: fill, border, full-height bar, lifted label, so it survives greyscale.
 
-`HomeScreen` becomes Your day. Remove the horizontal card feed; it lives in the Feed tab now.
+States: resting, urgent selected, by-EOD selected, can-wait selected with the honest "nothing else is waiting" line.
 
-- Dual ring. **Outer is time and monochrome; inner is work and is the only place a tier hue appears.** The tier selector directly below it is the inner ring's legend.
-- The tier row becomes a real selector: selecting swaps the list beneath it from meetings to that tier's items. Selection shows as fill, border, a full-height bar and a lifted label, so it survives greyscale.
+### Feed
+Full-screen cards, horizontal swipe, grouped Urgent, By EOD, Can wait, **Later**. **No divider cards, no progress rail, no tab badge.** Gestures track the finger 1:1 and reverse mid-flight.
 
-### 1.7 Category glyphs
+Seven cards drawn, one per source and category: GitHub review, Slack mention, Gmail, Linear, Calendar, Google Docs can-wait, Slack later. Each differs only in **middle block** and **three rail actions**.
 
-Each category carries a glyph as well as a hue, so it survives greyscale and colour blindness. **The glyphs already exist.** `TIER_GLYPH` in `HomeScreen.tsx` is `!` urgent, `◐` today, `○` can wait, `·` noise. That is a fullness ladder and it is a good one, so it stays and only the rendering changes, from text characters to vectors coloured by their own category.
+Sheets, each carrying the category wash and the regions `DetailSheet` already defines: Gmail open, Slack reply with composer, GitHub approve, Snooze picker.
 
-| Category | Glyph |
-|---|---|
-| Urgent | exclamation in a ring |
-| By EOD | half-filled ring |
-| Can wait | empty ring |
-| Later | a dot |
+### Later
+**Structure preserved exactly.** Source strip, icon-only inactive and icon-plus-label active, selector in the `later` hue. One stream opened once, switching as a filter over rows in hand. Batches appended as they land with a running total. `sender: title`, `summary` beneath, `ago` right, external-link glyph. Footnote that it is read live and never stored.
 
-They appear in the tier selector on Your day, and anywhere a category needs naming without room for a word.
+States: loaded, still streaming with the spinner and running count, empty with the current copy and "Home" updated to "Your day".
 
-### 1.8 Rows, everywhere
+### Activity
+Root: one card per **connected** source only, with three counts, a sparkline and a chevron. Board: 34pt hero with its label inline, two circular actions, `headline` as a 2-column summary grid keeping `label`, `value_label ?? value` and `detail`, then `breakdown` under its own `breakdown_title`.
 
-One `Row` component, used by Your day, Later, Activity and You. Discrete cards on `surface` at radius 12 with 8pt between them, a 3pt tier bar on the leading edge where a tier exists, and a tier wash from the left.
+**A breakdown row links only when it has a `url`**, the semantic already encoded by withholding the chevron. External-link glyph, not a chevron, since these leave the app. `unavailable` renders as one honest sentence, never a tile with a dash in it.
 
-**A hairline separates two rows by one pixel, which is why the old lists read as a single undifferentiated block however good the type was.** This is the change that fixes "the listing UI looks primitive" and it is worth doing before the screens that use it.
+Two boards drawn: GitHub, and Calendar as the case whose rows do not link.
 
-### 1.9 Later
+### You
+Notifications: one row, one toggle, one subtext, segmented `Urgent` / `+ By EOD` / `All` appearing only when on. **Appearance**: segmented `Dark` / `Light` / `System`, dark default. Connections: every source with state, `Add` in the section header, Connect sheet. **No AI section. No "Fix" button.**
 
-**Structure preserved exactly.** Source strip with icon-only inactive and icon-plus-label active; one stream opened once with switching as a filter over rows already in hand; batches appended as they land with a running total; `sender: title` with `summary` beneath and `ago` right; the footnote that it is read live and never stored; the empty copy with "Home" updated to "Your day". Restyled only.
-
-### 1.10 Activity
-
-`SourcesScreen` becomes Activity root. **Only connected sources appear**: connection state belongs in You. The Connect button leaves this tab.
-
-`SourceDetailScreen` keeps `headline`, `breakdown`, `breakdown_title` and `unavailable` exactly. The header compacts from roughly 470pt to 290: a 34pt hero with its label inline, two neutral glyph buttons, then `headline` as a two-column grid of separated cards, each keeping its `label`, `value_label ?? value` and `detail`.
-
-**A breakdown row is tappable only when it has a `url`**, which is the semantic the screen already encodes by withholding the chevron. Use an external-link glyph rather than a chevron, because these leave the app.
-
-### 1.11 You
-
-Remove the AI summaries section entirely. Summarising and ranking is what the product is, so asking permission per source framed the core behaviour as an optional extra.
-
-Notifications become one row, one toggle, one subtext line, with the level segmented control appearing only when on: roughly 200pt down to 60. **The levels are renamed to the categories' own words**, `Urgent` / `+ By EOD` / `All`, because "+ Today" named a time window where every other label in the app names a tier.
-
-**Appearance** is a new section: a segmented `Dark` / `Light` / `System`, with **dark the default**. `useColorScheme()` supplies System, and the explicit choice persists in `AsyncStorage` so a mode can be pinned against the OS.
-
-Connections list every source with its state and take the Connect flow as a sheet. **No "Fix" button**: a connection is live, or it needs connecting.
-
-### 1.12 Sheets
-
-Keep the three regions `DetailSheet` already defines and the reason they exist: head and footer fixed, only the message scrolls. Add `medium` and `large` detents with a visible grabber, replacing the fixed `height: '82%'`.
-
-### 1.13 Motion and haptics
-
-Last, as a pass over finished screens. Springs via Reanimated, never duration plus bezier. Haptics mark a change of state, never motion; `prepare()` ahead of time; never `Heavy`.
+### States that must not be faked
+Empty Feed with the completed ring and where the other items went. Loading skeletons that resolve into something. **Never a placeholder row.**
 
 ---
 
-## 3. Phase 2: backend
+## 5. Phase 1: sequence
 
-Everything here is a gap the redesign surfaced. **None of it blocks Phase 1**, which is drawn against what already works.
+Ordered so the riskiest assumption is tested first.
 
-### 2.1 Actions that are offered and rejected
+1. **Tokens.** `mobile/src/theme.ts` becomes `mobile/src/theme/`: `primitives`, `semantic`, `type`, `space`, `motion`, `haptics`. Components import semantic tokens only. Mode from `useColorScheme()`, dark default, override in `AsyncStorage`. Add `react-native-reanimated`, `react-native-gesture-handler`, `expo-haptics`, `expo-linear-gradient`, `expo-blur`, `expo-font`, `phosphor-react-native`, `lottie-react-native`. Fonts via the `expo-font` config plugin, **each weight its own family**, verified on a real iOS build because a name mismatch fails silently on iOS.
+2. **Tab bar and icons.** Highest-leverage visible change: the current icons are empty squares and circles.
+3. **One Feed card, end to end.** The tracer bullet. **Stop and compare against the mockup on a device before building anything else.**
+4. **Feed tab**, remaining cards and sheets.
+5. **Row component**, before the screens that use it.
+6. **Your day**, including the dual ring and the selector interaction.
+7. **Later**, restyle only.
+8. **Activity**, root and board.
+9. **You**, including Appearance.
+10. **Motion and haptics**, as a pass over finished screens. Springs via Reanimated, never duration plus bezier. Haptics mark a change of state, never motion; `prepare()` ahead; never `Heavy`.
 
-`actionsFor` and `overflowFor` in [`lib/actions.ts`](../mobile/src/lib/actions.ts) promise six actions that `perform()` raises `UnknownAction` on:
+### Files
 
-| Action | Offered for | Backend state |
+| File | Change |
+|---|---|
+| `theme.ts` | Deleted, replaced by `theme/` |
+| `Chrome.tsx` | Header becomes the dissolving header; `TabIcon` becomes Phosphor |
+| `FeedCard.tsx` | Rewritten as the full-screen card |
+| `ListRow.tsx` | Rewritten as the row card |
+| `YourDayCard.tsx` | Rewritten as ring plus selector |
+| `BrandMark.tsx` | Real marks, own colours, five sizes |
+| `DetailSheet.tsx` | Regions kept, detents and grabber added |
+| `states.tsx` | Honest empty and loading states |
+| `HomeScreen.tsx` | Becomes Your day, feed slider removed |
+| `FeedScreen.tsx` | **New** |
+| `LaterScreen.tsx` | Restyled, structure untouched |
+| `SourcesScreen.tsx` | Becomes Activity root, connected only |
+| `SourceDetailScreen.tsx` | Compacted board |
+| `YouScreen.tsx` | AI section out, Appearance in |
+| `App.tsx` | Five tabs, custom `tabBar`, `act()` signature fix |
+
+---
+
+## 6. Phase 2: backend, in scope
+
+### 6.1 Six actions offered and rejected
+
+`actionsFor` and `overflowFor` promise six actions `perform()` raises `UnknownAction` on. **Implement them.** Until each lands, its button does not render, because a button that fails is worse than a button that is absent.
+
+| Action | Where | Work |
 |---|---|---|
-| `reply` | Google Docs | `_send` accepts Slack and GitHub only |
-| `comment` | Linear | same |
-| `accept` | Calendar | no handler |
-| `decline` | Calendar | no handler |
-| `request_changes` | GitHub review | no handler |
-| `assign_to_me` | GitHub assigned | no handler |
+| `request_changes` | GitHub review | **Cheapest.** `_approve` already submits a review; this is the same call with `event="REQUEST_CHANGES"` and a required body |
+| `assign_to_me` | GitHub assigned | Issues API `POST /issues/{n}/assignees` with the authenticated login |
+| `comment` on Linear | Linear | `commentCreate` mutation. `_send` gains a Linear branch, and `source_ref` must carry the issue id |
+| `accept` / `decline` | Calendar | Google Calendar `events.patch` on the self attendee's `responseStatus`. Two actions, one call shape |
+| `reply` on Google Docs | Docs | Drive comments API `replies.create`. Needs the comment id in `source_ref` |
+| `reply` on Gmail | Gmail | **Its own project.** Send scope, threading, quoting, signature. Do not fold it in here |
 
-**Decide per action: implement it, or remove it from the matrix.** Leaving a button that fails is the worst of the three. My recommendation is to remove all six in Phase 1 so the UI only offers what works, and add them back as Phase 2 lands each one. `request_changes` is the cheapest, since the GitHub review API is already wired for `approve`.
+Each lands the same way: extend `_send` or add a sibling, map the failure to `ActionFailed`, respect any upstream "do not retry" signal, and write the test at the contract boundary with a `Fake*` implementation before the code.
 
-### 2.2 Snooze has no picker
+### 6.2 Snooze has no picker
 
-`act()` hardcodes three hours (`App.tsx:195`). The design has a picker: this evening, tomorrow morning, next week, pick a time. The endpoint already takes an arbitrary `until`, so **this is client-only work** and could move into Phase 1.
+`act()` hardcodes three hours ([`App.tsx:195`](../mobile/App.tsx)). The endpoint already takes an arbitrary `until`, so the picker is **client-only** and can land in Phase 1: this evening, tomorrow morning, next week, pick a time.
 
-### 2.3 Notifications have no "All" level
+### 6.3 Notifications have no "All" level
 
-The rename above is free for two of the three options and not for the third. [`backend/services/notifications.py:32`](../backend/services/notifications.py) defines exactly three levels:
+[`notifications.py:32`](../backend/services/notifications.py) defines exactly three:
 
 ```python
 class NotifyLevel(str, Enum):
@@ -261,47 +286,43 @@ _ALLOWED = {
 }
 ```
 
-`Urgent` maps to `URGENT` and `+ By EOD` to `URGENT_TODAY`, both unchanged. **`All` has no member**, so it needs one:
+`Urgent` maps to `URGENT` and `+ By EOD` to `URGENT_TODAY`, unchanged. **`All` has no member.** Add:
 
 ```python
 ALL = "all"
 _ALLOWED[NotifyLevel.ALL] = {Tier.URGENT, Tier.TODAY, Tier.CAN_WAIT}
 ```
 
-The UI now expresses `OFF` as the toggle rather than as a third segment, so the enum gains a value while the control still shows three. **`Tier.NOISE` stays out of `ALL` deliberately**: Later is the category that by definition did not need you, and notifying on it would undo the product.
+The UI expresses `OFF` as the toggle, so the enum gains a value while the control still shows three. **`Tier.NOISE` stays out deliberately**: Later is by definition what did not need you, and notifying on it would undo the product. `urgent_today` keeps its wire value; renaming a persisted enum for a label change is a migration for nothing.
 
-`urgent_today` keeps its wire value. Renaming a persisted enum for a label change would be a migration for nothing.
+### 6.4 The board has no designated hero
 
-### 2.4 The board has no designated hero
+`SourceDashboard.headline` is an unordered `StatLine[]` but the board wants one number at 34pt above the rest. Either add `hero: StatLine | null`, or fix the convention that `headline[0]` is the hero and document it on the model. **Convention is cheaper and reversible.**
 
-`SourceDashboard.headline` is an unordered `StatLine[]`, but the board wants one number at 34pt above the rest. Either add `hero: StatLine | null`, or fix the convention that `headline[0]` is the hero and document it. **Convention is cheaper and reversible.**
+### 6.5 Deliberately not proposed
 
-### 2.5 Things deliberately not proposed
-
-- **Diff stats on GitHub cards.** `FeedRow` has no file list or line counts, the v3 mockup invented them, and the card works without them. Only add if a real user need appears.
-- **Gmail reply.** Genuinely useful, genuinely a project: OAuth scope, threading, quoting. Worth its own plan.
+**Diff stats on GitHub cards.** `FeedRow` has no file list or line counts. The v3 mockup invented them, the card works without them, and adding a field to feed one card is the wrong trade.
 
 ---
 
-## 4. What must not regress
+## 7. Verification
 
-v4 ships with an automated check, and the same assertions should become a lint or a test:
+The script that ran against the mockup becomes a test. It currently passes on all 31 phones with zero findings, after catching, among others: a class-name collision putting 64px of margin on every secondary button; a bloom bright enough to make its own caption unreadable; three chips with hardcoded text colour that inverted in light mode; two fills below AA; a sparkline rounded into beads; and the last stray hex from a retired palette.
 
-- Spacing on `4 / 8 / 12 / 16 / 24 / 32 / 48 / 96` only
-- Radii on `4 / 8 / 12 / 16 / pill` only, nested as `inner = outer − padding`
-- Type on the seven roles only
-- **No colour outside the neutral ladder and the three tier hues**, excepting brand marks and data visualisation
-- Chip text at or above 4.5:1 on every tier fill, in both modes
-- Every row carries its category hue as a leading bar and a left wash. No list is one flat colour, and no colour comes from the source
-- No non-inset shadow anywhere
-- No content past the fold, and none hidden under a fixed footer
-- No control under 28pt, and a 44pt touch target via `hitSlop`
-
-It caught six things in v4 that reading did not, including a class-name collision that put 64px of margin on every secondary button, and a bloom bright enough to make the text on top of it unreadable.
+- Spacing on `4 8 12 16 24 32 48 96`, plus OS insets 54 and 34
+- Radii on `4 8 12 16 pill`, nested as `inner = outer − padding`
+- Type on the seven roles, nothing else
+- **No colour outside the neutral ladder and the six hues**, excepting brand marks and sparklines
+- Chip and body text at or above 4.5:1, both modes
+- No non-inset shadow
+- Nothing past the fold or under a fixed footer
+- No control under 28pt, 44pt touch target via `hitSlop`
+- Every row carries its category as a leading bar **and** a wash
 
 ---
 
-## 5. Open questions
+## 8. Open questions
 
-1. **"By EOD" grouping in the Feed.** The tier is deadline-based. If the intent was ever ownership, that is a backend change and it changes the Feed's grouping.
-2. **Sequencing against the other session.** `backend/` and `mobile/` are both being edited on this branch by another session. Phase 1 rewrites `theme.ts` and every screen, so it needs a clean handoff or its own branch.
+1. **Sequencing against the other session.** `mobile/` and `backend/` are both being edited on this branch. Phase 1 rewrites `theme.ts` and every screen, so it needs a clean handoff or its own branch.
+2. **`Tier.TODAY` is labelled "By EOD" everywhere.** The wire value stays `today`. Worth confirming nothing else reads that string as a display label.
+3. **Gmail reply** is the one Phase 2 item large enough to want its own plan.
