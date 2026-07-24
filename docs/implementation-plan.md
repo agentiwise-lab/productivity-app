@@ -64,23 +64,34 @@ The four tiers are the categories proper. The last two exist because plenty of r
 
 The four tiers were tuned twice: lightened, because the violet had arrived deep and saturated beside a light mint and read as a different class of signal; then brought **75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless.
 
-### Light is teal, not white
+### Light is sage teal, not white
 
-Light was a bright warm white and it glared. The neutral ladder is now a soft teal-grey, green-leaning so it reads calm rather than clinical, with the same lightness steps and **the six category hues unchanged in role**:
+Light was a bright warm white and it glared. The neutral ladder is now the **sage teal from `ad_analytics`**, whose own tokens name it *weathered copper* in a Dusty Earth palette: `--accent-spend: #6B9B9A`, hue 179 at 19% saturation. That mutedness is the whole character, and the first attempt at this leaned green where theirs holds green and blue nearly equal.
 
-| | Value |
+| Token | Light |
 |---|---|
-| `canvas` | `#DDE6E2` |
-| `surface` | `#EFF4F2` |
-| `raised` | `#F5F9F7` |
-| `overlay` | `#CFDCD7` |
-| `hairline` | `#C2D1CC` |
-| `border` | `#AEBFBA` |
-| `faint` / `low` / `mid` / `high` | `#8B9C97` / `#5F6F6B` / `#41514D` / `#141E1B` |
+| `canvas` | `#DCE6E5` |
+| `surface` | `#EAF1F0` |
+| `raised` | `#F2F7F6` |
+| `overlay` | `#CBDAD9` |
+| `hairline` | `#BFD0CF` |
+| `border` | `#A8BEBD` |
+| `faint` | `#86A09F` |
+| `low` | `#566E6D` |
+| `mid` | `#3E5453` |
+| `high` | `#12201F` |
 
-Changing the canvas broke three things that a colour swap alone would not have surfaced, all now fixed: three chips hardcoded near-black text, which is right on a light fill and wrong on a dark one; the Later and summary fills were too light for white text at 3.5:1 and 4.4:1; and tertiary text sat at 3.7:1. The day ring also carried five hardcoded light hexes from the old warm palette.
+**The six category hues are unchanged in role.** Only the replacement for white moved.
 
-**Every chip and text pair now clears AA in both modes.** Dark chips run 6.7 to 12.6, light chips 4.7 to 6.5, light body text 4.8 to 15.3. The lowest light values sit close to the floor, so **re-measure before changing any light fill.**
+Changing the canvas broke four things a colour swap alone would not have surfaced, all now fixed: three chips hardcoded near-black text, which is right on a light fill and wrong on a dark one; the Later and summary fills were too light for white text at 3.5:1 and 4.4:1; tertiary text sat at 3.7:1; and the day ring carried five hardcoded hexes from the retired warm palette.
+
+**Every chip and text pair clears AA in both modes.** Dark chips 6.7 to 12.6, light chips 4.7 to 6.5, light body text 4.8 to 14.6. The light values sit closest to the floor, so **re-measure before changing any light fill.**
+
+### A full-screen card bleeds to the top
+
+A Feed card is the whole screen, so a gradient that starts below the status bar draws a seam across a single surface. The card now runs edge to edge including under the status bar, which floats over it and sits above every sheet, as it does on iOS. Content keeps its inset: the card body pads 54pt for the bar plus the usual 16.
+
+The two OS constants, **54pt at the top and 34pt at the bottom**, are the only values allowed off the spacing scale, for the same reason the home indicator always was.
 
 ### What colours a row
 
@@ -92,7 +103,9 @@ Changing the canvas broke three things that a colour swap alone would not have s
 | Activity breakdowns, connections in You | `none` |
 | Activity stat cards and source cards | `summary` |
 
-Each row carries the hue twice: a **3pt bar on the leading edge** and a **wash running in from the left at 16%**. The screen behind stays matt black; nothing is tinted except the card itself.
+Each row carries the hue twice: a **3pt bar on the leading edge** and a **wash running in from the left at 16%**. The screen behind stays the plain canvas, matt black in dark and sage in light. Nothing is tinted except the card itself.
+
+The one exception is a Feed card, which *is* the screen, so its bloom and tint cover the whole surface.
 
 **Rejected along the way, and worth recording so it is not retried.** Colouring untiered rows by their source: Later filters to one source at a time, so every row came out the same colour and nothing was differentiated. Grouping Later by day to compensate: structure papering over a colour problem, and it put a header between every two rows.
 

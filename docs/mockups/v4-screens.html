@@ -33,11 +33,11 @@
 }
 /* warm light: the Warm Sand canvas the project already owns */
 .lightmode{
-  --canvas:#DDE6E2; --surface:#EFF4F2; --raised:#F5F9F7; --overlay:#CFDCD7;
-  --hairline:#C2D1CC; --border:#AEBFBA;
-  --faint:#8B9C97; --low:#5F6F6B; --mid:#41514D; --high:#141E1B;
+  --canvas:#DCE6E5; --surface:#EAF1F0; --raised:#F2F7F6; --overlay:#CBDAD9;
+  --hairline:#BFD0CF; --border:#A8BEBD;
+  --faint:#86A09F; --low:#566E6D; --mid:#3E5453; --high:#12201F;
   --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#96631F; --none:#3E6EA8; --stat:#6E5A40; --onSolid:#FFFDF9;
-  --tabbg:rgba(221,230,226,.80); --phedge:#C2CFCB;
+  --tabbg:rgba(220,230,229,.80); --phedge:#BFD0CF;
 }
 .pg *{box-sizing:border-box;}
 
@@ -72,13 +72,17 @@
 .grain{position:absolute;inset:0;pointer-events:none;opacity:.055;mix-blend-mode:overlay;z-index:30;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
 .sb{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
-  padding:0 24px 8px;position:relative;z-index:14;}
+  padding:0 24px 8px;position:relative;z-index:24;}
 .sb .clock{font-size:15px;font-weight:600;letter-spacing:-.1px;font-variant-numeric:tabular-nums;}
 .sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
   width:125px;height:36px;border-radius:999px;background:#000;}
-.lightmode .sb .isl{background:#101816;}
+.lightmode .sb .isl{background:#12201F;}
 .sb .glyphs{display:flex;align-items:center;gap:4px;}
 .bd{flex:1;overflow:hidden;position:relative;}
+/* A full-screen card bleeds under the status bar. The bar floats over it and
+   stays above every sheet, which is what iOS does. */
+.ph.bleed .bd{margin-top:-54px;}
+.ph.bleed .fbody{padding-top:70px;}
 .scroll{position:absolute;inset:0;overflow:hidden;}
 
 /* ═══ TYPE: seven roles, nothing else ════════════════════════════ */
@@ -153,7 +157,7 @@
   position:relative;overflow:hidden;}
 .mark::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent);}
-.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(20,29,27,.12),transparent);}
+.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(18,32,31,.12),transparent);}
 .mark.s16{width:16px;height:16px;border-radius:4px;}
 .mark.s20{width:20px;height:20px;border-radius:4px;}
 .mark.s24{width:24px;height:24px;border-radius:8px;}
@@ -245,13 +249,13 @@
 .fstrip{position:relative;z-index:5;padding:0 96px 16px 16px;display:flex;align-items:center;gap:8px;}
 .quote{border-left:2px solid var(--border);padding-left:12px;}
 .why{border-radius:12px;padding:12px;background:rgba(255,255,255,.04);}
-.lightmode .why{background:rgba(20,29,27,.05);}
+.lightmode .why{background:rgba(18,32,31,.05);}
 .quote.acc{border-left-color:var(--mid);}
 .kv{display:flex;justify-content:space-between;padding:4px 0;}
 
 /* ═══ SHEETS ═════════════════════════════════════════════════════ */
 .scrim{position:absolute;inset:0;background:rgba(0,0,0,.58);z-index:18;}
-.lightmode .scrim{background:rgba(20,29,27,.34);}
+.lightmode .scrim{background:rgba(18,32,31,.34);}
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:var(--raised);
   border-radius:16px 16px 0 0;padding:0 16px 34px;overflow:hidden;}
 .sheet .swash{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
@@ -946,11 +950,11 @@ const MEETINGS=[[10.5,11.25],[14,14.5],[16,17]];
 const frac=h=>(h-DAY_START)/DAY_H;
 function dayDual(light){
  const acc=light?'#0D8167':'#63E4C2', alm=light?'#CC4432':'#FF6B5F';
- const track=light?'#C2D1CC':'#2E2A26';
- const past =light?'#AEBFBA':'#3B352F';
+ const track=light?'#BFD0CF':'#2E2A26';
+ const past =light?'#A8BEBD':'#3B352F';
  const quiet=light?'#7144CC':'#AB7FF8';   // can wait: the third tier hue
- const meet =light?'#41514D':'#A79F97';
- const now  =light?'#141E1B':'#F5F1EC';
+ const meet =light?'#3E5453':'#A79F97';
+ const now  =light?'#12201F':'#F5F1EC';
  const R1=88,R2=66,C1=2*Math.PI*R1,C2=2*Math.PI*R2;
  const arc=(r,c,from,to,col,w)=>{const a=from*c,l=Math.max(0,(to-from)*c);
   return `<circle cx="96" cy="96" r="${r}" fill="none" stroke="${col}" stroke-width="${w}"
@@ -1227,6 +1231,7 @@ document.querySelectorAll('.ph').forEach(ph=>{
     stroke-width="${on?2.2:1.6}" stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"/></svg>
    <span class="tl">${label}</span></div>`;}).join('')+'</div>');
 });
+document.querySelectorAll('.ph').forEach(ph=>{if(ph.querySelector('.fcard'))ph.classList.add('bleed');});
 document.querySelectorAll('[data-dim]').forEach(el=>el.style.filter='brightness(.5)');
 paint();
 </script>
