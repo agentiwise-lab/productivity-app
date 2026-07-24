@@ -78,6 +78,12 @@ class _Query:
                     lambda row, c=column: row.get(c) is not None
                 )
                 continue
+            if len(parts) == 3 and parts[1] == "eq":
+                column, value = parts[0], parts[2]
+                clauses.append(
+                    lambda row, c=column, v=value: str(row.get(c)) == v
+                )
+                continue
             if len(parts) == 3 and parts[1] == "gte":
                 column, value = parts[0], parts[2]
                 clauses.append(

@@ -124,7 +124,7 @@ class SupabaseFeedRepository:
             # live obligation and never ages out, however long ago it was last
             # touched. Without the second clause, months-overdue work is dropped
             # for being old.
-            .or_(f"occurred_at.gte.{cutoff},deadline.not.is.null")
+            .or_(f"occurred_at.gte.{cutoff},deadline.not.is.null,type_tag.eq.assigned")
             .order("occurred_at", desc=True)
             .execute()
             .data

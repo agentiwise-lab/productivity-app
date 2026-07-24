@@ -124,12 +124,23 @@ def test_pending_classification_is_capped(repo):
 
 
 def test_list_by_user_drops_items_older_than_the_retention_window(repo):
-    """Later holds 30 days, and nothing beyond it reaches a read."""
+    """Later holds 30 days, and nothing beyond it reaches a read.
+
+    Tagged REPLY rather than the fixture's default ASSIGNED: assigned work is
+    an obligation and deliberately never ages out, so it cannot demonstrate
+    the window. A month-old mention genuinely is stale.
+    """
     repo.upsert(
-        make_item(source_ref="r#1", title="old", occurred_at=NOW - timedelta(days=31))
+        make_item(
+            source_ref="r#1", title="old", type_tag=TypeTag.REPLY,
+            occurred_at=NOW - timedelta(days=31),
+        )
     )
     repo.upsert(
-        make_item(source_ref="r#2", title="new", occurred_at=NOW - timedelta(days=2))
+        make_item(
+            source_ref="r#2", title="new", type_tag=TypeTag.REPLY,
+            occurred_at=NOW - timedelta(days=2),
+        )
     )
     assert [i.title for i in repo.list_by_user("me", now=NOW)] == ["new"]
 
@@ -218,3 +229,46 @@ def test_an_overdue_item_is_not_aged_out_of_the_feed():
     kept = {item.id for item in repo.list_by_user("u", now=now)}
     assert "overdue" in kept
     assert "stale" not in kept
+
+
+def test_assigned_work_never_ages_out_even_with_no_deadline():
+    """An open issue assigned to you is a standing obligation, not an event
+    that gets old. Six of the user's Linear issues were invisible purely
+    because nobody had edited them in a month, including one at Urgent
+    priority and five backlog items that left the Later tab empty."""
+    from datetime import datetime, timedelta, timezone
+
+    from backend.models.feed import FeedItem
+    from backend.models.tiers import Tier, TypeTag
+    from backend.repositories.feed_repository import InMemoryFeedRepository
+
+    now = datetime(2026, 7, 24, tzinfo=timezone.utc)
+    june = now - timedelta(days=46)
+
+    repo = InMemoryFeedRepository()
+    repo.upsert(
+        FeedItem(
+            id="assigned", user_id="u", source="linear", source_ref="linear:AGE-25",
+            rule_tier=Tier.URGENT, type_tag=TypeTag.ASSIGNED, title="Test suite",
+            url="", occurred_at=june, created_at=june,
+        )
+    )
+    repo.upsert(
+        FeedItem(
+            id="backlog", user_id="u", source="linear", source_ref="linear:AGE-21",
+            rule_tier=Tier.NOISE, type_tag=TypeTag.ASSIGNED, title="Summary card",
+            url="", occurred_at=june, created_at=june,
+        )
+    )
+    repo.upsert(
+        FeedItem(
+            id="old_mention", user_id="u", source="slack", source_ref="slack:C1:1",
+            rule_tier=Tier.CAN_WAIT, type_tag=TypeTag.REPLY, title="old chatter",
+            url="", occurred_at=june, created_at=june,
+        )
+    )
+
+    kept = {item.id for item in repo.list_by_user("u", now=now)}
+    assert "assigned" in kept, "an urgent assigned issue must not age out"
+    assert "backlog" in kept, "backlog work belongs in Later, not nowhere"
+    assert "old_mention" not in kept, "a month-old Slack line is genuinely stale"

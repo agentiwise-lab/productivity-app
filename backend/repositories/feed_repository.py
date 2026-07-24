@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from backend.models.feed import FeedItem, FeedStatus, TierSource
-from backend.models.tiers import Tier
+from backend.models.tiers import Tier, TypeTag
 
 RETENTION = timedelta(days=30)
 
@@ -163,12 +163,14 @@ class InMemoryFeedRepository:
             and item.status not in _CLOSED
             and (
                 (item.occurred_at or item.created_at or now) >= cutoff
-                # An open item with a deadline is a live obligation, not an old
-                # event, and must not age out. Linear issues last touched in
-                # June were months overdue and invisible at the same time,
-                # because retention read "when did this happen" rather than
-                # "is this still owed".
+                # Two things are obligations rather than events, and neither
+                # ages out. An item with a deadline: Linear issues last touched
+                # in June were months overdue and invisible at the same time.
+                # And anything assigned to this user: a task does not stop being
+                # yours because nobody edited it for a month. That one silently
+                # hid an Urgent issue and emptied the Later tab.
                 or item.deadline is not None
+                or item.type_tag is TypeTag.ASSIGNED
             )
         ]
 
