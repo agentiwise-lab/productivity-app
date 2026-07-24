@@ -11,12 +11,14 @@ contract, and translates an exception into a status code.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.auth import AuthMode, build_current_user
@@ -116,6 +118,7 @@ def create_app(
     classifier: DefaultClassificationService | None = None,
     connection_service: Any | None = None,
     stats: Any | None = None,
+    later: Any | None = None,
     calendar: Any | None = None,
     sync: Any | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
@@ -217,6 +220,45 @@ def create_app(
         if stats is None:
             raise HTTPException(status_code=503, detail="stats not configured")
         return stats.dashboard(provider, repo.list_by_user(user_id))
+
+    @app.get("/later/{provider}")
+    def stream_later(
+        provider: Source, limit: int = 200, user_id: str = Depends(current_user)
+    ) -> StreamingResponse:
+        """What arrived from one source and did not need you, streamed.
+
+        Server-sent events rather than one response: pulling every unread
+        message takes most of a minute, and a list that appears only after all
+        of it reads as broken. Each event is a batch of rows, and the client
+        appends as they land.
+
+        Nothing here is stored. This asks the provider what is currently
+        unread, unanswered or open, so it cannot drift from what the user sees
+        in Gmail or Slack the way a saved copy would.
+        """
+        if later is None:
+            raise HTTPException(status_code=503, detail="later not configured")
+
+        # Home is the exclusion set: an item on both screens would be the two
+        # of them disagreeing about the same message.
+        on_home = {item.source_ref for item in repo.list_by_user(user_id)}
+
+        def events():
+            try:
+                for batch in later.stream(
+                    user_id, provider, on_home=on_home, limit=limit
+                ):
+                    payload = json.dumps([row.model_dump(mode="json") for row in batch])
+                    yield f"event: rows\ndata: {payload}\n\n"
+            except Exception:
+                log.warning("later stream failed", exc_info=True)
+            yield "event: done\ndata: {}\n\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/day", response_model=list[MeetingOut])
     def get_day(user_id: str = Depends(current_user)) -> list[MeetingOut]:

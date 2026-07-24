@@ -108,8 +108,9 @@ class SourceSync:
             count = 0
             for event in events:
                 try:
-                    self._feed.ingest(user_id, event, prefs, identity)
-                    count += 1
+                    # None means it reaches no screen and was not stored.
+                    if self._feed.ingest(user_id, event, prefs, identity) is not None:
+                        count += 1
                 except Exception:
                     # One malformed row must not abandon the rest of the batch.
                     log.warning(

@@ -295,7 +295,7 @@ export default function App() {
             )}
           </Tab.Screen>
           <Tab.Screen name="Later">
-            {() => <LaterScreen rows={rows} onOpen={setSelected} />}
+            {() => <LaterScreen api={api} />}
           </Tab.Screen>
           <Tab.Screen name="You">
             {() => (

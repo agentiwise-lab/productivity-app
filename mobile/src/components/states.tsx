@@ -65,23 +65,6 @@ export function NothingConnected({ onConnect }: { onConnect: () => void }) {
  * An empty Later still has to be useful. It names the bucket, says what would
  * land there, and points at the thing worth doing instead.
  */
-export function EmptyBucket({
-  title,
-  explains,
-  hint,
-}: {
-  title: string;
-  explains: string;
-  hint?: string;
-}) {
-  return (
-    <View style={styles.block}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.blockBody}>{explains}</Text>
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-    </View>
-  );
-}
 
 export function StaleBanner({ fetchedAt }: { fetchedAt: Date | null }) {
   return (

@@ -156,6 +156,15 @@ export class ApiClient {
     });
   }
 
+  /** The Later stream is read with XHR, so the caller needs the URL and the
+   *  auth headers rather than a parsed response. */
+  laterStream(provider: string, limit = 200): { url: string; headers: Record<string, string> } {
+    return {
+      url: `${this.baseUrl}/later/${provider}?limit=${limit}`,
+      headers: this.auth(),
+    };
+  }
+
   refresh(): Promise<RefreshResult> {
     return this.request<RefreshResult>(
       '/feed/refresh',

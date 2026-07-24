@@ -23,11 +23,27 @@ from backend.models.identity import Identity
 from backend.repositories.feed_repository import FeedRepository
 from backend.services.hashing import content_hash
 from backend.services.ranking import effective_tier, score
-from backend.services.rules import RuleClassifier
+from backend.models.tiers import Tier
+from backend.services.rules import RuleClassifier, RuleVerdict
 
 
 class ItemNotFound(Exception):
     """Raised when an action targets a feed item that does not exist for a user."""
+
+
+def _reaches_no_screen(verdict: RuleVerdict) -> bool:
+    """True when storing this row would serve nothing.
+
+    Home shows what needs the user. Later reads the provider live. So an item
+    the rules settle as noise appears on neither screen, and keeping it means a
+    month of newsletters in the database backing a list that is fetched fresh
+    anyway: 349 of one refresh's 361 emails, all of them churn.
+
+    Only settled verdicts qualify. An item still waiting on the model has no
+    tier yet, and one the model has judged stays put: it is a small set, and
+    keeping it is what stops every refresh re-classifying the same messages.
+    """
+    return verdict.tier is Tier.NOISE and not verdict.needs_llm
 
 
 def _pr_ref_from_source_ref(source_ref: str) -> PRRef:
@@ -45,7 +61,8 @@ class FeedService(Protocol):
         event: RawEvent,
         prefs: UserPreferences,
         identity: Identity | None = None,
-    ) -> FeedItem:
+    ) -> FeedItem | None:
+        """None when the item reaches no screen and was not stored."""
         ...
 
     def list_feed(
@@ -78,8 +95,10 @@ class DefaultFeedService:
         event: RawEvent,
         prefs: UserPreferences,
         identity: Identity | None = None,
-    ) -> FeedItem:
+    ) -> FeedItem | None:
         verdict = self._rules.classify(event, identity=identity or Identity())
+        if _reaches_no_screen(verdict):
+            return None
         now = self._now()
         item = FeedItem(
             id=self._new_id(),

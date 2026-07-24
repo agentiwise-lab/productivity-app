@@ -117,15 +117,13 @@ def _noise_event(reason="gmail_bulk", **over):
     return RawEvent(**payload)
 
 
-def test_a_newsletter_is_kept_so_the_user_can_see_what_arrived():
-    """Later is the record of everything that came in and did not need you.
-    Discarding newsletters made the filter unauditable: the user could no
-    longer tell "nothing arrived" from "we threw it away"."""
+def test_a_newsletter_is_not_stored_because_no_screen_reads_it_from_here():
+    """It is still visible: Later streams it live from Gmail. Storing it as
+    well meant a month of newsletters in the database backing a list that is
+    fetched fresh on every open."""
     svc = build()
-    stored = svc.ingest("me", _noise_event(), prefs)
-    assert stored is not None
-    assert stored.rule_tier is Tier.NOISE
-    assert [r.source_ref for r in svc.list_feed("me", prefs)] == ["gmail:promo-1"]
+    assert svc.ingest("me", _noise_event(), prefs) is None
+    assert svc.list_feed("me", prefs) == []
 
 
 def test_a_backlog_issue_can_wait_rather_than_being_noise():

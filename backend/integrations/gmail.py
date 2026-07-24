@@ -11,6 +11,7 @@ dealt with.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from typing import Any
 
@@ -207,26 +208,20 @@ class ComposioGmailService:
             return result.get("data") or {}
         return getattr(result, "data", {}) or {}
 
-    def unread(self, limit: int = MAX_UNREAD) -> list[RawEvent]:
-        """Every unread message in the window, not the newest forty.
+    def unread_pages(self, limit: int = MAX_UNREAD) -> Iterator[list[RawEvent]]:
+        """One page at a time, so Later can render before the fetch finishes.
 
-        Later is meant to be the record of what arrived and did not need you,
-        so a cap here is a cap on what the user is allowed to know about: with
-        forty of two hundred fetched, the other hundred and sixty simply did not
-        exist anywhere in the app.
-
-        ``verbose`` is off. The full form carries every message body and 413s
-        well before this many, while the compact form still carries the sender,
-        the subject, the label ids the bulk rule needs, and enough text for the
-        model to judge the handful that are not newsletters.
+        Same walk as ``unread``, yielding instead of accumulating. Pulling every
+        unread message is three pages and most of a minute; a list that appears
+        after all of it feels broken, and one that fills in does not.
         """
-        found: list[RawEvent] = []
+        seen = 0
         page_token: str | None = None
 
-        while len(found) < limit:
+        while seen < limit:
             arguments: dict[str, Any] = {
                 "query": "is:unread newer_than:30d",
-                "max_results": min(PAGE_SIZE, limit - len(found)),
+                "max_results": min(PAGE_SIZE, limit - seen),
                 "verbose": False,
             }
             if page_token:
@@ -235,16 +230,27 @@ class ComposioGmailService:
 
             messages = data.get("messages") or data.get("emails") or []
             if not messages:
-                break
-            for message in messages:
-                event = message_to_raw_event(message)
-                if event is not None:
-                    found.append(event)
+                return
+            page = [message_to_raw_event(m) for m in messages]
+            page = [event for event in page if event is not None]
+            seen += len(page)
+            if page:
+                yield page
 
             page_token = data.get("nextPageToken") or data.get("next_page_token")
             if not page_token:
-                break
-        return found
+                return
+
+    def unread(self, limit: int = MAX_UNREAD) -> list[RawEvent]:
+        """Every unread message in the window, collected.
+
+        The ingest path wants one list; Later wants the pages as they arrive.
+        Both walk the same pager so they can never drift apart.
+        """
+        found: list[RawEvent] = []
+        for page in self.unread_pages(limit=limit):
+            found.extend(page)
+        return found[:limit]
 
     def inbox_summary(self, sample: int = 100) -> dict[str, Any]:
         """The real unread picture, straight from Gmail.

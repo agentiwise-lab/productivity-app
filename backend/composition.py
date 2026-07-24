@@ -24,6 +24,7 @@ from backend.main import create_app
 from backend.repositories.connections import InMemoryConnectionRepository
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.connections import DefaultConnectionService
+from backend.services.later import LaterService
 from backend.services.stats import SourceStatsService
 from backend.services.sync import SourceSync
 from backend.services.feed import DefaultFeedService
@@ -97,6 +98,16 @@ def build_app() -> FastAPI:
         github=github, linear=linear, calendar=calendar, gmail=gmail, slack=slack
     )
 
+    # Later reads the providers directly and stores nothing, so it takes the
+    # integrations rather than the repository.
+    later = LaterService(
+        gmail=gmail,
+        slack=slack,
+        linear=linear,
+        github=github,
+        identity_for=connections.identity_for,
+    )
+
     webhook_secret = os.environ.get("COMPOSIO_WEBHOOK_SECRET")
 
     def verify_webhook(body: bytes, headers: dict) -> dict:
@@ -128,6 +139,7 @@ def build_app() -> FastAPI:
         classifier=classifier,
         connection_service=connection_service,
         stats=stats,
+        later=later,
         calendar=calendar,
         sync=sync,
         verify_webhook=verify_webhook,

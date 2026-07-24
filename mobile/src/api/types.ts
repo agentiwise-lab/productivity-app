@@ -99,3 +99,18 @@ export interface SourceDashboard {
   breakdown_title: string;
   unavailable: string[];
 }
+
+/**
+ * A Later row. Thinner than FeedRow on purpose: nothing here has a tier,
+ * because nothing here was judged. These are the items that did not reach Home.
+ */
+export interface LaterRow {
+  source: Source;
+  source_ref: string;
+  title: string;
+  summary: string | null;
+  sender_name: string | null;
+  context_chip: string | null;
+  url: string;
+  occurred_at: string | null;
+}
