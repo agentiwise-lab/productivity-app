@@ -140,3 +140,35 @@ Recorded so nobody repeats the search.
 | **21st.dev** | Investigated twice. No tab bar, bottom sheet or gesture category at all. A React registry for marketing sites |
 
 **The methodological lesson: judge components at real size, in real apps. Every gallery that shows concept work on 3D phone renders is measuring the mockup, not the design.**
+
+---
+
+## Round 4 addendum: the doc-versus-pixel failure rate
+
+A further ~60 finance and crypto apps were swept, and the results sharpen the method further.
+
+### Confirmed on pixels
+
+- **Alpian** (CH, id `1634644504`) — a Swiss private bank. `~#0A0A0A` everywhere, **dark by default rather than dark-as-an-option**. Balance set in thin wide-tracked sans, mint circular action icons, charcoal currency cards with flag glyphs floating on black. **The best undiscovered find of the session.**
+- **Zolve** (IN/US, id `1574344423`) — pure black with a warm orange corner glow and **three 3D card renders: matte black with etched geometric guilloché, maroon, and deep purple.** The same material language as CRED, far less known.
+- **Vyzer** (id `1643866332`) — `#0D0D0D` with a multi-hue neon segmented donut and a grid of dark stat tiles. **Structurally the closest app found to a triage feed: a dark list of items carrying status chips ("Overdue") and per-row action buttons.**
+
+### Rated from press copy, then contradicted by their own screenshots
+
+- **Wealthsimple** — described as "Caslon + Futura over a near-black Dune base". **The store screenshots are cream and light.**
+- **Trade Republic** — described as "near-black canvas, hairline white chart strokes". **The store screenshots are white.**
+- **Zerion** — rated 4 in an earlier pass on the strength of a real, excellent Shuka Design rebrand. **The shipped iOS app is a white list view.**
+
+### The named failure mode: dark marketing, light product
+
+**Coinbase, Nexo, Zerion, Vinovest and Titan** all wrap a light product UI in dark, art-directed marketing. A case study or a brand site is not evidence about the app.
+
+> **Running tally: prose has now been contradicted by pixels six times this session** — Rivian, Bezel, Zerion, Wealthsimple, Trade Republic, and four App Store name-search mismatches. **This is not a run of bad sources. It is structural**, and the agent that swept this category named the reason: *companies and award juries publish strategy copy, not visual copy. Gradients, card renders, canvas darkness and chart density are almost never described in words.*
+>
+> **The rule for all future reference selection: a claim about how an app looks is not admissible unless someone has looked at it.**
+
+### Market context worth carrying
+
+India's mass-market fintech layer is **uniformly light and flat**: Jupiter, Fi, slice, Uni Cards, Groww, Zerodha Kite, Angel One, INDmoney, Navi. Jupiter's own community is still requesting dark mode.
+
+**CRED is the outlier in its own market, not the norm.** Part of why it reads as expensive locally is that nothing around it does.
