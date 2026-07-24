@@ -38,6 +38,19 @@ That was a real error. **We are building a phone app, and mobile is a different 
 | [09-mobile-design-principles.md](09-mobile-design-principles.md) | Tab bars, safe areas, thumb zones, sheets, gestures, haptics, mobile type scale, and how each differs from web. |
 | [10-mobile-sentiment.md](10-mobile-sentiment.md) | Mobbin, mobile subreddits, YouTube and Dribbble mobile. What real people say about phone app design. |
 
+**Step 2 teardowns. All 17 apps, depth-weighted to the priority 7.**
+
+| File | Apps |
+|---|---|
+| [11-teardown-priority.md](11-teardown-priority.md) | Things 3, CRED, Flighty, Halide |
+| [12-teardown-sequel-gentlerstreak-nubank.md](12-teardown-sequel-gentlerstreak-nubank.md) | Sequel, Gentler Streak, Nubank |
+| [13-teardown-tier2.md](13-teardown-tier2.md) | Not Boring Habits, Structured, Family, WHOOP, Copilot Money, stoic. |
+| [14-teardown-tier3.md](14-teardown-tier3.md) | Dark Noise, Timepage, Streaks, + the anti-reference |
+| **[15-measured-palettes.md](15-measured-palettes.md)** | **Hex values extracted from pixels, closing gaps no published source could** |
+| [references/](references/) | 96 App Store screenshots + 16 icons. See [SOURCES.md](references/SOURCES.md) |
+
+Every teardown tags each claim `[measured/published]`, `[reported]`, `[measured/pixels]` or `[inferred]`, and writes `NOT FOUND` rather than guessing. Contradictions found in source are reported, not smoothed over.
+
 **Round-one research. Principles stand, app lists and absolute web numbers do not.**
 
 | File | Status |
