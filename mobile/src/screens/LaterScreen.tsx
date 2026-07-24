@@ -41,8 +41,8 @@ const EMPTY: Record<Bucket, { title: string; explains: string; hint: string }> =
   noise: {
     title: 'Nothing held back',
     explains:
-      'Status updates, your own pull requests, bulk email and chatter you were not addressed in are filed here rather than shown on Home.',
-    hint: 'Everything filtered out stays visible here, never deleted.',
+      'Work assigned to you that nobody is waiting on is filed here rather than shown on Home. Backlog issues with no date land here.',
+    hint: 'Newsletters, bot chatter and conversation you were not addressed in are not kept at all.',
   },
 };
 
