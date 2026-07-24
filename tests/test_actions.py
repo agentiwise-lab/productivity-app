@@ -19,6 +19,7 @@ from backend.services.actions import ActionFailed, DefaultActionService, Unknown
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.rules import DefaultRuleClassifier
 from tests.fakes import (
+    FakeGmailService,
     FakeCalendarService,
     FakeGitHubService,
     FakeLinearService,
@@ -301,6 +302,68 @@ def test_commenting_on_linear_reaches_linear():
     actions.perform("me", item.id, "comment", body="picking this up now")
 
     assert linear.comments == [("linear:ENG-412", "picking this up now")]
+
+
+def gmail_event(**overrides):
+    defaults = dict(
+        source="gmail",
+        source_ref="gmail:198f3c903078dd486",
+        reason="gmail_message",
+        subject_type="Message",
+        title="Contract redline back from Nina",
+        url="https://mail.google.com/x",
+        repo="",
+    )
+    defaults.update(overrides)
+    return make_event(**defaults)
+
+
+def test_replying_to_gmail_posts_to_the_thread_and_closes_the_item():
+    """Reply is the one action a mail item exists for, and it was raising
+    UnknownAction because `_send` had no Gmail branch and the service had no
+    Gmail client, so the card could not offer the button at all."""
+    actions, feed, gmail = build_with_gmail()
+    item = feed.ingest("me", gmail_event(), PREFS)
+
+    updated = actions.perform("me", item.id, "reply", body="signing today")
+
+    assert gmail.replies == [("gmail:198f3c903078dd486", "signing today")]
+    assert updated.status is FeedStatus.ACTED
+    assert updated.handled_at == NOW
+
+
+def test_marking_gmail_read_reaches_gmail():
+    actions, feed, gmail = build_with_gmail()
+    item = feed.ingest("me", gmail_event(), PREFS)
+
+    actions.perform("me", item.id, "mark_read")
+
+    assert gmail.read == ["gmail:198f3c903078dd486"]
+
+
+def test_a_gmail_reply_with_no_client_is_refused_not_silently_dropped():
+    actions, feed, _ = build_with_gmail(with_gmail=False)
+    item = feed.ingest("me", gmail_event(), PREFS)
+
+    with pytest.raises(UnknownAction):
+        actions.perform("me", item.id, "reply", body="hello")
+
+
+def build_with_gmail(with_gmail: bool = True):
+    repo = InMemoryFeedRepository()
+    github = FakeGitHubService()
+    gmail = FakeGmailService()
+    feed = DefaultFeedService(
+        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+    )
+    actions = DefaultActionService(
+        repo=repo,
+        github=github,
+        slack=FakeSlackService(),
+        gmail=gmail if with_gmail else None,
+        clock=lambda: NOW,
+    )
+    return actions, feed, gmail
 
 
 def test_accepting_and_declining_are_the_same_call_with_a_different_answer():

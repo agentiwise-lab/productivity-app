@@ -5,8 +5,8 @@
  * decide on the user's behalf: it hardcoded three hours. The endpoint has
  * always taken an arbitrary time, so the picker is entirely client-side.
  *
- * The copy is taken from `snooze()`'s own docstring, because the reassurance
- * that nothing is sent upstream is the whole reason the action feels safe.
+ * The copy speaks to the user, not about them: it tells them what snoozing does
+ * for them rather than describing the feature in the third person.
  */
 
 import React from 'react';
@@ -81,10 +81,10 @@ export function SnoozeSheet({
               marginBottom: space.md,
             }}
           />
-          <T role="title">Snooze until</T>
+          <T role="title">Remind me</T>
           <T role="secondary" tone="mid" style={{ marginTop: space.xs }}>
-            Snoozing touches nothing upstream. It is your decision to look later,
-            not a statement to anyone else.
+            This just hides it from you until then. Nobody else is told, and
+            nothing is sent.
           </T>
           <View style={{ height: space.md }} />
           <Separator inset={0} />

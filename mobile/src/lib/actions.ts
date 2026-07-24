@@ -54,10 +54,25 @@ const IMPLEMENTED: Record<Source, Set<string>> = {
   // integration this build does not have. Until it exists, Docs opens and
   // nothing else: a button that fails is worse than one that is absent.
   google_docs: new Set<string>(),
-  // Sending mail is its own project: a send scope, threading, quoting and a
-  // signature. Until that lands, Gmail opens and nothing else.
-  gmail: new Set<string>(),
+  // Reply threads the response into the same conversation via
+  // GMAIL_REPLY_TO_THREAD, and mark_read clears UNREAD. Both are wired in the
+  // backend action service, so a mail item is a first-class reply target.
+  gmail: new Set(['reply', 'mark_read']),
 };
+
+/**
+ * Actions that need something typed before they can be sent: a reply body, a
+ * comment, a reason for requesting changes. Pressing one on the rail opens the
+ * sheet with the composer rather than firing an empty send that the backend
+ * can only reject. Firing empty was the whole "the button does nothing, then
+ * the card jumps to the next one" report: the empty send failed and the
+ * optimistic removal advanced the deck.
+ */
+const COMPOSER = new Set(['reply', 'comment', 'request_changes']);
+
+export function needsComposer(actionId: string): boolean {
+  return COMPOSER.has(actionId);
+}
 
 const EVERYWHERE = new Set(['open', 'snooze', 'mark_read', 'bring_back']);
 
@@ -100,6 +115,10 @@ function candidates(row: FeedRow): Action[] {
       return [COMMENT, OPEN, SNOOZE];
     case 'slack':
       return [REPLY, MARK_READ, SNOOZE];
+    case 'gmail':
+      // Reply first and always, because answering the mail is the point of
+      // the item and the reason it reached you rather than Later.
+      return [REPLY, OPEN, SNOOZE];
     case 'calendar':
       return [ACCEPT, DECLINE, OPEN];
     case 'google_docs':

@@ -11,6 +11,36 @@
  * every row keeps the same shape.
  */
 /**
+ * HTML entities as their characters.
+ *
+ * Mail arrives escaped for a web client it is never going to be shown in, so an
+ * apostrophe reaches the phone as `&#39;` and a quotation mark as `&quot;`. The
+ * later list decodes on the server; the feed body and summary do not, so it is
+ * done here where both of them are read.
+ */
+const NAMED: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+export function decodeEntities(input: string): string {
+  return input.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (whole, code: string) => {
+    if (code[0] === '#') {
+      const n =
+        code[1] === 'x' || code[1] === 'X'
+          ? parseInt(code.slice(2), 16)
+          : parseInt(code.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : whole;
+    }
+    return NAMED[code.toLowerCase()] ?? whole;
+  });
+}
+
+/**
  * One line of markdown as the words it was carrying.
  *
  * We are never going to render markdown: there is no renderer in the app and a
@@ -39,7 +69,7 @@ function strip(line: string): string {
  * their backticks, which is the app showing its input rather than its content.
  */
 export function readable(raw?: string | null): string | null {
-  const body = raw?.trim();
+  const body = decodeEntities(raw?.trim() || '');
   if (!body) return null;
   return (
     body
@@ -52,19 +82,29 @@ export function readable(raw?: string | null): string | null {
   );
 }
 
+/** The message itself, one line, decoded and de-marked. */
+function firstLine(raw?: string | null): string | null {
+  const body = decodeEntities(raw?.trim() || '');
+  if (!body) return null;
+  const first = body.split('\n').map(strip).find((line) => line.length > 0);
+  return first ? first.slice(0, 140) : null;
+}
+
 export function subtext(row: {
+  source?: string;
   summary?: string | null;
   body?: string | null;
 }): string | null {
+  // On a mail or a chat message the message *is* the content, so the card
+  // shows it rather than the model's paraphrase of it. The paraphrase reads as
+  // the app talking about the item instead of showing it, and the reason block
+  // below already carries the "why". For an issue or a PR the body is a wall of
+  // markdown, so there the one-line summary is the better line.
+  const conversational = row.source === 'gmail' || row.source === 'slack';
+  if (conversational) {
+    return firstLine(row.body) ?? (row.summary ? decodeEntities(row.summary.trim()) : null);
+  }
   const summary = row.summary?.trim();
-  if (summary) return summary;
-
-  const body = row.body?.trim();
-  if (!body) return null;
-
-  // First line with actual words in it. Linear descriptions open with a
-  // markdown heading, so the raw first line renders as "## V1 Unit 5" on a card
-  // that is already showing that title.
-  const first = body.split('\n').map(strip).find((line) => line.length > 0);
-  return first ? first.slice(0, 140) : null;
+  if (summary) return decodeEntities(summary);
+  return firstLine(row.body);
 }

@@ -60,6 +60,7 @@ class DefaultActionService:
         *,
         linear: Any | None = None,
         calendar: Any | None = None,
+        gmail: Any | None = None,
     ) -> None:
         self._repo = repo
         self._github = github
@@ -69,6 +70,7 @@ class DefaultActionService:
         # comment was posted.
         self._linear = linear
         self._calendar = calendar
+        self._gmail = gmail
         self._now = clock or (lambda: datetime.now(timezone.utc))
 
     def perform(
@@ -136,6 +138,13 @@ class DefaultActionService:
                 if self._linear is None:
                     raise UnknownAction("cannot reply on linear")
                 self._linear.comment(item.source_ref, text)
+            elif item.source == "gmail":
+                if self._gmail is None:
+                    raise UnknownAction("cannot reply on gmail")
+                # GMAIL_REPLY_TO_THREAD keeps the reply in the same thread and
+                # quotes the original, so the recipient sees a normal reply
+                # rather than a fresh mail with no history.
+                self._gmail.reply(item.source_ref, text)
             else:
                 raise UnknownAction(f"cannot reply on {item.source}")
         except UnknownAction:
@@ -203,6 +212,10 @@ class DefaultActionService:
         try:
             if item.source == "slack":
                 self._slack.mark_read(item.source_ref)
+            elif item.source == "gmail" and self._gmail is not None:
+                # Clearing UNREAD in Gmail too, so dismissing here does not
+                # leave the mail bold in the inbox and the work half done.
+                self._gmail.mark_read(item.source_ref)
             # GitHub read-state sync lands with the notification thread API;
             # dismissing locally is still correct in the meantime.
         except Exception as error:

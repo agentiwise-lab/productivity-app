@@ -128,6 +128,26 @@ class FakeLinearService:
         self.comments.append((source_ref, body))
 
 
+class FakeGmailService:
+    """Records replies and read-marks. ``fail`` makes the next call raise, the
+    way the other fakes model an upstream saying no."""
+
+    def __init__(self) -> None:
+        self.replies: list[tuple[str, str]] = []
+        self.read: list[str] = []
+        self.fail = False
+
+    def reply(self, source_ref: str, body: str) -> None:
+        if self.fail:
+            raise RuntimeError("gmail said no")
+        self.replies.append((source_ref, body))
+
+    def mark_read(self, source_ref: str) -> None:
+        if self.fail:
+            raise RuntimeError("gmail said no")
+        self.read.append(source_ref)
+
+
 class FakeCalendarService:
     """Records RSVPs as (event, accepted) so a test can tell an accept from a
     decline rather than merely observing that something was sent."""

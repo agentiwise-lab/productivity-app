@@ -27,7 +27,7 @@ import {
 import { Row } from '../components/ListRow';
 import { BrandMark } from '../components/BrandMark';
 import { SectionLabel, T } from '../components/ui';
-import { Clear, NothingConnected, Skeleton, StaleBanner } from '../components/states';
+import { Clear, NoMeetingsLeft, NothingConnected, Skeleton, StaleBanner } from '../components/states';
 import { ago, deadlineLabel } from '../lib/time';
 import { subtext } from '../lib/subtext';
 import type { FeedRow } from '../api/types';
@@ -172,7 +172,7 @@ export function YourDayScreen({
                 {loading && meetings.length === 0 ? (
                   <Skeleton rows={2} />
                 ) : ahead.length === 0 ? (
-                  <Clear heldBack={heldBack} />
+                  <NoMeetingsLeft counts={counts} />
                 ) : (
                   <>
                     {ahead.map((meeting, index) => (

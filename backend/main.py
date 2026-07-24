@@ -135,6 +135,7 @@ def create_app(
     later: Any | None = None,
     calendar: Any | None = None,
     linear: Any | None = None,
+    gmail: Any | None = None,
     sync: Any | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
     cors_origins: list[str] | None = None,
@@ -154,6 +155,7 @@ def create_app(
         # build with no Linear client must not report a comment nobody saw.
         linear=linear,
         calendar=calendar,
+        gmail=gmail,
     )
     ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
     current_user = build_current_user(auth_mode, jwt_secret)

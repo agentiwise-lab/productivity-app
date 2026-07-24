@@ -194,13 +194,19 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                   }
                   placeholderTextColor={c.low}
                   multiline
-                  style={{
-                    flex: 1,
-                    ...roles.body,
-                    fontFamily: fonts.sans,
-                    color: c.high,
-                    maxHeight: 96,
-                  }}
+                  // The composer already sits inside a bordered card, so the
+                  // browser's own focus ring drew a second rectangle inside the
+                  // first. `outline` is a web-only prop react-native-web reads.
+                  style={[
+                    {
+                      flex: 1,
+                      ...roles.body,
+                      fontFamily: fonts.sans,
+                      color: c.high,
+                      maxHeight: 96,
+                    },
+                    { outline: 'none' } as object,
+                  ]}
                 />
                 <Pressable
                   // An empty reply is rejected server-side, so the button is

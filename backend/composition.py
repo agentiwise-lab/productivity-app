@@ -142,6 +142,7 @@ def build_app() -> FastAPI:
         later=later,
         calendar=calendar,
         linear=linear,
+        gmail=gmail,
         sync=sync,
         verify_webhook=verify_webhook,
         cors_origins=[
