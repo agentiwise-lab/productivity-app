@@ -209,3 +209,39 @@ def test_the_subject_becomes_the_title_and_the_snippet_the_body():
     raw = message_to_raw_event(message())
     assert raw.title == "Board deck numbers"
     assert "board call" in raw.body
+
+
+def test_a_compact_gmail_message_keeps_its_real_date():
+    """The compact fetch has no ``internalDate``; it carries an ISO
+    ``messageTimestamp``. Reading only the epoch field left every email with no
+    date at all, so the feed stamped them "now" and a week-old invitation
+    looked like it had just arrived."""
+    from backend.integrations.gmail import message_to_raw_event
+
+    event = message_to_raw_event(
+        {
+            "messageId": "m1",
+            "labelIds": ["UNREAD"],
+            "subject": "Invitation: Update Call",
+            "sender": "Loganathan A <log@x.com>",
+            "messageTimestamp": "2026-07-17T11:00:00Z",
+        }
+    )
+    assert event is not None
+    assert event.occurred_at == datetime(2026, 7, 17, 11, 0, tzinfo=timezone.utc)
+
+
+def test_the_epoch_form_still_works():
+    """The verbose fetch and the webhooks still send internalDate."""
+    from backend.integrations.gmail import message_to_raw_event
+
+    event = message_to_raw_event(
+        {
+            "id": "m2",
+            "labelIds": ["UNREAD"],
+            "subject": "Hi",
+            "sender": "a@b.com",
+            "internalDate": "1784800000000",
+        }
+    )
+    assert event.occurred_at is not None

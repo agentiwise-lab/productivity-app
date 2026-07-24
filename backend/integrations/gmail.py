@@ -51,6 +51,31 @@ def _parse_internal_date(value: Any) -> datetime | None:
         return None
 
 
+def _sent_at(message: dict[str, Any]) -> datetime | None:
+    """When the message was actually sent.
+
+    The two fetch shapes disagree: the verbose form and the webhooks carry
+    ``internalDate`` as epoch milliseconds, the compact form carries
+    ``messageTimestamp`` as ISO. Reading only the first meant every message from
+    the compact fetch had no date, so the feed stamped it with the ingest time
+    and a week-old invitation was displayed as having just arrived.
+    """
+    epoch = _parse_internal_date(
+        message.get("internalDate") or message.get("internal_date")
+    )
+    if epoch is not None:
+        return epoch
+
+    stamp = message.get("messageTimestamp") or message.get("message_timestamp")
+    if not isinstance(stamp, str) or not stamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 def _sender(from_header: str) -> tuple[str, str]:
     """"Priya Sharma <priya@x.com>" into a name and an address."""
     if "<" in from_header and ">" in from_header:
@@ -159,9 +184,7 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
         repo="",
         context_chip="Inbox",
         actor=Actor(login=email, display_name=name or None),
-        occurred_at=_parse_internal_date(
-            message.get("internalDate") or message.get("internal_date")
-        ),
+        occurred_at=_sent_at(message),
         # Someone wrote to this person by name and has had no answer.
         is_blocking=not noisy,
         raw=message,

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Protocol
+from datetime import datetime, timezone
+from typing import Callable, Protocol
 
 from pydantic import BaseModel
 
@@ -55,6 +56,9 @@ RULES
 - Bot and automated messages are noise unless they report a failure in this
   user's own work.
 - Recency alone never makes something urgent.
+- Today's date is given as `now`, and each item carries `sent_at`. Use them.
+  Anything whose moment has already passed, such as an invitation to a meeting
+  that has happened, is noise: there is nothing left to do about it.
 
 WRITING THE TWO LINES
 - summary: what this actually asks of the user, in their words. Name the thing
@@ -131,12 +135,14 @@ class DefaultClassificationService:
         cache: ClassificationCache,
         daily_budget: int = 200,
         model_name: str = "google/gemini-2.5-flash",
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._model = model
         self._repo = repo
         self._cache = cache
         self._budget = daily_budget
         self._model_name = model_name
+        self._now = clock or (lambda: datetime.now(timezone.utc))
 
     def classify_pending(self, user_id: str) -> ClassificationReport:
         pending = self._repo.list_pending_classification(user_id, limit=self._budget)
@@ -190,7 +196,8 @@ class DefaultClassificationService:
         Retrying more would delay every other batch behind it for an outcome
         that a second attempt has already shown to be unlikely.
         """
-        payload = [self._to_payload(item) for item in batch]
+        now = self._now().isoformat()
+        payload = [self._to_payload(item, now) for item in batch]
         for attempt in (1, 2):
             try:
                 verdicts = self._model.judge(payload)
@@ -246,8 +253,9 @@ class DefaultClassificationService:
         return applied
 
     @staticmethod
-    def _to_payload(item: FeedItem) -> dict:
+    def _to_payload(item: FeedItem, now: str) -> dict:
         return {
+            "now": now,
             "id": item.id,
             "source": item.source,
             "type": item.type_tag.value,
@@ -257,6 +265,12 @@ class DefaultClassificationService:
             "labels": item.raw.get("labels") or [],
             "deadline": item.deadline.isoformat() if item.deadline else None,
             "is_direct": item.is_blocking,
+            # Without these the model cannot tell a past event from a future
+            # one. It read a 17 July invitation as "far in the future" a week
+            # after the meeting had happened, and filed it under Can wait.
+            "sent_at": (item.occurred_at or item.created_at).isoformat()
+            if (item.occurred_at or item.created_at)
+            else None,
         }
 
 
