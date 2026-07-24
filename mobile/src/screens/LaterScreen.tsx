@@ -1,13 +1,17 @@
 /**
- * Later: everything unactioned, every source, inside the 30-day window.
+ * Later: what was set aside rather than what is live.
  *
- * This is what earns the right to hide things from Home. Nothing is deleted, it
- * is only not shouted about, and the user can always come here and see exactly
- * what was held back and why. A filter that discards silently is a filter
- * nobody trusts.
+ * Two buckets. "Held back" is work assigned to this user that nobody is waiting
+ * on, chiefly backlog issues with no date, kept out of Home without being lost.
+ * "Snoozed" is what the user themselves pushed to a time.
  *
- * Rows carry the reason they are here, and an empty bucket explains what would
- * land in it rather than saying "Nothing here" and stopping.
+ * What does *not* appear here is newsletters, bot chatter and conversation the
+ * user was never addressed in: that is classified and discarded, never stored.
+ * An earlier version kept all of it to prove the filter had run, which produced
+ * a Later tab that was 37 newsletters deep and told the user nothing.
+ *
+ * An empty bucket explains what would land in it rather than saying "Nothing
+ * here" and stopping.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -126,7 +130,9 @@ export function LaterScreen({
           ))
         )}
         {shown.length > 0 ? (
-          <Text style={styles.footnote}>Kept for 30 days, then removed.</Text>
+          <Text style={styles.footnote}>
+            Work assigned to you stays here until it is done.
+          </Text>
         ) : null}
       </ScrollView>
     </SafeAreaView>

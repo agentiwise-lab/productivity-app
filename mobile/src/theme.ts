@@ -130,7 +130,10 @@ export const tierLabel = {
   urgent: 'Urgent',
   today: 'By EOD',
   can_wait: 'Can wait',
-  noise: 'Noise',
+  // Only ever rendered in Later. What survives at this tier is the user's own
+  // work with no date on it, so "Noise" named the internal tier rather than
+  // the thing: nobody calls their own backlog noise.
+  noise: 'No date set',
 } as const;
 
 /** .lsthd .pip colours, in tier order. */
