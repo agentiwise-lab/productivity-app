@@ -22,7 +22,7 @@ import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Icon } from '../components/Icon';
 import { Row } from '../components/ListRow';
-import { Chip, SectionLabel, Segmented, Separator, T, Toggle } from '../components/ui';
+import { Chip, Segmented, Separator, T, Toggle } from '../components/ui';
 import type { Source, SourceInfo } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
@@ -145,14 +145,18 @@ export function YouScreen({
 
         <Separator inset={0} />
 
-        <SectionLabel label="Appearance" />
+        {/* The section headings read like "Notify me", not as small uppercase
+            labels: every heading on the screen is one 17pt weight, so the eye
+            groups them as peers. They sit close under the separator rather than
+            a full 32pt below it. */}
+        <SectionHeading label="Appearance" />
         <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
           <Segmented options={APPEARANCES} value={appearance} onChange={setAppearance} />
         </View>
 
         <Separator inset={0} />
 
-        <SectionLabel
+        <SectionHeading
           label="Connections"
           right={
             needsAction > 0 ? (
@@ -233,6 +237,34 @@ export function YouScreen({
         <Separator inset={0} />
       </AnimatedScrollView>
       <CollapsedTitle title={title} scrollY={scrollY} />
+    </View>
+  );
+}
+
+/** A section heading in the same 17pt weight as "Notify me", with room on the
+ *  right for a badge, set close under the separator above it. */
+function SectionHeading({
+  label,
+  right,
+}: {
+  label: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.xs,
+        paddingHorizontal: space.md,
+        paddingTop: space.md,
+        paddingBottom: space.xs,
+      }}
+    >
+      <T role="heading" style={{ flex: 1 }}>
+        {label}
+      </T>
+      {right}
     </View>
   );
 }
