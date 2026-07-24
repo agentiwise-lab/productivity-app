@@ -22,8 +22,8 @@
   --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
   --hairline:#2E2A26; --border:#3B352F;
   --faint:#57504A; --low:#7A736C; --mid:#A79F97; --high:#F5F1EC;
-  --accent:#5FE3C0; --alarm:#FF5A4E; --onSolid:#0C0B0A;
-  --github:#A371F7; --linear:#5E6AD2; --slack:#36C5F0;
+  --accent:#6FE6C6; --alarm:#FF9E90; --wait:#C3A8FA; --onSolid:#0C0B0A;
+  --github:#C3A8FA; --linear:#5E6AD2; --slack:#36C5F0;
   --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
   --tabbg:rgba(12,11,10,.74);
   --page:#151412; --pagefg:#EDEAE5; --pagedim:#8E8880; --pageln:#2E2A26; --phedge:#332E29;
@@ -36,7 +36,7 @@
   --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
   --hairline:#E2DCD2; --border:#D2CABE;
   --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
-  --accent:#0C7D63; --alarm:#C8402F; --onSolid:#FFFDF9;
+  --accent:#0F8E71; --alarm:#D9503C; --wait:#7C4FD6; --onSolid:#FFFDF9;
   --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
 }
 .pg *{box-sizing:border-box;}
@@ -57,7 +57,7 @@
 .cell{flex:none;width:393px;}
 .cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;}
 .cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
-.cap .rec{color:#5FE3C0;}
+.cap .rec{color:#6FE6C6;}
 .specrow{display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;align-items:flex-end;}
 .specitem{padding:12px 16px;border:1px solid var(--pageln);border-radius:12px;background:#0C0B0A;}
 .specitem .nm{font-family:"Geist Mono",monospace;font-size:10px;color:var(--pagedim);margin-top:8px;}
@@ -111,7 +111,7 @@
   letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--low);}
 .tabitem.on .tl{color:var(--high);}
 .tabitem.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--accent);}
+  width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--high);}
 .tabbadge{position:absolute;top:-1px;left:calc(50% + 7px);min-width:16px;height:16px;
   border-radius:999px;background:var(--alarm);color:var(--onSolid);font-size:11px;font-weight:600;
   display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
@@ -167,8 +167,9 @@
   text-transform:uppercase;font-weight:600;white-space:nowrap;}
 .chip.solid{background:var(--alarm);color:var(--onSolid);}
 .chip.solid.acc{background:var(--accent);}
+.chip.solid.wait{background:var(--wait);color:#0C0B0A;}
 .chip.outline{border:1px solid var(--border);color:var(--mid);}
-.chip.outline.acc{border-color:var(--accent);color:var(--accent);}
+.chip.outline.acc{border-color:var(--border);color:var(--high);}
 .chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
 .chip.ghost{color:var(--low);padding:0;}
 .chip.file{text-transform:none;letter-spacing:0;font-family:"Geist Mono",monospace;font-weight:400;}
@@ -195,8 +196,8 @@
 .daykey{position:absolute;bottom:0;display:flex;align-items:center;gap:8px;}
 .daykey .dot{width:8px;height:8px;border-radius:999px;display:block;}
 .arcglow{position:absolute;width:260px;height:260px;border-radius:999px;
-  background:radial-gradient(circle,rgba(255,90,78,.14) 0%,rgba(255,90,78,0) 62%);}
-.lightmode .arcglow{background:radial-gradient(circle,rgba(200,64,47,.09) 0%,rgba(200,64,47,0) 62%);}
+  background:radial-gradient(circle,rgba(255,158,144,.14) 0%,rgba(255,158,144,0) 62%);}
+.lightmode .arcglow{background:radial-gradient(circle,rgba(217,80,60,.09) 0%,rgba(217,80,60,0) 62%);}
 .arcnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 
 /* ═══ FEED CARD ══════════════════════════════════════════════════ */
@@ -205,17 +206,20 @@
 /* the flamboyance: tier colour rising from the bottom edge */
 .beneath{position:absolute;left:0;right:0;bottom:0;height:340px;pointer-events:none;z-index:1;}
 .beneath.u{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(255,120,90,.46) 0%,rgba(255,90,78,.16) 42%,rgba(255,90,78,0) 74%),
-  linear-gradient(0deg,rgba(255,90,78,.16) 0%,rgba(255,90,78,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(255,158,144,.50) 0%,rgba(255,158,144,.16) 42%,rgba(255,158,144,0) 74%),
+  linear-gradient(0deg,rgba(255,158,144,.16) 0%,rgba(255,158,144,0) 58%);}
 .beneath.b{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(120,240,205,.38) 0%,rgba(95,227,192,.13) 42%,rgba(95,227,192,0) 74%),
-  linear-gradient(0deg,rgba(95,227,192,.12) 0%,rgba(95,227,192,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(111,230,198,.42) 0%,rgba(111,230,198,.13) 42%,rgba(111,230,198,0) 74%),
+  linear-gradient(0deg,rgba(111,230,198,.12) 0%,rgba(111,230,198,0) 58%);}
 .beneath.c{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(190,182,172,.20) 0%,rgba(167,159,151,.06) 42%,rgba(167,159,151,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(195,168,250,.34) 0%,rgba(195,168,250,.11) 42%,rgba(195,168,250,0) 74%),
+  linear-gradient(0deg,rgba(195,168,250,.12) 0%,rgba(195,168,250,0) 58%);}
 .lightmode .beneath.u{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(200,64,47,.22) 0%,rgba(200,64,47,.07) 42%,rgba(200,64,47,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(217,80,60,.22) 0%,rgba(217,80,60,.07) 42%,rgba(217,80,60,0) 74%);}
 .lightmode .beneath.b{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(12,125,99,.20) 0%,rgba(12,125,99,.06) 42%,rgba(12,125,99,0) 74%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(15,142,113,.20) 0%,rgba(15,142,113,.06) 42%,rgba(15,142,113,0) 74%);}
+.lightmode .beneath.c{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(124,79,214,.20) 0%,rgba(124,79,214,.06) 42%,rgba(124,79,214,0) 74%);}
 .fbody{flex:1;padding:16px 16px 0;position:relative;z-index:4;display:flex;flex-direction:column;min-height:0;}
 .fhead{display:flex;align-items:center;gap:12px;}
 .fmid{margin-top:24px;}
@@ -234,7 +238,7 @@
 .quote{border-left:2px solid var(--border);padding-left:12px;}
 .why{border-radius:12px;padding:12px;background:rgba(255,255,255,.04);}
 .lightmode .why{background:rgba(0,0,0,.04);}
-.quote.acc{border-left-color:var(--accent);}
+.quote.acc{border-left-color:var(--mid);}
 .kv{display:flex;justify-content:space-between;padding:4px 0;}
 
 /* ═══ SHEETS ═════════════════════════════════════════════════════ */
@@ -267,7 +271,7 @@
 .act{width:44px;height:44px;border-radius:999px;background:var(--overlay);
   border:1px solid var(--border);display:grid;place-items:center;}
 .statusdot{width:8px;height:8px;border-radius:999px;flex:none;}
-.statusdot.live{background:var(--accent);}
+.statusdot.live{background:var(--mid);}
 .statusdot.bad{background:var(--alarm);}
 .statusdot.off{border:1px solid var(--border);}
 
@@ -283,8 +287,8 @@
 .sw{width:51px;height:31px;border-radius:999px;background:var(--overlay);padding:2px;display:flex;flex:none;
   box-shadow:inset 0 0 0 1px var(--hairline);}
 .sw i{width:27px;height:27px;border-radius:999px;background:var(--faint);display:block;}
-.sw.on{background:var(--accent);box-shadow:none;}
-.sw.on i{margin-left:20px;background:var(--onSolid);}
+.sw.on{background:var(--high);box-shadow:none;}
+.sw.on i{margin-left:20px;background:var(--canvas);}
 .bubble{min-width:20px;height:20px;border-radius:999px;background:var(--alarm);color:var(--onSolid);
   font-size:11px;font-weight:600;display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
 .spin{width:20px;height:20px;border-radius:999px;border:2px solid var(--border);border-top-color:var(--accent);}
@@ -338,8 +342,9 @@
   <div class="sw-item"><div class="sw-chip" style="background:#3B352F"></div><div class="sw-nm">border 3B352F</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#A79F97"></div><div class="sw-nm">mid A79F97</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#F5F1EC"></div><div class="sw-nm">high F5F1EC</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#5FE3C0"></div><div class="sw-nm">accent 5FE3C0</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#FF5A4E"></div><div class="sw-nm">alarm FF5A4E</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#6FE6C6"></div><div class="sw-nm">By EOD 6FE6C6</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#FF9E90"></div><div class="sw-nm">Urgent FF9E90</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#C3A8FA"></div><div class="sw-nm">Can wait C3A8FA</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#F4F1EC"></div><div class="sw-nm">light canvas</div></div>
 </div>
 
@@ -354,7 +359,7 @@
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
     <div class="hdr"><div class="t-label eb">Thu 24 Jul</div>
-      <div class="t-display" style="margin-top:4px">Your day</div></div>
+      <div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="none"></div>
     <div class="sectlab t-label">Next</div>
@@ -365,7 +370,7 @@
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
     <div class="hdr"><div class="t-label eb">Thu 24 Jul</div>
-      <div class="t-display" style="margin-top:4px">Your day</div></div>
+      <div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
@@ -384,7 +389,7 @@
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="none"></div>
     <div class="sectlab t-label">Next</div>
@@ -394,7 +399,7 @@
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
@@ -404,7 +409,7 @@
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="byyou"></div>
     <div class="sectlab t-label">By EOD <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
@@ -414,7 +419,7 @@
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="canwait"></div>
     <div class="sectlab t-label">Can wait <span class="grow"></span><span class="mono t-secondary c-low">1 item</span></div>
@@ -434,7 +439,7 @@
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
-    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="tint" data-tint="u"></div><div class="beneath u"></div>
     <div class="fbody">
       <div class="fhead"><span class="mark s44" data-mark="github"></span>
         <span class="stack grow"><span class="t-heading">GitHub</span>
@@ -463,7 +468,7 @@
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
-    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="tint" data-tint="u"></div><div class="beneath u"></div>
     <div class="fbody">
       <div class="fhead"><span class="mark s44" data-mark="github"></span>
         <span class="stack grow"><span class="t-heading">GitHub</span>
@@ -490,7 +495,7 @@
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
-    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="tint" data-tint="u"></div><div class="beneath u"></div>
     <div class="fbody" style="padding-top:16px">
       <div class="fhead"><span class="mark s44" data-mark="github"></span>
         <span class="stack grow"><span class="t-heading">GitHub</span>
@@ -531,14 +536,14 @@
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
     <div class="fcard" data-dim>
-      <div class="tint" data-tint="gmail"></div><div class="beneath u"></div>
+      <div class="tint" data-tint="u"></div><div class="beneath u"></div>
       <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="gmail"></span>
         <span class="stack grow"><span class="t-heading">Gmail</span><span class="mono t-secondary c-low">nina@brightlaw.co</span></span></div>
         <div class="t-display clamp2" style="margin-top:32px">Contract redline back from legal</div></div>
     </div>
     <div class="scrim"></div>
     <div class="sheet" style="height:82%">
-      <div class="swash" data-swash="gmail"></div>
+      <div class="swash" data-swash="u"></div>
       <div class="grab"></div>
       <!-- head: who, where, when, tier -->
       <div style="display:flex;align-items:center;gap:12px">
@@ -568,14 +573,14 @@
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
     <div class="fcard" data-dim>
-      <div class="tint" data-tint="slack"></div><div class="beneath u"></div>
+      <div class="tint" data-tint="u"></div><div class="beneath u"></div>
       <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="slack"></span>
         <span class="stack grow"><span class="t-heading">Slack</span><span class="mono t-secondary c-low">#product</span></span></div>
         <div class="t-display clamp2" style="margin-top:32px">Sam needs a call on the pricing tier</div></div>
     </div>
     <div class="scrim"></div>
     <div class="sheet" style="height:76%">
-      <div class="swash" data-swash="slack"></div>
+      <div class="swash" data-swash="u"></div>
       <div class="grab"></div>
       <div style="display:flex;align-items:center;gap:12px">
         <span class="mark s32" data-mark="slack"></span>
@@ -605,14 +610,14 @@
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
     <div class="fcard" data-dim>
-      <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+      <div class="tint" data-tint="u"></div><div class="beneath u"></div>
       <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="github"></span>
         <span class="stack grow"><span class="t-heading">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
         <div class="t-display clamp2" style="margin-top:32px">Fix the auth race in the session refresh</div></div>
     </div>
     <div class="scrim"></div>
     <div class="sheet" style="height:58%">
-      <div class="swash" data-swash="github"></div>
+      <div class="swash" data-swash="u"></div>
       <div class="grab"></div>
       <div class="t-title">Approve this pull request</div>
       <div class="t-secondary c-mid" style="margin-top:8px">This submits a review, not a comment. An approval is what unblocks the merge.</div>
@@ -632,14 +637,14 @@
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
     <div class="fcard" data-dim>
-      <div class="tint" data-tint="linear"></div><div class="beneath b"></div>
+      <div class="tint" data-tint="b"></div><div class="beneath b"></div>
       <div class="fbody"><div class="fhead"><span class="mark s44" data-mark="linear"></span>
         <span class="stack grow"><span class="t-heading">Linear</span><span class="mono t-secondary c-low">ENG-412</span></span></div>
         <div class="t-display clamp2" style="margin-top:32px">Ship the token layer for dark mode</div></div>
     </div>
     <div class="scrim"></div>
     <div class="sheet" style="height:52%">
-      <div class="swash" data-swash="linear"></div>
+      <div class="swash" data-swash="b"></div>
       <div class="grab"></div>
       <div class="t-title">Snooze until</div>
       <div class="t-secondary c-mid" style="margin-top:8px">Snoozing touches nothing upstream. It is your decision to look later, not a statement to anyone else.</div>
@@ -710,7 +715,8 @@
 
 <div class="cell"><div class="ph" data-tab="activity">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Activity</div></div>
+    <div class="hdr"><div class="t-label eb">Last 30 days</div>
+      <div class="t-display" style="margin-top:4px">3 sources connected</div></div>
     <div style="height:24px"></div>
     <div data-activity></div>
   </div></div>
@@ -722,7 +728,7 @@
       <span class="mark s24" data-mark="github"></span><span class="t-heading grow">GitHub</span>
       <span class="t-label c-low">30 days</span></div>
     <div class="boardhead">
-      <div class="tint" data-tint="github" style="height:140px"></div>
+      <div class="tint" data-tint="u" style="height:140px"></div>
       <div class="stack grow" style="position:relative"><span class="t-display num">12</span>
         <span class="t-label c-low" style="margin-top:4px">Open pull requests</span></div>
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
@@ -740,7 +746,7 @@
       <span class="mark s24" data-mark="calendar"></span><span class="t-heading grow">Calendar</span>
       <span class="t-label c-low">30 days</span></div>
     <div class="boardhead">
-      <div class="tint" data-tint="calendar" style="height:140px"></div>
+      <div class="tint" data-tint="b" style="height:140px"></div>
       <div class="stack grow" style="position:relative"><span class="t-display num">38h</span>
         <span class="t-label c-low" style="margin-top:4px">In meetings</span></div>
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
@@ -748,12 +754,12 @@
     </div>
     <div class="statgrid"><div class="statcard"><div class="t-label c-low">Meetings</div><div class="t-title num" style="margin-top:4px">62</div><div class="t-secondary c-mid trunc">2.8 a day</div></div><div class="statcard"><div class="t-label c-low">Longest day</div><div class="t-title num" style="margin-top:4px">6h</div><div class="t-secondary c-mid trunc">Tue 15 Jul</div></div><div class="statcard"><div class="t-label c-low">Organised by you</div><div class="t-title num" style="margin-top:4px">14</div><div class="t-secondary c-mid trunc">of 62</div></div><div class="statcard"><div class="t-label c-low">Declined</div><div class="t-title num" style="margin-top:4px">7</div><div class="t-secondary c-mid trunc">of 62</div></div></div>
     <div class="sectlab t-label tight">Most frequent</div>
-    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+    <div class="lrow"><span class="lwash" data-lwash=""></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">Weekly product sync</span>
         <span class="t-secondary c-mid trunc">every Monday, 60m</span></span>
       <span class="mono t-heading">4</span></div>
-    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+    <div class="lrow"><span class="lwash" data-lwash=""></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">1:1 with Sam</span>
         <span class="t-secondary c-mid trunc">every Thursday, 30m</span></span>
@@ -773,15 +779,15 @@
 
 <div class="cell"><div class="ph" data-tab="you">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+    <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">Vicky Pandey</div></div>
     <div class="sectlab t-label">Notifications</div>
     <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
       <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
     <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
     <div class="sep full"></div>
     <div class="sectlab t-label">Connections <span class="bubble">1</span><span class="grow"></span>
-      <span style="display:flex;align-items:center;gap:4px;color:var(--accent)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><use href="#i-plus"/></svg>Add</span></div>
+      <span style="display:flex;align-items:center;gap:4px;color:var(--high)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" stroke-linecap="round"><use href="#i-plus"/></svg>Add</span></div>
     <div class="sep full"></div>
     <div data-conn></div>
     <div class="row" style="margin-top:24px"><span class="t-body c-mid grow">Sign out</span></div>
@@ -792,7 +798,7 @@
 <div class="cell"><div class="ph" data-tab="you">
   <div class="bd">
     <div class="scroll">
-      <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+      <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">Vicky Pandey</div></div>
       <div class="sectlab t-label">Notifications</div>
       <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
         <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
@@ -820,12 +826,12 @@
 <div class="pgsec">
 <p class="eyebrow">The alternate</p>
 <h2>Light, and warm</h2>
-<p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0C7D63</span> and the alarm to <span class="mono">#C8402F</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
+<p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0F8E71</span> and the alarm to <span class="mono">#D9503C</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
 <div class="rail lightmode">
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
+    <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Good morning, Vicky</div></div>
     <div class="arcwrap" data-day="dual" data-light="1"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
@@ -835,7 +841,7 @@
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
-    <div class="tint" data-tint="github"></div><div class="beneath u"></div>
+    <div class="tint" data-tint="u"></div><div class="beneath u"></div>
     <div class="fbody">
       <div class="fhead"><span class="mark s44" data-mark="github"></span>
         <span class="stack grow"><span class="t-heading">GitHub</span>
@@ -875,16 +881,19 @@
 <script>
 /* ═══ brand marks, Simple Icons paths (CC0) ═══════════════════════ */
 const MARKS={
- github:{c:'#A371F7',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
+ github:{c:'#C3A8FA',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
  slack:{c:'#36C5F0',p:'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z'},
  linear:{c:'#5E6AD2',p:'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z'},
  gmail:{c:'#EA4335',p:'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z'},
  gdocs:{c:'#4285F4',p:'M14 2H6.4C5.1 2 4 3.1 4 4.4v15.2C4 20.9 5.1 22 6.4 22h11.2c1.3 0 2.4-1.1 2.4-2.4V8l-6-6zm-1 7V3.6L18.4 9H13zM8 12.4h8v1.4H8v-1.4zm0 3.2h8V17H8v-1.4zM8 9h4v1.4H8V9z'},
  calendar:{c:'#34A853',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
 };
-const TINT={github:'163,113,247',slack:'54,197,240',linear:'94,106,210',
-            gmail:'234,67,53',gdocs:'66,133,244',calendar:'52,168,83'};
-function markSvg(id,box){const m=MARKS[id];return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="${m.c}"><path d="${m.p}"/></svg>`;}
+/* Three hues in the whole app, and they mean tier. Nothing else is coloured. */
+const TIERRGB={u:'255,158,144',b:'111,230,198',c:'195,168,250'};
+/* Monochrome. A brand mark is identity by shape, not by hue, and colouring
+   six of them would put six hues on screen that mean nothing about priority. */
+function markSvg(id,box){const m=MARKS[id];
+ return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="var(--mid)"><path d="${m.p}"/></svg>`;}
 function paint(root=document){
  root.querySelectorAll('[data-mark]').forEach(el=>{
   if(el.dataset.done)return; el.dataset.done=1;
@@ -892,11 +901,13 @@ function paint(root=document){
             el.classList.contains('s24')?14:el.classList.contains('s20')?12:11;
   el.innerHTML=markSvg(el.dataset.mark,box);});
  root.querySelectorAll('[data-lwash]').forEach(el=>{
-  el.style.background=`linear-gradient(90deg,rgba(${TINT[el.dataset.lwash]},.13),rgba(${TINT[el.dataset.lwash]},0) 100%)`;});
+  const c=TIERRGB[el.dataset.lwash]; if(!c){el.style.display='none';return;}
+  el.style.background=`linear-gradient(90deg,rgba(${c},.14),rgba(${c},0) 100%)`;});
  root.querySelectorAll('[data-swash]').forEach(el=>{
-  el.style.background=`linear-gradient(180deg,rgba(${TINT[el.dataset.swash]},.18),rgba(${TINT[el.dataset.swash]},0) 100%)`;});
+  el.style.background=`linear-gradient(180deg,rgba(${TIERRGB[el.dataset.swash]},.20),rgba(${TIERRGB[el.dataset.swash]},0) 100%)`;});
  root.querySelectorAll('[data-tint]').forEach(el=>{
-  el.style.background=`radial-gradient(120% 80% at 12% 0%,rgba(${TINT[el.dataset.tint]},.16),rgba(${TINT[el.dataset.tint]},0) 60%)`;});
+  const c=TIERRGB[el.dataset.tint]; if(!c){el.style.display='none';return;}
+  el.style.background=`radial-gradient(120% 80% at 12% 0%,rgba(${c},.14),rgba(${c},0) 60%)`;});
 }
 
 /* ═══ the day object ══════════════════════════════════════════════
@@ -907,10 +918,10 @@ const DAY_START=8,DAY_H=12,NOW=9+41/60;
 const MEETINGS=[[10.5,11.25],[14,14.5],[16,17]];
 const frac=h=>(h-DAY_START)/DAY_H;
 function dayDual(light){
- const acc=light?'#0C7D63':'#5FE3C0', alm=light?'#C8402F':'#FF5A4E';
+ const acc=light?'#0F8E71':'#6FE6C6', alm=light?'#D9503C':'#FF9E90';
  const track=light?'#E2DCD2':'#2E2A26';
  const past =light?'#D2CABE':'#3B352F';
- const quiet=light?'#B8AFA2':'#57504A';   // can wait: neutral, but still countable
+ const quiet=light?'#7C4FD6':'#C3A8FA';   // can wait: the third tier hue
  const meet =light?'#5E564E':'#A79F97';
  const now  =light?'#1A1714':'#F5F1EC';
  const R1=88,R2=66,C1=2*Math.PI*R1,C2=2*Math.PI*R2;
@@ -947,7 +958,7 @@ document.querySelectorAll('[data-daybars]').forEach(el=>{
 /* ═══ the tier selector ═══════════════════════════════════════════ */
 const TIERS=[{k:'urgent',n:3,l:'Urgent',c:'var(--alarm)'},
              {k:'byyou',n:3,l:'By EOD',c:'var(--accent)'},
-             {k:'canwait',n:1,l:'Can wait',c:'var(--border)'}];
+             {k:'canwait',n:1,l:'Can wait',c:'var(--wait)'}];
 document.querySelectorAll('[data-tiersel]').forEach(el=>{
  const sel=el.dataset.tiersel;
  el.outerHTML='<div class="tiersel">'+TIERS.map(t=>{
@@ -970,10 +981,10 @@ const ITEMS={
   {s:'gdocs',t:'Priya commented on the pricing section',sub:'Should we lead with the triage story here?',m:'Q3 brief',age:'4h'}],
 };
 function rowHtml(it,tier){
- const bar=tier==='urgent'?'var(--alarm)':tier==='byeod'?'var(--accent)':null;
+ const bar=tier==='urgent'?'var(--alarm)':tier==='byeod'?'var(--accent)':'var(--wait)';
  return `<div class="lrow">
   ${bar?`<span class="ltier" style="background:${bar}"></span>`:''}
-  <span class="lwash" data-lwash="${it.s}"></span>
+  <span class="lwash" data-lwash="${tier==="urgent"?"u":tier==="byeod"?"b":"c"}"></span>
   <span class="mark s32" data-mark="${it.s}"></span>
   <span class="grow stack" style="gap:2px">
    <span class="t-body trunc">${it.t}</span>
@@ -989,8 +1000,8 @@ document.querySelectorAll('[data-next]').forEach(el=>{
  const M=[['10:30','Design review','3 others · Google Meet','45m',1],
           ['14:00','1:1 with Sam','recurring · every Thursday','30m',0]];
  el.outerHTML=M.map(([time,title,sub,dur,next])=>`<div class="lrow">
-  <span class="lwash" data-lwash="calendar"></span>
-  <span class="mono t-heading ${next?'c-accent':'c-mid'}" style="width:52px;flex:none">${time}</span>
+  <span class="lwash" data-lwash=""></span>
+  <span class="mono t-heading ${next?'c-high':'c-mid'}" style="width:52px;flex:none">${time}</span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${title}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>
   <span class="mono t-secondary c-low">${dur}</span></div>`).join('')+
@@ -1014,7 +1025,7 @@ const LATER={
 document.querySelectorAll('[data-later]').forEach(el=>{
  const src=el.dataset.later||'gmail', rows=LATER[src];
  el.outerHTML=rows.map(r=>`<div class="lrow">
-  <span class="lwash" data-lwash="${src}"></span>
+  <span class="lwash" data-lwash=""></span>
   <span class="mark s32" data-mark="${src}"></span>
   <span class="grow stack" style="gap:2px">
    <span class="t-body trunc"><span class="w500">${r.a}</span> &middot; ${r.t}</span>
@@ -1042,14 +1053,13 @@ const SRC=[
 document.querySelectorAll('[data-activity]').forEach(el=>{
  el.innerHTML=SRC.map(s=>{
   return `<div class="scard">
-   <div class="tint" style="background:radial-gradient(100% 100% at 0% 0%,rgba(${TINT[s.id]},.14),rgba(${TINT[s.id]},0) 65%)"></div>
    <div class="spread"><span style="display:flex;gap:12px;align-items:center">
     <span class="mark s32" data-mark="${s.id}"></span><span class="t-heading">${s.n}</span></span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
    <div class="snums">
     <div><div class="t-title num">${s.a[0]}</div><div class="t-label c-low">${s.a[1]}</div></div>
     <div><div class="t-title num">${s.b[0]}</div><div class="t-label c-low">${s.b[1]}</div></div>
-    <div><div class="t-title num c-accent">${s.c[0]}</div><div class="t-label c-low">${s.c[1]}</div></div></div>
+    <div><div class="t-title num">${s.c[0]}</div><div class="t-label c-low">${s.c[1]}</div></div></div>
    <div class="sparks" style="margin-top:16px">${s.sp.map(h=>`<i style="height:${h}%"></i>`).join('')}</div></div>`;
  }).join('');
 });
@@ -1057,7 +1067,7 @@ document.querySelectorAll('[data-break]').forEach(el=>{
  const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15'],
              ['acme/infra','7 commits · 2 PRs','9']];
  el.outerHTML=rows.map(([a,b,c])=>`<div class="lrow">
-  <span class="lwash" data-lwash="github"></span>
+  <span class="lwash" data-lwash=""></span>
   <span class="mark s32" data-mark="github"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${a}</span>
    <span class="t-secondary c-mid trunc">${b}</span></span>
@@ -1072,7 +1082,7 @@ document.querySelectorAll('[data-conn]').forEach(el=>{
              ['gmail','Gmail','live','64 in Later · synced 4m ago'],
              ['linear','Linear','off','Never connected']];
  el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="lrow">
-  <span class="lwash" data-lwash="${id}"></span>
+  <span class="lwash" data-lwash=""></span>
   <span class="mark s32" data-mark="${id}"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body">${n}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>
@@ -1141,7 +1151,7 @@ if(cardsRail) cardsRail.innerHTML=CARDS.map(c=>`
    <div class="fhead"><span class="mark s44" data-mark="${c.src}"></span>
     <span class="stack grow"><span class="t-heading">${c.name}</span>
      <span class="mono t-secondary c-low">${c.ctx}</span></span>
-    <span class="chip ${c.tier==='u'?'solid':c.tier==='b'?'outline acc':'ghost'}">${c.tag}</span></div>
+    <span class="chip ${c.tier==='u'?'solid':c.tier==='b'?'solid acc':'solid wait'}">${c.tag}</span></div>
    <div class="t-display clamp3" style="margin-top:32px">${c.title}</div>
    ${c.body?`<div class="t-body c-mid clamp3" style="margin-top:16px">${c.body}</div>`:''}
    ${c.mid}
