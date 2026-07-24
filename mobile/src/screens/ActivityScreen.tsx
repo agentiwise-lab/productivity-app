@@ -4,12 +4,18 @@
  * A different question from the feed's "what needs me now", which is why it is
  * a tab rather than a settings page.
  *
- * **Only connected sources appear.** Connection state belongs in You, and
- * showing a dead source here made half of this tab a settings screen wearing a
- * chart. A source you have not connected has nothing to report.
+ * **The numbers here are the source's own activity, not the feed's.** The first
+ * version counted feed items per source, so GitHub read "nothing in 30 days"
+ * while the board one tap inside listed twelve open pull requests: the feed only
+ * holds what needs action right now, which is the opposite of what this tab
+ * asks. Each card now shows the same live summary the board does, and never a
+ * "needs you" figure, because needing you is the feed's job and not this one's.
+ *
+ * **Only connected sources appear.** Connection state belongs in You, and a
+ * source you have not connected has nothing to report.
  */
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Pressable, View } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
@@ -23,20 +29,22 @@ import { Icon } from '../components/Icon';
 import { T } from '../components/ui';
 import { TopTint } from '../components/Bloom';
 import { Explain, Skeleton } from '../components/states';
-import { Sparkline, SPARK_GAP, dailyCounts, hasShape } from '../components/Sparkline';
-import type { FeedRow, SourceInfo } from '../api/types';
+import type { ApiClient } from '../api/client';
+import type { SourceDashboard, SourceInfo, StatLine } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
+/** loading, or the board, or the reason there is no board to show. */
+type Board = 'loading' | SourceDashboard | { error: string };
+
 export function ActivityScreen({
   sources,
-  rows,
+  api,
   loadingStatus,
   onOpen,
 }: {
   sources: SourceInfo[];
-  /** The same feed the other tabs read, so the bars cannot disagree with them. */
-  rows: FeedRow[];
+  api: ApiClient;
   loadingStatus: boolean;
   onOpen: (info: SourceInfo) => void;
 }) {
@@ -47,8 +55,44 @@ export function ActivityScreen({
     scrollY.value = event.contentOffset.y;
   });
 
-  const connected = sources.filter((info) => info.status === 'connected');
+  const connected = useMemo(
+    () => sources.filter((info) => info.status === 'connected'),
+    [sources],
+  );
   const title = `${connected.length} ${connected.length === 1 ? 'source' : 'sources'} connected`;
+
+  // One board per connected source, fetched in parallel. They are computed live
+  // at each provider and slow by design, so each card fills in on its own
+  // rather than the tab waiting on the slowest of them.
+  const [boards, setBoards] = useState<Record<string, Board>>({});
+  const key = connected.map((info) => info.source).join(',');
+  useEffect(() => {
+    let live = true;
+    setBoards((prev) => {
+      const next: Record<string, Board> = {};
+      for (const info of connected) next[info.source] = prev[info.source] ?? 'loading';
+      return next;
+    });
+    connected.forEach((info) => {
+      api
+        .sourceDashboard(info.source)
+        .then((board) => {
+          if (live) setBoards((prev) => ({ ...prev, [info.source]: board }));
+        })
+        .catch(() => {
+          if (live)
+            setBoards((prev) => ({
+              ...prev,
+              [info.source]: { error: 'Could not read this source right now.' },
+            }));
+        });
+    });
+    return () => {
+      live = false;
+    };
+    // Refetch only when the set of connected sources changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
@@ -73,11 +117,7 @@ export function ActivityScreen({
             <SourceCard
               key={info.source}
               info={info}
-              counts={dailyCounts(
-                rows
-                  .filter((row) => row.source === info.source)
-                  .map((row) => row.occurred_at ?? row.created_at),
-              )}
+              board={boards[info.source] ?? 'loading'}
               onPress={() => onOpen(info)}
             />
           ))
@@ -89,26 +129,21 @@ export function ActivityScreen({
 }
 
 /**
- * One source, at a glance.
- *
- * It used to carry two 22pt numbers labelled `Items` and `Urgent`, which was
- * the wrong shape twice over. "Items" is the app's own internal word for a row
- * in its database and means nothing to a reader, and a source that is quiet
- * showed a pair of enormous zeroes: the emptiest card on the screen was also
- * the loudest. The card now states what it knows in one sentence and spends
- * its height on the thirty-day shape instead, which is the thing that is
- * actually worth glancing at. The real figures are one tap away on the board.
+ * One source, at a glance: the two or three figures that describe its month.
+ * The board a tap away has the full breakdown.
  */
 function SourceCard({
   info,
-  counts,
+  board,
   onPress,
 }: {
   info: SourceInfo;
-  counts: number[];
+  board: Board;
   onPress: () => void;
 }) {
   const c = useTheme();
+  const stats = summarise(board);
+
   return (
     <Pressable
       onPress={onPress}
@@ -116,7 +151,7 @@ function SourceCard({
         {
           marginHorizontal: space.md,
           marginBottom: space.sm,
-          padding: space.sm,
+          padding: space.md,
           borderRadius: radius.lg,
           backgroundColor: c.surface,
           borderWidth: 1,
@@ -127,38 +162,80 @@ function SourceCard({
       ]}
     >
       {/* A board is a summary rather than a category, so it takes the summary
-          hue, which never shares a screen with a tier. A corner radial rather
-          than a band: it reads as light falling across the card instead of a
-          stripe painted along the top of it. */}
-      <TopTint category="summary" width={361} height={96} />
+          hue, which never shares a screen with a tier. */}
+      <TopTint category="summary" width={361} height={120} />
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <BrandMark source={info.source} size={32} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <T role="heading" lines={1}>
-            {info.label}
-          </T>
-          <T role="secondary" tone="low" lines={1}>
-            {volumeLine(info)}
-          </T>
-        </View>
-        {/* A chevron rather than a status word: every card here is connected
-            by definition, so the word would only ever say the same thing. */}
+        <T role="heading" style={{ flex: 1 }} lines={1}>
+          {info.label}
+        </T>
         <Icon name="chevron" size={16} color={c.low} />
       </View>
 
-      {hasShape(counts) ? (
-        <View style={{ marginTop: SPARK_GAP }}>
-          <Sparkline counts={counts} />
+      {board === 'loading' ? (
+        <T role="secondary" tone="low" style={{ marginTop: space.md }}>
+          Reading the last 30 days...
+        </T>
+      ) : 'error' in board ? (
+        <T role="secondary" tone="low" style={{ marginTop: space.md }}>
+          {board.error}
+        </T>
+      ) : stats.length === 0 ? (
+        <T role="secondary" tone="low" style={{ marginTop: space.md }}>
+          Quiet across the last 30 days.
+        </T>
+      ) : (
+        <View style={{ flexDirection: 'row', marginTop: space.md, gap: space.lg }}>
+          {stats.map((stat, index) => (
+            <Stat
+              key={stat.label}
+              value={stat.value_label ?? String(stat.value)}
+              label={stat.label}
+              hero={index === 0}
+            />
+          ))}
         </View>
-      ) : null}
+      )}
     </Pressable>
   );
 }
 
-/** What the source has been doing, in the reader's words rather than ours. */
-function volumeLine(info: SourceInfo): string {
-  if (info.count === 0) return 'Nothing in the last 30 days';
-  const seen = `${info.count} in 30 days`;
-  return info.urgent > 0 ? `${info.urgent} need you · ${seen}` : seen;
+/**
+ * The headline figures, at most three, that a glance can hold.
+ *
+ * The board leads with a "Needs you" figure, which is the feed's question and
+ * not this tab's: Activity is for seeing what a source has been doing, so the
+ * "needs you" stat is dropped and what is left is pure volume. What remains is
+ * the source's real headline (open PRs, meetings, messages) and the two figures
+ * under it.
+ */
+function summarise(board: Board): StatLine[] {
+  if (board === 'loading' || 'error' in board) return [];
+  return board.headline
+    .filter((stat) => stat.label.trim().toLowerCase() !== 'needs you')
+    .slice(0, 3);
+}
+
+function Stat({
+  value,
+  label,
+  hero,
+}: {
+  value: string;
+  label: string;
+  hero: boolean;
+}) {
+  return (
+    <View style={{ minWidth: 0 }}>
+      {/* The first figure is the source's headline and reads a step larger, the
+          way the board inside draws it. */}
+      <T role={hero ? 'title' : 'heading'} numeric tone="high">
+        {value}
+      </T>
+      <T role="label" tone="low" lines={1}>
+        {label}
+      </T>
+    </View>
+  );
 }

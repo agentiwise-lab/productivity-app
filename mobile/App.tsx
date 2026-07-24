@@ -373,7 +373,7 @@ function Shell() {
             {() => (
               <ActivityScreen
                 sources={sources}
-                rows={rows}
+                api={api}
                 loadingStatus={loadingSources}
                 onOpen={openSource}
               />

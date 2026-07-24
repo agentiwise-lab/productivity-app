@@ -98,9 +98,12 @@ export function YouScreen({
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
-        <ScreenHeader eyebrow={local ? email : "Signed in"} title={title} />
+        {/* The name alone. The address was an eyebrow reading "Signed in" over
+            it, which labelled the obvious; the name is enough. */}
+        <ScreenHeader title={title} />
 
-        <SectionLabel label="Notifications" />
+        {/* No "Notifications" label over a row that opens "Notify me": the
+            heading and the control were saying the same word twice. */}
         <View
           style={{
             flexDirection: 'row',
@@ -108,6 +111,7 @@ export function YouScreen({
             gap: space.sm,
             paddingHorizontal: space.md,
             minHeight: 72,
+            marginTop: space.sm,
           }}
         >
           <View style={{ flex: 1 }}>

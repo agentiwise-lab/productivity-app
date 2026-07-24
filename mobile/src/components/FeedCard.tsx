@@ -245,14 +245,14 @@ export function FeedCard({
         ))}
       </View>
 
-      {/* Clears the rail column on the right rather than a fixed 96. */}
+      {/* Clears the rail column on the right. */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           gap: space.xs,
           paddingLeft: space.md,
-          paddingRight: 72,
+          paddingRight: space.huge,
           paddingBottom: space.md,
         }}
       >

@@ -27,15 +27,18 @@ export function ScreenHeader({
   eyebrow,
   title,
 }: {
-  eyebrow: string;
+  /** Omitted where the title stands on its own, as the name does on You. */
+  eyebrow?: string;
   title: string;
 }) {
   return (
     <View style={styles.header}>
-      <T role="label" tone="low">
-        {eyebrow}
-      </T>
-      <T role="display" style={{ marginTop: space.xxs }} lines={2}>
+      {eyebrow ? (
+        <T role="label" tone="low">
+          {eyebrow}
+        </T>
+      ) : null}
+      <T role="display" style={eyebrow ? { marginTop: space.xxs } : undefined} lines={2}>
         {title}
       </T>
     </View>
