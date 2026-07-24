@@ -75,32 +75,34 @@ export function headerSubline(row: FeedRow): string | null {
 /**
  * The headline line: the subject, the issue, the PR, or the message.
  *
- * Mail with no subject leads with its message rather than the literal string
- * "(no subject)", which was drawing as large as everything else on screen.
+ * The Gmail card headline is the subject and never the body: a mail with no
+ * subject says so, and its message lives in the detail sheet. (Slack has no
+ * subject, so its headline is the message itself, which is `title`.)
  */
 export function primaryLine(row: FeedRow): string {
   const title = clean(row.title);
   if (row.source === 'gmail') {
     const missing = !title || /^\(no subject\)$/i.test(title);
-    if (missing) return oneLine(row.body) ?? clean(row.sender_name) ?? 'Message';
+    if (missing) return 'No subject';
   }
   return title ?? 'Untitled';
 }
 
 /**
- * The subtitle on the feed card, which has a header. It carries only what the
- * header does not: the mail body under the subject, the issue description under
- * the issue. Slack returns nothing, because the message is already the title
- * and the sender is already the header.
+ * The subtitle on the feed card, which has a header.
+ *
+ * Gmail and Slack carry the classifier's reason here: under the mail subject,
+ * or under the one-line Slack message, a short line saying why this landed in
+ * its tier. The full mail body or Slack message is not previewed on the card;
+ * it opens in the detail sheet. Other sources still carry their own summary or
+ * description.
  */
 export function cardSubtitle(row: FeedRow): string | null {
   switch (row.source) {
     case 'slack':
-      return null;
-    case 'gmail': {
-      const message = oneLine(row.body);
-      return message && message !== primaryLine(row) ? message : null;
-    }
+      return clean(row.reason);
+    case 'gmail':
+      return clean(row.reason);
     case 'linear':
       return oneLine(row.body);
     default:

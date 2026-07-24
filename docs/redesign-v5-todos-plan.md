@@ -200,6 +200,14 @@ Bounded card, no bleed, no safe-area math, no bloom.
 
 - `ActionButton.onPress`: identical logic to today's `RailButton`:
   `needsComposer(id) ? onOpen(row, true) : (haptics.commit(), onAction(row, id))`.
+- **Per-source card text** (`rowText.ts`): Gmail shows the **subject** as the
+  headline ("No subject" when the mail has none, never the body) with the
+  classifier's **reason** as the subtitle; Slack shows the **one-line message**
+  as the headline with the reason as the subtitle. The mail body / full Slack
+  message is not previewed on the card, it opens in the detail sheet. Because
+  Gmail and Slack carry the reason inline, their cards skip the boxed "why".
+  Other sources keep their summary/description subtitle and the urgent-only
+  "why" box.
 - All geometry from theme tokens (`space`, `radius`, `size`, `type`) so the
   design audit stays clean. Card radius 16, margins 16/4, wash alpha 0.16,
   type roles heading/body/secondary/label only.

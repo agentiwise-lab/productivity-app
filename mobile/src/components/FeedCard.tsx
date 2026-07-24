@@ -60,7 +60,13 @@ export function FeedCard({
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
   // The grounds for the decision, shown inline only on the strongest tier; on
   // every other card it stays in the sheet, which keeps the feed scannable.
-  const showWhy = row.tier === 'urgent' && !!row.reason;
+  // Gmail and Slack already carry the reason as their subtitle, so the boxed
+  // "why" would only repeat it there.
+  const showWhy =
+    row.tier === 'urgent' &&
+    !!row.reason &&
+    row.source !== 'gmail' &&
+    row.source !== 'slack';
 
   return (
     <View
