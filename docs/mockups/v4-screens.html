@@ -193,8 +193,9 @@
 .tcell{flex:1;border-radius:12px;padding:12px;position:relative;overflow:hidden;
   border:1px solid transparent;background:transparent;}
 .tcell .tbar{position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:999px;}
-.tcell .tn{margin-left:12px;font-variant-numeric:tabular-nums;}
-.tcell .tlb{margin-left:12px;display:block;color:var(--low);}
+.tcell .ttop{margin-left:12px;display:flex;align-items:center;justify-content:space-between;}
+.tcell .tn{font-variant-numeric:tabular-nums;}
+.tcell .tlb{margin-left:12px;display:block;color:var(--low);margin-top:4px;}
 .tcell.on{background:var(--surface);border-color:var(--border);}
 .tcell.on .tbar{top:0;bottom:0;}
 .tcell.on .tlb{color:var(--high);}
@@ -322,6 +323,10 @@
   <g id="i-snooze"><circle cx="12" cy="13" r="8"/><path d="M12 9.4V13l2.6 1.6M9 2.6h6"/></g>
   <g id="i-chat"><path d="M20.4 11.6a7.6 7.6 0 0 1-8.2 7.6L6.2 21.4l1.4-4.2A7.6 7.6 0 1 1 20.4 11.6Z"/></g>
   <g id="i-checks"><path d="M2.6 12.6l4 4L14.2 9"/><path d="M10.4 15.4l1.2 1.2L21.4 6.8"/></g>
+  <g id="i-tier-u"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.2v5.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.4" r="1.15" fill="currentColor" stroke="none"/></g>
+  <g id="i-tier-b"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.6a8.4 8.4 0 0 1 0 16.8Z" fill="currentColor" stroke="none"/></g>
+  <g id="i-tier-c"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></g>
+  <g id="i-tier-l"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></g>
   <g id="i-more"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></g>
   <g id="i-send"><path d="M21 3L10.5 13.5M21 3l-6.6 18-3.9-7.5L3 9.6 21 3Z"/></g>
   <g id="i-cal"><rect x="3.4" y="5" width="17.2" height="16" rx="2.6"/><path d="M3.4 10h17.2M8 3v4M16 3v4"/></g>
@@ -803,7 +808,10 @@
     <div class="sectlab t-label">Notifications</div>
     <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
       <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
-    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
+    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ By EOD</i><i>All</i></div></div>
+    <div class="sep full"></div>
+    <div class="sectlab t-label">Appearance</div>
+    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Dark</i><i>Light</i><i>System</i></div></div>
     <div class="sep full"></div>
     <div class="sectlab t-label">Connections <span class="bubble">1</span><span class="grow"></span>
       <span style="display:flex;align-items:center;gap:4px;color:var(--high)">
@@ -845,7 +853,7 @@
 <!-- ══════════ 9 · WARM LIGHT ══════════ -->
 <div class="pgsec">
 <p class="eyebrow">The alternate</p>
-<h2>Light, and warm</h2>
+<h2>Light, in sage teal</h2>
 <p class="lede">The v2 light theme was a cool neutral white that the review called hard on the eyes. This one returns to <span class="mono">#F4F1EC</span>, the Warm Sand canvas the project already chose, with <span class="mono">#FFFDF9</span> surfaces. The accent darkens to <span class="mono">#0D8167</span> and the alarm to <span class="mono">#CC4432</span>, because the dark-mode values are luminous against near-black and illegible against sand.</p>
 <div class="rail lightmode">
 
@@ -857,7 +865,7 @@
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
     <div data-list="urgent"></div>
   </div></div>
-</div><p class="cap"><b>Your day, warm light</b>Same geometry, same type, same spacing. Only the ladder and the two hues move, and the ladder is warm at every step.</p></div>
+</div><p class="cap"><b>Your day, sage light</b>Same geometry, same type, same spacing. Only the neutral ladder moves; all six category hues keep their roles. The tier glyphs are the ones the app already ships in <span class="mono">TIER_GLYPH</span>, drawn as vectors and coloured by their own category.</p></div>
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
@@ -883,7 +891,7 @@
     <div class="fstrip"><span class="t-label c-high">Blocking</span>
       <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span></div>
   </div></div>
-</div><p class="cap"><b>Feed card, warm light</b>The glow from beneath drops from 30% to 16%, because a light field carries a tint much further before it stops reading as a glow and starts reading as a fill.</p></div>
+</div><p class="cap"><b>Feed card, sage light</b>The glow from beneath drops from 30% to 16%, because a light field carries a tint much further before it stops reading as a glow and starts reading as a fill.</p></div>
 
 <div class="cell"><div class="ph" data-tab="later">
   <div class="bd"><div class="scroll">
@@ -892,7 +900,7 @@
     <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
     <div data-later></div>
   </div></div>
-</div><p class="cap"><b>Later, warm light</b>On sand, the inset hairline does all the separating work and no row needs a box, a border or a fill.</p></div>
+</div><p class="cap"><b>Later, sage light</b>On sand, the inset hairline does all the separating work and no row needs a box, a border or a fill.</p></div>
 
 </div></div>
 
@@ -987,15 +995,17 @@ document.querySelectorAll('[data-daybars]').forEach(el=>{
 });
 
 /* ═══ the tier selector ═══════════════════════════════════════════ */
-const TIERS=[{k:'urgent',n:3,l:'Urgent',c:'var(--alarm)'},
-             {k:'byyou',n:3,l:'By EOD',c:'var(--accent)'},
-             {k:'canwait',n:1,l:'Can wait',c:'var(--wait)'}];
+const TIERS=[{k:'urgent',n:3,l:'Urgent',c:'var(--alarm)',i:'i-tier-u'},
+             {k:'byeod',n:3,l:'By EOD',c:'var(--accent)',i:'i-tier-b'},
+             {k:'canwait',n:1,l:'Can wait',c:'var(--wait)',i:'i-tier-c'}];
 document.querySelectorAll('[data-tiersel]').forEach(el=>{
  const sel=el.dataset.tiersel;
  el.outerHTML='<div class="tiersel">'+TIERS.map(t=>{
   const on=t.k===sel;
   return `<div class="tcell ${on?'on':'off'}"><span class="tbar" style="background:${t.c}"></span>
-   <div class="t-title tn">${t.n}</div><span class="t-label tlb">${t.l}</span></div>`;}).join('')+'</div>';
+   <div class="ttop"><svg width="20" height="20" viewBox="0 0 24 24" style="color:${t.c}"><use href="#${t.i}"/></svg>
+    <span class="t-title tn">${t.n}</span></div>
+   <span class="t-label tlb">${t.l}</span></div>`;}).join('')+'</div>';
 });
 
 /* ═══ list rows ═══════════════════════════════════════════════════ */
@@ -1112,7 +1122,6 @@ document.querySelectorAll('[data-break]').forEach(el=>{
 /* ═══ You, connections ════════════════════════════════════════════ */
 document.querySelectorAll('[data-conn]').forEach(el=>{
  const rows=[['github','GitHub','live','3 need you · synced 4m ago'],
-             ['slack','Slack','live','2 need you · synced 4m ago'],
              ['gmail','Gmail','live','64 in Later · synced 4m ago'],
              ['linear','Linear','off','Never connected']];
  el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="lrow">

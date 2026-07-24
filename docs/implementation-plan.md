@@ -170,17 +170,30 @@ The line collapses to 17pt in a 44pt blurred bar on scroll, and a source board k
 - Dual ring. **Outer is time and monochrome; inner is work and is the only place a tier hue appears.** The tier selector directly below it is the inner ring's legend.
 - The tier row becomes a real selector: selecting swaps the list beneath it from meetings to that tier's items. Selection shows as fill, border, a full-height bar and a lifted label, so it survives greyscale.
 
-### 1.7 Rows, everywhere
+### 1.7 Category glyphs
+
+Each category carries a glyph as well as a hue, so it survives greyscale and colour blindness. **The glyphs already exist.** `TIER_GLYPH` in `HomeScreen.tsx` is `!` urgent, `◐` today, `○` can wait, `·` noise. That is a fullness ladder and it is a good one, so it stays and only the rendering changes, from text characters to vectors coloured by their own category.
+
+| Category | Glyph |
+|---|---|
+| Urgent | exclamation in a ring |
+| By EOD | half-filled ring |
+| Can wait | empty ring |
+| Later | a dot |
+
+They appear in the tier selector on Your day, and anywhere a category needs naming without room for a word.
+
+### 1.8 Rows, everywhere
 
 One `Row` component, used by Your day, Later, Activity and You. Discrete cards on `surface` at radius 12 with 8pt between them, a 3pt tier bar on the leading edge where a tier exists, and a tier wash from the left.
 
 **A hairline separates two rows by one pixel, which is why the old lists read as a single undifferentiated block however good the type was.** This is the change that fixes "the listing UI looks primitive" and it is worth doing before the screens that use it.
 
-### 1.8 Later
+### 1.9 Later
 
 **Structure preserved exactly.** Source strip with icon-only inactive and icon-plus-label active; one stream opened once with switching as a filter over rows already in hand; batches appended as they land with a running total; `sender: title` with `summary` beneath and `ago` right; the footnote that it is read live and never stored; the empty copy with "Home" updated to "Your day". Restyled only.
 
-### 1.9 Activity
+### 1.10 Activity
 
 `SourcesScreen` becomes Activity root. **Only connected sources appear**: connection state belongs in You. The Connect button leaves this tab.
 
@@ -188,17 +201,21 @@ One `Row` component, used by Your day, Later, Activity and You. Discrete cards o
 
 **A breakdown row is tappable only when it has a `url`**, which is the semantic the screen already encodes by withholding the chevron. Use an external-link glyph rather than a chevron, because these leave the app.
 
-### 1.10 You
+### 1.11 You
 
 Remove the AI summaries section entirely. Summarising and ranking is what the product is, so asking permission per source framed the core behaviour as an optional extra.
 
-Notifications become one row, one toggle, one subtext line, with the level segmented control appearing only when on: roughly 200pt down to 60. Connections list every source with its state and take the Connect flow as a sheet. **No "Fix" button**: a connection is live, or it needs connecting.
+Notifications become one row, one toggle, one subtext line, with the level segmented control appearing only when on: roughly 200pt down to 60. **The levels are renamed to the categories' own words**, `Urgent` / `+ By EOD` / `All`, because "+ Today" named a time window where every other label in the app names a tier.
 
-### 1.11 Sheets
+**Appearance** is a new section: a segmented `Dark` / `Light` / `System`, with **dark the default**. `useColorScheme()` supplies System, and the explicit choice persists in `AsyncStorage` so a mode can be pinned against the OS.
+
+Connections list every source with its state and take the Connect flow as a sheet. **No "Fix" button**: a connection is live, or it needs connecting.
+
+### 1.12 Sheets
 
 Keep the three regions `DetailSheet` already defines and the reason they exist: head and footer fixed, only the message scrolls. Add `medium` and `large` detents with a visible grabber, replacing the fixed `height: '82%'`.
 
-### 1.12 Motion and haptics
+### 1.13 Motion and haptics
 
 Last, as a pass over finished screens. Springs via Reanimated, never duration plus bezier. Haptics mark a change of state, never motion; `prepare()` ahead of time; never `Heavy`.
 
@@ -227,11 +244,39 @@ Everything here is a gap the redesign surfaced. **None of it blocks Phase 1**, w
 
 `act()` hardcodes three hours (`App.tsx:195`). The design has a picker: this evening, tomorrow morning, next week, pick a time. The endpoint already takes an arbitrary `until`, so **this is client-only work** and could move into Phase 1.
 
-### 2.3 The board has no designated hero
+### 2.3 Notifications have no "All" level
+
+The rename above is free for two of the three options and not for the third. [`backend/services/notifications.py:32`](../backend/services/notifications.py) defines exactly three levels:
+
+```python
+class NotifyLevel(str, Enum):
+    URGENT = "urgent"
+    URGENT_TODAY = "urgent_today"
+    OFF = "off"
+
+_ALLOWED = {
+    NotifyLevel.URGENT:       {Tier.URGENT},
+    NotifyLevel.URGENT_TODAY: {Tier.URGENT, Tier.TODAY},
+    NotifyLevel.OFF:          set(),
+}
+```
+
+`Urgent` maps to `URGENT` and `+ By EOD` to `URGENT_TODAY`, both unchanged. **`All` has no member**, so it needs one:
+
+```python
+ALL = "all"
+_ALLOWED[NotifyLevel.ALL] = {Tier.URGENT, Tier.TODAY, Tier.CAN_WAIT}
+```
+
+The UI now expresses `OFF` as the toggle rather than as a third segment, so the enum gains a value while the control still shows three. **`Tier.NOISE` stays out of `ALL` deliberately**: Later is the category that by definition did not need you, and notifying on it would undo the product.
+
+`urgent_today` keeps its wire value. Renaming a persisted enum for a label change would be a migration for nothing.
+
+### 2.4 The board has no designated hero
 
 `SourceDashboard.headline` is an unordered `StatLine[]`, but the board wants one number at 34pt above the rest. Either add `hero: StatLine | null`, or fix the convention that `headline[0]` is the hero and document it. **Convention is cheaper and reversible.**
 
-### 2.4 Things deliberately not proposed
+### 2.5 Things deliberately not proposed
 
 - **Diff stats on GitHub cards.** `FeedRow` has no file list or line counts, the v3 mockup invented them, and the card works without them. Only add if a real user need appears.
 - **Gmail reply.** Genuinely useful, genuinely a project: OAuth scope, threading, quoting. Worth its own plan.
