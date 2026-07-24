@@ -54,12 +54,29 @@ This is a one-line client fix plus a contract tightening, it is independent of t
 | `urgent` | `#FF6B5F` | `#CC4432` | Someone is blocked on you |
 | `byEod` | `#63E4C2` | `#0D8167` | Due before tonight |
 | `canWait` | `#AB7FF8` | `#7144CC` | Neither |
+| `later` | `#C9B79A` | `#8A7355` | Arrived, did not need you |
+
+Later is a warm sand rather than a fourth vivid hue. It is the one state that asks nothing of you, so it should read as quiet without reading as broken, and a warm neutral sits with the canvas where a cool blue did not.
 
 All three sit in one band so they read as a family rather than as three unrelated signals. They were tuned twice: first lightened, because the violet arrived deep and saturated beside a light mint and looked like a different class of signal; then **brought 75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless. This is the midpoint that keeps the family and keeps the punch.
 
 Contrast of the near-black chip text: **7.0:1, 12.6:1 and 6.7:1** in dark, **4.7:1, 4.7:1 and 6.1:1** in light. All clear AA. The two light values sit close to the floor, so **re-measure before changing any light-mode fill.**
 
 **The rule that makes this work: everything that is not a tier is neutral.** Buttons, toggles, status dots, selection bars, tab chrome and brand marks all use the grey ladder. The old design had mint doing double duty as "By EOD" *and* as the primary button, which is what made the palette feel arbitrary.
+
+### What colours a row
+
+A grey list where every row is the same object is the reason the old listings read as primitive, and colour is the cheapest fix. **A row is coloured by the most meaningful thing it has:**
+
+| List | Coloured by |
+|---|---|
+| Feed, and a selected tier on Your day | **Tier** |
+| Meetings on Your day | **Source**, which is always Calendar |
+| Activity root and its breakdowns | **Source** |
+| Connections in You | **Source** |
+| Later | **Age**, plus day groups |
+
+Later is the exception that proves the rule. It **filters to one source at a time**, so a source wash paints every row identically and differentiates nothing. Rows there carry the sand at a strength that steps down with age, and the list is grouped **Today / Yesterday / Earlier**, so the rhythm comes from structure as well as tone.
 
 **Two exemptions, and only two: brand marks, above, and data visualisation.** The Activity sparklines are neutral by the letter of the rule and looked dead for it. A sparkline encodes a quantity over time, not a priority, so it cannot be misread as a tier. Nothing else gets this exemption.
 
@@ -100,7 +117,9 @@ The tracer bullet. Build the GitHub urgent card: monochrome mark, solid tier chi
 
 ### 1.4 Feed tab
 
-New screen. Full-screen cards, horizontal swipe, grouped Urgent, By EOD, Can wait, Later. Gestures track the finger 1:1 and are reversible mid-flight. Actions open source sheets rather than committing blind. No divider cards and no progress rail.
+New screen. Full-screen cards, horizontal swipe, grouped Urgent, By EOD, Can wait, **and Later**, which reaches the Feed in full: snoozed, no date set and handled. A Later card carries the sand hue and a **Bring back** action, the only one unique to that group.
+
+**No count badge on the Feed tab.** A number on a tab you have not opened is a demand, and the tier row on Your day already says how much is waiting. Gestures track the finger 1:1 and are reversible mid-flight. Actions open source sheets rather than committing blind. No divider cards and no progress rail.
 
 ### 1.5 Headers, on every screen
 
@@ -201,6 +220,7 @@ v4 ships with an automated check, and the same assertions should become a lint o
 - Type on the seven roles only
 - **No colour outside the neutral ladder and the three tier hues**, excepting brand marks and data visualisation
 - Chip text at or above 4.5:1 on every tier fill, in both modes
+- Every row list differentiated by something: tier, source, or age. Never one flat colour repeated down the screen
 - No non-inset shadow anywhere
 - No content past the fold, and none hidden under a fixed footer
 - No control under 28pt, and a 44pt touch target via `hitSlop`

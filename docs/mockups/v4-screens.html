@@ -22,7 +22,7 @@
   --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
   --hairline:#2E2A26; --border:#3B352F;
   --faint:#57504A; --low:#7A736C; --mid:#A79F97; --high:#F5F1EC;
-  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --onSolid:#0C0B0A;
+  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --later:#C9B79A; --onSolid:#0C0B0A;
   --github:#AB7FF8; --linear:#5E6AD2; --slack:#36C5F0;
   --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
   --tabbg:rgba(12,11,10,.74);
@@ -36,7 +36,7 @@
   --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
   --hairline:#E2DCD2; --border:#D2CABE;
   --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
-  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --onSolid:#FFFDF9;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#8A7355; --onSolid:#FFFDF9;
   --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
 }
 .pg *{box-sizing:border-box;}
@@ -168,6 +168,7 @@
 .chip.solid{background:var(--alarm);color:var(--onSolid);}
 .chip.solid.acc{background:var(--accent);}
 .chip.solid.wait{background:var(--wait);color:#0C0B0A;}
+.chip.solid.later{background:var(--later);color:#0C0B0A;}
 .chip.outline{border:1px solid var(--border);color:var(--mid);}
 .chip.outline.acc{border-color:var(--border);color:var(--high);}
 .chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
@@ -211,6 +212,9 @@
 .beneath.b{background:
   radial-gradient(150% 74% at 50% 110%,rgba(99,228,194,.42) 0%,rgba(99,228,194,.13) 42%,rgba(99,228,194,0) 74%),
   linear-gradient(0deg,rgba(99,228,194,.12) 0%,rgba(99,228,194,0) 58%);}
+.beneath.l{background:
+  radial-gradient(150% 74% at 50% 110%,rgba(201,183,154,.40) 0%,rgba(201,183,154,.13) 42%,rgba(201,183,154,0) 74%),
+  linear-gradient(0deg,rgba(201,183,154,.13) 0%,rgba(201,183,154,0) 58%);}
 .beneath.c{background:
   radial-gradient(150% 74% at 50% 110%,rgba(171,127,248,.34) 0%,rgba(171,127,248,.11) 42%,rgba(171,127,248,0) 74%),
   linear-gradient(0deg,rgba(171,127,248,.12) 0%,rgba(171,127,248,0) 58%);}
@@ -754,12 +758,12 @@
     </div>
     <div class="statgrid"><div class="statcard"><div class="t-label c-low">Meetings</div><div class="t-title num" style="margin-top:4px">62</div><div class="t-secondary c-mid trunc">2.8 a day</div></div><div class="statcard"><div class="t-label c-low">Longest day</div><div class="t-title num" style="margin-top:4px">6h</div><div class="t-secondary c-mid trunc">Tue 15 Jul</div></div><div class="statcard"><div class="t-label c-low">Organised by you</div><div class="t-title num" style="margin-top:4px">14</div><div class="t-secondary c-mid trunc">of 62</div></div><div class="statcard"><div class="t-label c-low">Declined</div><div class="t-title num" style="margin-top:4px">7</div><div class="t-secondary c-mid trunc">of 62</div></div></div>
     <div class="sectlab t-label tight">Most frequent</div>
-    <div class="lrow"><span class="lwash" data-lwash=""></span>
+    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">Weekly product sync</span>
         <span class="t-secondary c-mid trunc">every Monday, 60m</span></span>
       <span class="mono t-heading">4</span></div>
-    <div class="lrow"><span class="lwash" data-lwash=""></span>
+    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">1:1 with Sam</span>
         <span class="t-secondary c-mid trunc">every Thursday, 30m</span></span>
@@ -889,7 +893,12 @@ const MARKS={
  calendar:{c:'#4285F4',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
 };
 /* Three hues in the whole app, and they mean tier. Nothing else is coloured. */
-const TIERRGB={u:'255,107,95',b:'99,228,194',c:'171,127,248'};
+const TIERRGB={u:'255,107,95',b:'99,228,194',c:'171,127,248',l:'201,183,154'};
+/* Where a row has no tier there is still something worth telling apart, and
+   that is which tool it came from. Tier wins when there is one; source
+   identifies the row when there is not. Colour is never decoration. */
+const SRCRGB={github:'167,159,151',slack:'54,197,240',gmail:'234,67,53',
+              linear:'94,106,210',calendar:'66,133,244',gdocs:'66,133,244'};
 /* Brand marks keep their own colour. They are identity, not priority, and
    they never occupy a position where a tier signal lives, so they cannot be
    misread as one. This is the one exemption from "hue means tier". */
@@ -902,12 +911,13 @@ function paint(root=document){
             el.classList.contains('s24')?14:el.classList.contains('s20')?12:11;
   el.innerHTML=markSvg(el.dataset.mark,box);});
  root.querySelectorAll('[data-lwash]').forEach(el=>{
-  const c=TIERRGB[el.dataset.lwash]; if(!c){el.style.display='none';return;}
-  el.style.background=`linear-gradient(90deg,rgba(${c},.14),rgba(${c},0) 100%)`;});
+  const k=el.dataset.lwash, c=TIERRGB[k]||SRCRGB[k];
+  if(!c){el.style.display='none';return;}
+  el.style.background=`linear-gradient(90deg,rgba(${c},${TIERRGB[k]?.14:.16}),rgba(${c},0) 100%)`;});
  root.querySelectorAll('[data-swash]').forEach(el=>{
   el.style.background=`linear-gradient(180deg,rgba(${TIERRGB[el.dataset.swash]},.20),rgba(${TIERRGB[el.dataset.swash]},0) 100%)`;});
  root.querySelectorAll('[data-tint]').forEach(el=>{
-  const c=TIERRGB[el.dataset.tint]; if(!c){el.style.display='none';return;}
+  const k=el.dataset.tint, c=TIERRGB[k]||SRCRGB[k]; if(!c){el.style.display='none';return;}
   el.style.background=`radial-gradient(120% 80% at 12% 0%,rgba(${c},.14),rgba(${c},0) 60%)`;});
 }
 
@@ -1001,7 +1011,7 @@ document.querySelectorAll('[data-next]').forEach(el=>{
  const M=[['10:30','Design review','3 others · Google Meet','45m',1],
           ['14:00','1:1 with Sam','recurring · every Thursday','30m',0]];
  el.outerHTML=M.map(([time,title,sub,dur,next])=>`<div class="lrow">
-  <span class="lwash" data-lwash=""></span>
+  <span class="lwash" data-lwash="calendar"></span>
   <span class="mono t-heading ${next?'c-high':'c-mid'}" style="width:52px;flex:none">${time}</span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${title}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>
@@ -1012,28 +1022,33 @@ document.querySelectorAll('[data-next]').forEach(el=>{
 /* ═══ Later, preserving the current shape ═════════════════════════ */
 const LATER={
  gmail:[
-  {a:'Stripe',t:'Your invoice for July is ready',sub:'Receipt for INV-4821, no action needed',age:'2h'},
-  {a:'GitHub',t:'[acme/api] 14 new commits to main',sub:'Digest of everything merged since Tuesday',age:'5h'},
-  {a:'Pangram Pangram',t:'Your licence is confirmed',sub:'Cirka and Gilroy, desktop and app embedding',age:'1d'},
-  {a:'Linear',t:'Weekly project digest',sub:'Design System moved 6 issues to Done',age:'1d'},
-  {a:'Every',t:'The knowledge economy is eating itself',sub:'Newsletter, no reply expected',age:'2d'},
-  {a:'Vercel',t:'Deployment succeeded for productivity-app',sub:'Preview build from branch main',age:'2d'}],
+  {g:'Today',a:'Stripe',t:'Your invoice for July is ready',sub:'Receipt for INV-4821, no action needed',age:'2h',f:.17},
+  {g:'Today',a:'GitHub',t:'[acme/api] 14 new commits to main',sub:'Digest of everything merged since Tuesday',age:'5h',f:.13},
+  {g:'Yesterday',a:'Pangram Pangram',t:'Your licence is confirmed',sub:'Cirka and Gilroy, desktop and app embedding',age:'1d',f:.10},
+  {g:'Yesterday',a:'Linear',t:'Weekly project digest',sub:'Design System moved 6 issues to Done',age:'1d',f:.08},
+  {g:'Earlier',a:'Every',t:'The knowledge economy is eating itself',sub:'Newsletter, no reply expected',age:'2d',f:.05}],
  slack:[
-  {a:'#design-system',t:'Thread on the icon family decision',sub:'Phosphor won on the fill variant argument',age:'4h'},
-  {a:'#general',t:'Lunch order for Thursday',sub:'You were not mentioned',age:'6h'},
-  {a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d'}],
+  {g:'Today',a:'#design-system',t:'Thread on the icon family decision',sub:'Phosphor won on the fill variant argument',age:'4h',f:.17},
+  {g:'Today',a:'#general',t:'Lunch order for Thursday',sub:'You were not mentioned',age:'6h',f:.13},
+  {g:'Yesterday',a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d',f:.08}],
 };
 document.querySelectorAll('[data-later]').forEach(el=>{
  const src=el.dataset.later||'gmail', rows=LATER[src];
- el.outerHTML=rows.map(r=>`<div class="lrow">
-  <span class="lwash" data-lwash=""></span>
+ // Later filters to one source, so a source wash paints every row the same
+ // colour and differentiates nothing. Rows grade by age instead, and day
+ // groups give the list a rhythm that tone alone cannot.
+ let group=null, out='';
+ rows.forEach(r=>{
+  if(r.g!==group){group=r.g; out+=`<div class="sectlab t-label tight">${group}</div>`;}
+  out+=`<div class="lrow">
+  <span class="lwash" style="background:linear-gradient(90deg,rgba(201,183,154,${r.f}),rgba(201,183,154,0) 100%)"></span>
   <span class="mark s32" data-mark="${src}"></span>
   <span class="grow stack" style="gap:2px">
    <span class="t-body trunc"><span class="w500">${r.a}</span> &middot; ${r.t}</span>
    <span class="t-secondary c-mid trunc">${r.sub}</span></span>
   <span class="lmeta"><span class="mono t-secondary c-mid">${r.age}</span>
-   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>`).join('')+
-  `<div style="padding:16px"><span class="t-secondary c-low">${rows.length} from ${src==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
+   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>`;});
+ el.outerHTML=out+`<div style="padding:16px"><span class="t-secondary c-low">${rows.length} from ${src==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
 });
 const STRIP=[['gmail','Gmail'],['slack','Slack'],['linear','Linear'],['github','GitHub']];
 document.querySelectorAll('[data-strip]').forEach(el=>{
@@ -1054,6 +1069,7 @@ const SRC=[
 document.querySelectorAll('[data-activity]').forEach(el=>{
  el.innerHTML=SRC.map(s=>{
   return `<div class="scard">
+   <div class="tint" data-tint="${s.id}" style="height:130px"></div>
    <div class="spread"><span style="display:flex;gap:12px;align-items:center">
     <span class="mark s32" data-mark="${s.id}"></span><span class="t-heading">${s.n}</span></span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
@@ -1068,7 +1084,7 @@ document.querySelectorAll('[data-break]').forEach(el=>{
  const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15'],
              ['acme/infra','7 commits · 2 PRs','9']];
  el.outerHTML=rows.map(([a,b,c])=>`<div class="lrow">
-  <span class="lwash" data-lwash=""></span>
+  <span class="lwash" data-lwash="github"></span>
   <span class="mark s32" data-mark="github"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${a}</span>
    <span class="t-secondary c-mid trunc">${b}</span></span>
@@ -1083,7 +1099,7 @@ document.querySelectorAll('[data-conn]').forEach(el=>{
              ['gmail','Gmail','live','64 in Later · synced 4m ago'],
              ['linear','Linear','off','Never connected']];
  el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="lrow">
-  <span class="lwash" data-lwash=""></span>
+  <span class="lwash" data-lwash="${id}"></span>
   <span class="mark s32" data-mark="${id}"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body">${n}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>
@@ -1142,7 +1158,16 @@ const CARDS=[
    <div class="t-body c-mid clamp3" style="margin-top:4px">Should we lead with the triage story here rather than the integrations list?</div></div>`,
   acts:[['Open','i-ext',0],['Snooze','i-snooze',0],['Read','i-checks',0]],
   strip:['No deadline','4h ago','1 of 2 threads'],
-  cap:'<b>Google Docs &middot; can wait</b>The quietest tier: a neutral glow rather than a hue, a ghost chip, and <b>no filled button at all</b>. Reply is offered by <span class="mono">actionsFor</span> and rejected by the backend, so it is not drawn.'},
+  cap:'<b>Google Docs &middot; can wait</b>The violet tier, and the first card with <b>no filled action at all</b>. Nothing that can wait earns the strongest button, which is what stops the neutral fill appearing on every screen.'},
+ {src:'slack',name:'Slack',ctx:'#design-system',tier:'l',tag:'Later',
+  title:'Thread on the icon family decision',
+  body:'You snoozed this yesterday. It comes back at 17:00.',
+  mid:`<div class="fmid" style="display:flex;gap:32px">
+   <span class="stack"><span class="t-label c-low">Snoozed</span><span class="t-body" style="margin-top:4px">Yesterday, 16:20</span></span>
+   <span class="stack"><span class="t-label c-low">Returns</span><span class="t-body" style="margin-top:4px">Today, 17:00</span></span></div>`,
+  acts:[['Open','i-ext',0],['Bring back','i-up',0],['Read','i-checks',0]],
+  strip:['Returns 17:00','in 4h 12m','#design-system'],
+  cap:'<b>Later, inside the Feed</b>The fourth state gets the fourth hue, azure, so a Later card is unmistakable while you swipe without being loud. Everything in Later reaches the Feed this way: snoozed, no date set, and handled. <b>Bring back</b> promotes it to the live queue, which is the only action unique to this group.'},
 ];
 const cardsRail=document.querySelector('[data-cards]');
 if(cardsRail) cardsRail.innerHTML=CARDS.map(c=>`
@@ -1186,7 +1211,7 @@ document.querySelectorAll('.ph').forEach(ph=>{
   return `<div class="tabitem${on?' on':''}">
    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="${on?'var(--high)':'var(--low)'}"
     stroke-width="${on?2.2:1.6}" stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"/></svg>
-   <span class="tl">${label}</span>${id==='feed'?'<span class="tabbadge">3</span>':''}</div>`;}).join('')+'</div>');
+   <span class="tl">${label}</span></div>`;}).join('')+'</div>');
 });
 document.querySelectorAll('[data-dim]').forEach(el=>el.style.filter='brightness(.5)');
 paint();
