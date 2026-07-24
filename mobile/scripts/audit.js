@@ -146,9 +146,17 @@
       if (leaf && text) {
         const size = parseFloat(style.fontSize);
         if (!TYPE.has(size)) note('offScaleType', `${size}: ${text.slice(0, 24)}`);
+        // SVG text paints with `fill`, not `color`: the DOM `color` on an
+        // `<text>` node is the inherited default (black), so reading it against
+        // a dark canvas reported the ring's hour labels at 1.1:1 when they are
+        // a light grey `fill` clearing AA. Take the fill for SVG-namespaced
+        // text; everything else keeps using color.
+        const isSvgText = element.namespaceURI === 'http://www.w3.org/2000/svg';
+        const inkSource = isSvgText ? style.fill : style.color;
+        const ink = triples(inkSource)[0];
         const bg = backdrop(element);
-        if (bg) {
-          const pair = ratio(triples(style.color)[0], bg);
+        if (bg && ink) {
+          const pair = ratio(ink, bg);
           if (pair < 4.5) note('contrastBelowAA', `${pair.toFixed(1)}: ${text.slice(0, 30)}`);
         }
       }

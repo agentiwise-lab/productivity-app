@@ -194,11 +194,13 @@ export function YourDayScreen({
                     marginBottom: space.xs,
                   }}
                 >
-                  <T role="body" tone="mid">
+                  <T role="secondary" tone="low">
                     {daySummary(todayMeetings, ahead)}
                   </T>
                   {ahead.length === 0 ? (
-                    <T role="secondary" tone="low" style={{ marginTop: space.xs }}>
+                    // Read at the size a meeting row would have, so a clear day
+                    // still has a line of real content where its list would be.
+                    <T role="body" tone="high" style={{ marginTop: space.xs }}>
                       {workPrompt(counts)}
                     </T>
                   ) : null}
@@ -296,14 +298,11 @@ function workPrompt(counts: {
   byEod: number;
   canWait: number;
 }): string {
-  const pressing = counts.urgent + counts.byEod;
-  const total = pressing + counts.canWait;
+  const total = counts.urgent + counts.byEod + counts.canWait;
   if (total === 0) return 'Nothing is waiting on you. Enjoy the quiet.';
-  const what =
-    pressing > 0
-      ? `${pressing} still ${pressing === 1 ? 'needs' : 'need'} you`
-      : `${counts.canWait} can wait`;
-  return `Pick a category above to work through what is left: ${what}.`;
+  // The instruction alone, no count: the numbers are already on the cells the
+  // sentence points at.
+  return 'Pick a category above to work through what is left.';
 }
 
 function daySummary(today: Meeting[], ahead: Meeting[], now = new Date()): string {
