@@ -138,7 +138,7 @@ export function LaterScreen({
                   on ? { borderColor: c.hue.later, backgroundColor: c.overlay } : null,
                 ]}
               >
-                <BrandMark source={entry.id} size={16} />
+                <BrandMark source={entry.id} size={24} />
                 {on ? (
                   // The hue lives in the border and the fill. As text on a
                   // tinted overlay it measured 3.6 in light mode, and a label

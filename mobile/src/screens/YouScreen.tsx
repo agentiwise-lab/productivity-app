@@ -150,7 +150,10 @@ export function YouScreen({
             groups them as peers. They sit close under the separator rather than
             a full 32pt below it. */}
         <SectionHeading label="Appearance" />
-        <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
+        {/* The heading sits close under the line (its own small top padding),
+            and the breathing room goes here instead, between the heading and
+            the selector, without making the section any taller overall. */}
+        <View style={{ paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md }}>
           <Segmented options={APPEARANCES} value={appearance} onChange={setAppearance} />
         </View>
 
@@ -257,7 +260,8 @@ function SectionHeading({
         alignItems: 'center',
         gap: space.xs,
         paddingHorizontal: space.md,
-        paddingTop: space.md,
+        // Close under the separator above it, not a full step below.
+        paddingTop: space.xs,
         paddingBottom: space.xs,
       }}
     >

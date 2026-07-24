@@ -207,13 +207,16 @@ export function Toggle({
   onChange: (next: boolean) => void;
 }) {
   const c = useTheme();
+  // Slimmer than the iOS default: 26 tall sits within the two-line "Notify me"
+  // block rather than standing taller than it, and the lost touch height is
+  // made up in hitSlop.
   return (
-    <Pressable onPress={() => onChange(!value)} hitSlop={8}>
+    <Pressable onPress={() => onChange(!value)} hitSlop={12}>
       <View
         style={[
           {
-            width: 51,
-            height: 31,
+            width: 44,
+            height: 26,
             borderRadius: radius.pill,
             padding: 2,
             backgroundColor: value ? c.high : c.overlay,
@@ -223,11 +226,11 @@ export function Toggle({
       >
         <View
           style={{
-            width: 27,
-            height: 27,
+            width: 22,
+            height: 22,
             borderRadius: radius.pill,
             backgroundColor: value ? c.canvas : c.faint,
-            marginLeft: value ? 20 : 0,
+            marginLeft: value ? 18 : 0,
           }}
         />
       </View>
