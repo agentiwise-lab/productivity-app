@@ -1,0 +1,30 @@
+/**
+ * The line under a row's title.
+ *
+ * Normally the model's summary: what this actually asks of you. But a tier the
+ * rules settle on their own never reaches the model, so Linear issues carrying
+ * a priority or a due date had no second line at all while every email had one.
+ * The row looked broken rather than merely unclassified.
+ *
+ * The item's own text is the fallback. An issue description or the first line
+ * of a message says less than a written summary, but it says something, and
+ * every row keeps the same shape.
+ */
+export function subtext(row: {
+  summary?: string | null;
+  body?: string | null;
+}): string | null {
+  const summary = row.summary?.trim();
+  if (summary) return summary;
+
+  const body = row.body?.trim();
+  if (!body) return null;
+
+  // First non-empty line, so a description with its own paragraphs does not
+  // arrive as one run-on sentence.
+  const first = body
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return first ? first.slice(0, 140) : null;
+}

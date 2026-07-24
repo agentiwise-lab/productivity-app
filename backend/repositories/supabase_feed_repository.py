@@ -101,15 +101,6 @@ class SupabaseFeedRepository:
         )
         return _deserialize(rows[0]) if rows else None
 
-    def delete(self, user_id: str, item_id: str) -> None:
-        (
-            self._db.table(_TABLE)
-            .delete()
-            .eq("user_id", user_id)
-            .eq("id", item_id)
-            .execute()
-        )
-
     def list_by_user(
         self, user_id: str, now: datetime | None = None
     ) -> list[FeedItem]:

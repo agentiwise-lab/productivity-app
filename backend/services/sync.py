@@ -51,7 +51,12 @@ class SourceSync:
         classifier: Any | None = None,
         identity_for: Callable[[str, str], Identity] | None = None,
         clock: Callable[[], datetime] | None = None,
-        timeout: float = 25.0,
+        # Gmail sets this floor: pulling every unread message in the window is
+        # three pages and about 37 seconds on a mailbox with a few hundred, and
+        # at 25s it was cut off mid-fetch so the whole source reported failure.
+        # Nobody waits on this. The app paints from cache and the sources refresh
+        # behind it.
+        timeout: float = 90.0,
         classify_async: bool = False,
     ) -> None:
         self._timeout = timeout
@@ -103,10 +108,8 @@ class SourceSync:
             count = 0
             for event in events:
                 try:
-                    # None means the item was noise and was discarded rather
-                    # than stored, so it is not something this refresh brought in.
-                    if self._feed.ingest(user_id, event, prefs, identity) is not None:
-                        count += 1
+                    self._feed.ingest(user_id, event, prefs, identity)
+                    count += 1
                 except Exception:
                     # One malformed row must not abandon the rest of the batch.
                     log.warning(

@@ -30,6 +30,13 @@ _NOISE_LABELS = {
 }
 
 
+#: One page of the compact form. Larger pages 413 through Composio.
+PAGE_SIZE = 100
+#: Ceiling on one refresh. Not a view limit: Later shows everything fetched.
+#: This only stops a mailbox with thousands unread from stalling a refresh.
+MAX_UNREAD = 400
+
+
 def _header(payload: dict[str, Any], name: str) -> str:
     for header in (payload.get("headers") or []):
         if str(header.get("name", "")).lower() == name.lower():
@@ -98,6 +105,26 @@ def _plain_body(message: dict[str, Any]) -> str:
     return "\n".join(lines).strip()[:4000]
 
 
+def _preview_text(message: dict[str, Any]) -> str:
+    """What the compact form offers instead of a body.
+
+    ``preview`` arrives as ``{"body": "..."}`` rather than a string, and passing
+    the dict straight through failed RawEvent validation, which took the whole
+    Gmail source down mid-refresh. Every branch here is guarded on type for the
+    same reason.
+    """
+    preview = message.get("preview")
+    if isinstance(preview, dict):
+        text = preview.get("body")
+        if isinstance(text, str) and text.strip():
+            return text.strip()[:4000]
+    for key in ("preview", "snippet"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:4000]
+    return ""
+
+
 def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     labels = set(message.get("labelIds") or message.get("label_ids") or [])
     if "UNREAD" not in labels:
@@ -116,7 +143,7 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
 
     # The whole readable message, not just Gmail's one-line snippet. The
     # detail sheet shows the mail itself, and a snippet is not a mail.
-    body = _plain_body(message) or message.get("snippet") or ""
+    body = _plain_body(message) or _preview_text(message)
 
     return RawEvent(
         source="gmail",
@@ -157,18 +184,44 @@ class ComposioGmailService:
             return result.get("data") or {}
         return getattr(result, "data", {}) or {}
 
-    def unread(self, max_results: int = 40) -> list[RawEvent]:
-        data = self._execute(
-            "GMAIL_FETCH_EMAILS",
-            {
+    def unread(self, limit: int = MAX_UNREAD) -> list[RawEvent]:
+        """Every unread message in the window, not the newest forty.
+
+        Later is meant to be the record of what arrived and did not need you,
+        so a cap here is a cap on what the user is allowed to know about: with
+        forty of two hundred fetched, the other hundred and sixty simply did not
+        exist anywhere in the app.
+
+        ``verbose`` is off. The full form carries every message body and 413s
+        well before this many, while the compact form still carries the sender,
+        the subject, the label ids the bulk rule needs, and enough text for the
+        model to judge the handful that are not newsletters.
+        """
+        found: list[RawEvent] = []
+        page_token: str | None = None
+
+        while len(found) < limit:
+            arguments: dict[str, Any] = {
                 "query": "is:unread newer_than:30d",
-                "max_results": max_results,
-                "verbose": True,
-            },
-        )
-        messages = data.get("messages") or data.get("emails") or []
-        found = [message_to_raw_event(message) for message in messages]
-        return [event for event in found if event is not None]
+                "max_results": min(PAGE_SIZE, limit - len(found)),
+                "verbose": False,
+            }
+            if page_token:
+                arguments["page_token"] = page_token
+            data = self._execute("GMAIL_FETCH_EMAILS", arguments)
+
+            messages = data.get("messages") or data.get("emails") or []
+            if not messages:
+                break
+            for message in messages:
+                event = message_to_raw_event(message)
+                if event is not None:
+                    found.append(event)
+
+            page_token = data.get("nextPageToken") or data.get("next_page_token")
+            if not page_token:
+                break
+        return found
 
     def inbox_summary(self, sample: int = 100) -> dict[str, Any]:
         """The real unread picture, straight from Gmail.

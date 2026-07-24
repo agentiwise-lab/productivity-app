@@ -19,7 +19,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from backend.models.feed import FeedItem
-from backend.models.tiers import Tier, TypeTag
+from backend.models.tiers import Tier
 from backend.repositories.feed_repository import FeedRepository
 
 log = logging.getLogger(__name__)
@@ -177,15 +177,9 @@ class DefaultClassificationService:
         if hit is None:
             return False
         tier, summary, reason = hit
-        # Same verdict, same consequence. A cache hit that says noise has to
-        # discard too, or whether an item survives depends on whether something
-        # identical happened to pass through earlier.
-        if tier is Tier.NOISE and item.type_tag is not TypeTag.ASSIGNED:
-            self._repo.delete(user_id, item.id)
-        else:
-            self._repo.apply_classification(
-                user_id, item.id, tier=tier, summary=summary, reason=reason
-            )
+        self._repo.apply_classification(
+            user_id, item.id, tier=tier, summary=summary, reason=reason
+        )
         report.from_cache += 1
         report.classified += 1
         return True
@@ -238,18 +232,6 @@ class DefaultClassificationService:
 
             summary = str(verdict.get("summary") or "")[:90]
             reason = str(verdict.get("reason") or "")[:60]
-
-            # The rules can only discard what they are certain about; anything
-            # they defer is stored first and judged after. This is the second
-            # place noise appears, and it is discarded here for the same reason:
-            # a month of newsletters kept to prove they were filtered is just a
-            # database full of newsletters. Work assigned to the user is never
-            # dropped, however the model tiers it.
-            if tier is Tier.NOISE and item.type_tag is not TypeTag.ASSIGNED:
-                self._repo.delete(user_id, item.id)
-                report.classified += 1
-                applied.append(tier)
-                continue
 
             self._repo.apply_classification(
                 user_id, item.id, tier=tier, summary=summary, reason=reason

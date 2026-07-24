@@ -71,10 +71,10 @@ _TERMINAL: dict[str, tuple[Tier, TypeTag]] = {
     # A due date settles it by itself: read-time ranking promotes it as the
     # deadline approaches and once it passes (3.8).
     "linear_due": (Tier.TODAY, TypeTag.ASSIGNED),
-    # An untouched backlog item with no priority and no date. Real work, but
-    # nobody is waiting on it today, so it belongs in Later rather than in
-    # front of the user. Terminal: there is no prose here to judge.
-    "linear_backlog": (Tier.NOISE, TypeTag.ASSIGNED),
+    # A backlog issue with no priority and no date. Nobody is waiting on it, but
+    # it is still the user's own task, so it belongs on Home under Can wait.
+    # Calling it noise filed the user's own backlog next to newsletters.
+    "linear_backlog": (Tier.CAN_WAIT, TypeTag.ASSIGNED),
     # Filtered by Gmail's own category labels before the model, so we never pay
     # to classify a newsletter.
     "gmail_bulk": (Tier.NOISE, TypeTag.FYI),

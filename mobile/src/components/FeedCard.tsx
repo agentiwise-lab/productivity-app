@@ -21,6 +21,7 @@ import { ago, deadlineLabel } from '../lib/time';
 import { BrandMark } from './BrandMark';
 import { actionsFor } from '../lib/actions';
 import type { FeedRow } from '../api/types';
+import { subtext } from '../lib/subtext';
 
 export const CARD_WIDTH = s(216);
 export const CARD_GAP = s(9);
@@ -140,9 +141,9 @@ export function FeedCard({
         {/* The AI one-liner. Absent while classification is still pending, and
             omitted rather than replaced with a placeholder that would read like
             a summary the model never wrote. */}
-        {row.summary ? (
+        {subtext(row) ? (
           <Text style={styles.why} numberOfLines={2} ellipsizeMode="tail">
-            {row.summary}
+            {subtext(row)}
           </Text>
         ) : null}
       </View>

@@ -14,6 +14,7 @@ import { colors, s, type, pipColor, tierLabel } from '../theme';
 import { ago, deadlineLabel } from '../lib/time';
 import { BrandMark } from './BrandMark';
 import type { FeedRow, Tier } from '../api/types';
+import { subtext } from '../lib/subtext';
 
 export function GroupHeader({ tier, count }: { tier: Tier; count: number }) {
   return (
@@ -51,9 +52,9 @@ export function ListRow({
         </Text>
         {/* Why this row exists. Without it a list of titles is just an inbox,
             which is the thing this product replaces. */}
-        {row.summary ? (
+        {subtext(row) ? (
           <Text style={styles.rowSub} numberOfLines={1} ellipsizeMode="tail">
-            {row.summary}
+            {subtext(row)}
           </Text>
         ) : null}
       </View>

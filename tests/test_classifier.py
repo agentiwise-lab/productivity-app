@@ -254,12 +254,10 @@ def test_a_normal_spread_raises_no_alarm():
 # --- the model demoting something to noise ---------------------------------
 
 
-def test_an_item_the_model_calls_noise_is_deleted_not_stored():
-    """The rules can only discard what they are certain about. Everything else
-    is stored first and judged after, so the model's verdict is the second
-    place noise can appear, and it has to be discarded there too or the store
-    fills with exactly what the rules were told to keep out."""
-    from backend.models.feed import FeedItem, UserPreferences
+def test_an_item_the_model_calls_noise_is_kept_and_tiered_noise():
+    """It stays so Later can show it. The user asked to see everything that
+    arrived and did not need them, not to have it silently dropped."""
+    from backend.models.feed import FeedItem
     from backend.models.tiers import Tier, TypeTag
     from backend.repositories.feed_repository import InMemoryFeedRepository
     from backend.services.classifier import (
@@ -275,27 +273,20 @@ def test_an_item_the_model_calls_noise_is_deleted_not_stored():
             title="Your weekly digest", url="", content_hash="h1",
         )
     )
-    repo.upsert(
-        FeedItem(
-            id="real", user_id="u", source="gmail", source_ref="gmail:2",
-            rule_tier=Tier.TODAY, type_tag=TypeTag.REPLY, needs_llm=True,
-            title="Can you review the contract today?", url="", content_hash="h2",
-        )
-    )
 
     class _Model:
         def judge(self, items):
             return [
-                {"id": i["id"],
-                 "tier": "noise" if i["id"] == "junk" else "urgent",
-                 "summary": "s", "reason": "r"}
+                {"id": i["id"], "tier": "noise", "summary": "a newsletter",
+                 "reason": "bulk mail"}
                 for i in items
             ]
 
-    service = DefaultClassificationService(
+    DefaultClassificationService(
         model=_Model(), repo=repo, cache=InMemoryClassificationCache()
-    )
-    service.classify_pending("u")
+    ).classify_pending("u")
 
-    remaining = [item.id for item in repo.list_by_user("u")]
-    assert remaining == ["real"]
+    kept = repo.list_by_user("u")
+    assert [i.id for i in kept] == ["junk"]
+    assert kept[0].llm_tier is Tier.NOISE
+    assert kept[0].summary == "a newsletter"
