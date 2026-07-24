@@ -69,7 +69,10 @@ class SourceSync:
         if linear is not None:
             self._sources[Source.LINEAR] = linear.assigned_to_me
         if gmail is not None:
-            self._sources[Source.GMAIL] = gmail.unread
+            # Only mail that could need a reply. The broad fetch belongs to
+            # Later, which reads it live; asking for it here meant pulling 361
+            # messages to store 12 and made the refresh eight times slower.
+            self._sources[Source.GMAIL] = gmail.actionable
         if calendar is not None:
             self._sources[Source.CALENDAR] = calendar.pending
         if slack is not None and identity_provider is not None:

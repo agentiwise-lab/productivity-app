@@ -15,7 +15,7 @@
  * end of.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -42,47 +42,35 @@ const SOURCES: { id: Source; label: string }[] = [
   { id: 'github', label: 'GitHub' },
 ];
 
-const LOADING_NOTE: Partial<Record<Source, string>> = {
-  gmail: 'Reading everything unread in the last 30 days.',
-  slack: 'Reading messages you were not addressed in.',
-  linear: 'Reading issues nobody is waiting on.',
-  github: 'Reading notifications you have not opened.',
-};
-
 export function LaterScreen({ api }: { api: ApiClient }) {
   const [source, setSource] = useState<Source>('gmail');
-  const [rows, setRows] = useState<LaterRow[]>([]);
+  const [all, setAll] = useState<LaterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const handle = useRef<StreamHandle | null>(null);
 
-  const load = useCallback(
-    (next: Source) => {
-      // Leaving one source mid-stream must not let its rows land in the next.
-      handle.current?.cancel();
-      setRows([]);
-      setError(null);
-      setLoading(true);
-
-      const { url, headers } = api.laterStream(next);
-      handle.current = streamEvents<LaterRow>({
-        url,
-        headers,
-        onBatch: (batch) => setRows((current) => [...current, ...batch]),
-        onDone: () => setLoading(false),
-        onError: (message) => {
-          setError(message);
-          setLoading(false);
-        },
-      });
-    },
-    [api],
-  );
-
+  // One stream for every source, opened once. Switching source used to start a
+  // fresh fetch and wait on it again; now it is a filter over rows already in
+  // hand, so the strip responds immediately.
   useEffect(() => {
-    load(source);
+    const { url, headers } = api.laterStream();
+    handle.current = streamEvents<LaterRow>({
+      url,
+      headers,
+      onBatch: (batch) => setAll((current) => [...current, ...batch]),
+      onDone: () => setLoading(false),
+      onError: (message) => {
+        setError(message);
+        setLoading(false);
+      },
+    });
     return () => handle.current?.cancel();
-  }, [source, load]);
+  }, [api]);
+
+  const rows = useMemo(
+    () => all.filter((row) => row.source === source),
+    [all, source],
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -138,9 +126,9 @@ export function LaterScreen({ api }: { api: ApiClient }) {
           <View style={styles.loading}>
             <ActivityIndicator color={colors.accent} />
             <Text style={styles.loadingNote}>
-              {rows.length > 0
-                ? `${rows.length} so far`
-                : LOADING_NOTE[source] ?? 'Reading from the source.'}
+              {all.length > 0
+                ? `${all.length} from all sources so far`
+                : 'Reading every source at once.'}
             </Text>
           </View>
         ) : null}

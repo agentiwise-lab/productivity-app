@@ -277,6 +277,7 @@ export default function App() {
                 meetings={meetings}
                 connectedCount={connectedCount}
                 sourcesUnknown={sourcesFailed}
+                sourcesLoading={loadingSources}
                 onRefresh={refresh}
                 onOpen={setSelected}
                 onAction={act}

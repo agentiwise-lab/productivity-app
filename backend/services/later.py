@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from queue import Queue
 from typing import Any, Callable
 
 from pydantic import BaseModel
@@ -114,6 +116,59 @@ class LaterService:
             # Whatever already arrived stands. The alternative is throwing away
             # a page the user can see in favour of an empty error screen.
             log.warning("later stream failed for %s", source.value, exc_info=True)
+
+    def stream_all(
+        self,
+        user_id: str,
+        *,
+        on_home: set[str],
+        limit: int = DEFAULT_LIMIT,
+    ) -> Iterator[list[LaterRow]]:
+        """Every source at once, batches yielded in whatever order they arrive.
+
+        One source at a time meant the user waited on Gmail's ten seconds before
+        anything appeared, and waited again on every tap of the strip. Fanned
+        out, the first rows show at the *fastest* source's latency and the total
+        is the slowest one rather than the sum, so switching source becomes a
+        filter over rows already in hand instead of a fresh fetch.
+
+        Each source runs on its own thread feeding a queue that this generator
+        drains, which is what lets a batch be yielded the moment it exists. A
+        source that fails takes itself out and leaves the rest streaming.
+        """
+        sources = [
+            source
+            for source in (Source.GMAIL, Source.SLACK, Source.LINEAR, Source.GITHUB)
+            if self._pages(user_id, source, limit) is not None
+        ]
+        if not sources:
+            return
+
+        batches: Queue[list[LaterRow] | None] = Queue()
+
+        def run(source: Source) -> None:
+            try:
+                for batch in self.stream(
+                    user_id, source, on_home=on_home, limit=limit
+                ):
+                    batches.put(batch)
+            except Exception:
+                log.warning("later stream failed for %s", source.value, exc_info=True)
+            finally:
+                # Always, or the drain below waits forever on a source that died.
+                batches.put(None)
+
+        with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+            for source in sources:
+                pool.submit(run, source)
+
+            done = 0
+            while done < len(sources):
+                batch = batches.get()
+                if batch is None:
+                    done += 1
+                    continue
+                yield batch
 
     # ------------------------------------------------------------ internals
 

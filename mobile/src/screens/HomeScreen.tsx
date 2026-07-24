@@ -57,6 +57,8 @@ interface Props {
   connectedCount: number;
   /** The connection check failed, so 0 connected means unknown, not none. */
   sourcesUnknown?: boolean;
+  /** The connection check has not answered yet, so 0 means "not yet". */
+  sourcesLoading?: boolean;
   onRefresh: () => Promise<void>;
   onOpen: (row: FeedRow) => void;
   onAction: (row: FeedRow, action: string) => void;
@@ -71,6 +73,7 @@ export function HomeScreen({
   meetings,
   connectedCount,
   sourcesUnknown = false,
+  sourcesLoading = false,
   onRefresh,
   onOpen,
   onAction,
@@ -126,10 +129,12 @@ export function HomeScreen({
     );
   }
 
-  // Only when we know nothing is connected. If the connection check itself
-  // failed we know nothing at all, and telling a user with five live sources to
-  // "connect your first source" is worse than showing them the feed we have.
-  if (connectedCount === 0 && !sourcesUnknown) {
+  // Only when we know nothing is connected. Two ways we might not know: the
+  // check failed, or it simply has not answered yet. The feed resolves in about
+  // a tenth of a second and the connection list in about six tenths, so without
+  // the second guard every open told a user with five live integrations to
+  // connect their first source, for half a second, every time.
+  if (connectedCount === 0 && !sourcesUnknown && !sourcesLoading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <Header title="Today" subtitle={dateLabel} />

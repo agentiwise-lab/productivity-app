@@ -245,3 +245,57 @@ def test_the_epoch_form_still_works():
         }
     )
     assert event.occurred_at is not None
+
+
+def test_ingest_asks_gmail_to_exclude_the_bulk_categories():
+    """The rules throw newsletters away anyway, so fetching them is pure cost:
+    361 messages over three pages, 37 seconds, to find the dozen addressed to a
+    person. Gmail can filter its own category tabs, which returns 15 in one
+    page in 4 seconds."""
+
+    class _Tools:
+        def __init__(self):
+            self.queries = []
+
+        def execute(self, slug, user_id=None, arguments=None, version=None):
+            self.queries.append((arguments or {}).get("query", ""))
+            return {"data": {"messages": []}}
+
+    class _Composio:
+        def __init__(self):
+            self.tools = _Tools()
+
+    from backend.integrations.gmail import ComposioGmailService
+
+    client = _Composio()
+    ComposioGmailService(client, user_id="u").actionable()
+
+    query = client.tools.queries[0]
+    assert "is:unread" in query
+    assert "newer_than:30d" in query
+    for tab in ("promotions", "social", "forums", "updates"):
+        assert f"-category:{tab}" in query
+
+
+def test_later_still_asks_for_everything():
+    """Later shows what arrived and did not need you, so its query must stay
+    broad. Narrowing both would hide the newsletters entirely."""
+
+    class _Tools:
+        def __init__(self):
+            self.queries = []
+
+        def execute(self, slug, user_id=None, arguments=None, version=None):
+            self.queries.append((arguments or {}).get("query", ""))
+            return {"data": {"messages": []}}
+
+    class _Composio:
+        def __init__(self):
+            self.tools = _Tools()
+
+    from backend.integrations.gmail import ComposioGmailService
+
+    client = _Composio()
+    ComposioGmailService(client, user_id="u").unread()
+
+    assert "-category:" not in client.tools.queries[0]

@@ -221,6 +221,36 @@ def create_app(
             raise HTTPException(status_code=503, detail="stats not configured")
         return stats.dashboard(provider, repo.list_by_user(user_id))
 
+    @app.get("/later")
+    def stream_later_all(
+        limit: int = 200, user_id: str = Depends(current_user)
+    ) -> StreamingResponse:
+        """Every source at once, streamed as each one answers.
+
+        One connection rather than one per source. The client keeps all the
+        rows and filters by source locally, so the strip switches instantly
+        instead of starting a fresh ten-second fetch on every tap.
+        """
+        if later is None:
+            raise HTTPException(status_code=503, detail="later not configured")
+
+        on_home = {item.source_ref for item in repo.list_by_user(user_id)}
+
+        def events():
+            try:
+                for batch in later.stream_all(user_id, on_home=on_home, limit=limit):
+                    payload = json.dumps([row.model_dump(mode="json") for row in batch])
+                    yield f"event: rows\ndata: {payload}\n\n"
+            except Exception:
+                log.warning("later stream failed", exc_info=True)
+            yield "event: done\ndata: {}\n\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @app.get("/later/{provider}")
     def stream_later(
         provider: Source, limit: int = 200, user_id: str = Depends(current_user)

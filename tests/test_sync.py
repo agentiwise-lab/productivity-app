@@ -28,6 +28,8 @@ class FakeSource:
     list_notifications = _fetch
     assigned_to_me = _fetch
     unread = _fetch
+    # Ingest asks Gmail for actionable mail only; Later keeps the broad fetch.
+    actionable = _fetch
     pending = _fetch
 
 

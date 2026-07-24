@@ -114,3 +114,58 @@ def test_rows_carry_what_a_list_needs_to_render():
     assert row.source_ref == "gmail:m1"
     assert row.title == "Newsletter one"
     assert row.occurred_at == NOW
+
+
+# --- every source at once --------------------------------------------------
+
+
+class _SlowLinear:
+    """Answers in one call, like the real one."""
+
+    def assigned_to_me(self):
+        return [_issue("AGE-1")]
+
+
+def _issue(ref):
+    from backend.models.events import RawEvent
+
+    return RawEvent(
+        source="linear", source_ref=f"linear:{ref}", reason="linear_backlog",
+        subject_type="Issue", title=f"{ref} something", url="", repo="",
+        occurred_at=NOW,
+    )
+
+
+def test_all_sources_stream_together_and_each_batch_says_which_it_is():
+    """One source at a time meant Gmail's ten seconds before anything showed,
+    and another ten every time the user tapped a different source."""
+    service = _service(gmail=_FakeGmail(), linear=_SlowLinear())
+    batches = list(service.stream_all("u", on_home=set()))
+
+    rows = [row for batch in batches for row in batch]
+    sources = {row.source for row in rows}
+    assert sources == {Source.GMAIL, Source.LINEAR}
+    assert len(rows) == 4  # three mails, one issue
+
+
+def test_a_source_that_fails_does_not_stop_the_others():
+    class _Broken:
+        def assigned_to_me(self):
+            raise RuntimeError("linear is down")
+
+    service = _service(gmail=_FakeGmail(), linear=_Broken())
+    rows = [row for batch in service.stream_all("u", on_home=set()) for row in batch]
+
+    assert [row.source for row in rows] == [Source.GMAIL] * 3
+
+
+def test_home_items_are_excluded_across_every_source():
+    service = _service(gmail=_FakeGmail(), linear=_SlowLinear())
+    rows = [
+        row
+        for batch in service.stream_all("u", on_home={"linear:AGE-1", "gmail:m1"})
+        for row in batch
+    ]
+    refs = {row.source_ref for row in rows}
+    assert "linear:AGE-1" not in refs and "gmail:m1" not in refs
+    assert len(rows) == 2

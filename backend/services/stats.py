@@ -17,6 +17,7 @@ Gmail search, but a Calendar frequency line is a summary and opens nothing.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -89,6 +90,18 @@ def _minutes_label(minutes: float) -> str:
     return f"{round(minutes)}m"
 
 
+#: How long a built board stays good enough to serve again.
+#:
+#: These are 30-day counts, so a minute of staleness is invisible. What it buys
+#: is not just speed: Slack's search endpoint has a workspace-wide budget of
+#: roughly twenty calls a minute and one board costs thirty-five, so a user
+#: tapping back into Slack was guaranteed to exhaust it. Over budget, calls come
+#: back 429 and the counting code reads that as zero, which quietly understated
+#: the workspace total by hundreds of messages. Serving the cached board is the
+#: difference between a right answer and a wrong one, not merely a fast one.
+CACHE_TTL = timedelta(seconds=60)
+
+
 class SourceStatsService:
     def __init__(
         self,
@@ -97,17 +110,32 @@ class SourceStatsService:
         calendar: Any | None = None,
         gmail: Any | None = None,
         slack: Any | None = None,
+        clock: Any | None = None,
     ) -> None:
         self._github = github
         self._linear = linear
         self._calendar = calendar
         self._gmail = gmail
         self._slack = slack
+        self._now_fn = clock or (lambda: datetime.now(timezone.utc))
+        self._cache: dict[Source, tuple[datetime, SourceDashboard]] = {}
 
     def dashboard(
         self, source: Source, items: list[FeedItem], now: datetime | None = None
     ) -> SourceDashboard:
-        now = now or datetime.now(timezone.utc)
+        now = now or self._now_fn()
+
+        cached = self._cache.get(source)
+        if cached is not None and now - cached[0] < CACHE_TTL:
+            return cached[1]
+
+        board = self._build(source, items, now)
+        self._cache[source] = (now, board)
+        return board
+
+    def _build(
+        self, source: Source, items: list[FeedItem], now: datetime
+    ) -> SourceDashboard:
         mine = _recent([i for i in items if i.source == source.value], now)
         board = SourceDashboard(source=source, label=LABELS[source])
 
@@ -148,8 +176,14 @@ class SourceStatsService:
             ]
             return
 
+        # The two halves are independent, so they run together. In series the
+        # board paid for both round trips, and the second is itself two deep.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            summary_f = pool.submit(self._github.activity_summary)
+            repos_f = pool.submit(self._github.repo_activity, _GITHUB_LOGINS)
+
         try:
-            activity = self._github.activity_summary()
+            activity = summary_f.result()
             board.headline += [
                 StatLine(label="Open PRs", value=activity.get("open_prs", 0), detail="yours"),
                 StatLine(label="Merged", value=activity.get("merged_prs", 0), detail="30 days"),
@@ -159,7 +193,7 @@ class SourceStatsService:
             board.unavailable.append("pull request counts")
 
         try:
-            repos = self._github.repo_activity(_GITHUB_LOGINS)
+            repos = repos_f.result()
             total_commits = sum(r["commits"] for r in repos)
             board.headline.insert(
                 1, StatLine(label="Commits", value=total_commits, detail="yours")

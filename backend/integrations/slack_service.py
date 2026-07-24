@@ -216,11 +216,27 @@ class ComposioSlackService:
         """
         now = now or datetime.now(timezone.utc)
         after = (now - BACKFILL).strftime("%Y-%m-%d")
-        names = self.user_names()
+
+        # Six independent reads, run together rather than one after another.
+        # None of them needs any of the others; only the assembly below needs
+        # all of them, and in series they were most of the dashboard's 19
+        # seconds before the per-channel counting had even started.
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            names_f = pool.submit(self.user_names)
+            channels_f = pool.submit(self._list, "public_channel,private_channel")
+            discovered_f = pool.submit(self._discover_channels, after)
+            dms_f = pool.submit(self._list, "im")
+            per_dm_f = pool.submit(self._direct_message_counts, after)
+            total_f = pool.submit(self._workspace_total, after)
+
+        names = names_f.result()
+        discovered = discovered_f.result()
+        dm_list = dms_f.result()
+        per_dm = per_dm_f.result()
 
         listed = {
             c["name"]: c
-            for c in self._list("public_channel,private_channel")
+            for c in channels_f.result()
             if c.get("id") and c.get("name")
         }
         # Slack Connect channels never come back from conversations.list, but
@@ -228,7 +244,7 @@ class ComposioSlackService:
         # held 4504 of this workspace's 5932 messages, including the single
         # busiest channel. Listing only what conversations.list knows about
         # meant the dashboard missed three quarters of the traffic.
-        for name, channel_id in self._discover_channels(after).items():
+        for name, channel_id in discovered.items():
             listed.setdefault(name, {"id": channel_id, "name": name})
 
         rows: list[dict[str, Any]] = [
@@ -251,8 +267,7 @@ class ComposioSlackService:
         # search per DM. Twenty-seven extra round trips took the dashboard past
         # thirty seconds, which is longer than the app was willing to wait, so
         # the screen gave up and bounced back to Sources.
-        per_dm = self._direct_message_counts(after)
-        for dm in self._list("im"):
+        for dm in dm_list:
             user_id = dm.get("user")
             if not dm.get("id") or not user_id:
                 continue
@@ -300,7 +315,7 @@ class ComposioSlackService:
         # The true workspace figure, so the headline is not quietly capped by
         # whatever we managed to enumerate. Any gap becomes its own row rather
         # than a silent discrepancy between the total and the list under it.
-        total = self._workspace_total(after)
+        total = total_f.result()
         if total is None:
             total = counted
         elif total > counted:
@@ -365,8 +380,7 @@ class ComposioSlackService:
         by relevance, so a handful of pages surfaces the high-volume channels,
         which are exactly the ones worth naming.
         """
-        found: dict[str, str] = {}
-        for page in (1, 5, 20, 40):
+        def one_page(page: int) -> list[dict[str, Any]]:
             try:
                 data = self._execute(
                     "SLACK_SEARCH_MESSAGES",
@@ -374,10 +388,15 @@ class ComposioSlackService:
                 )
             except Exception:
                 log.info("channel discovery page %d failed", page, exc_info=True)
-                continue
-            matches = (data.get("messages") or {}).get("matches") or []
-            if not matches:
-                break
+                return []
+            return (data.get("messages") or {}).get("matches") or []
+
+        # The four sample pages together rather than one after another: they are
+        # independent, and in series they were four round trips of pure latency.
+        found: dict[str, str] = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            pages = list(pool.map(one_page, (1, 5, 20, 40)))
+        for matches in pages:
             for match in matches:
                 channel = match.get("channel") or {}
                 name, channel_id = channel.get("name"), channel.get("id")
