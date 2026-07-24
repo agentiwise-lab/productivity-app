@@ -12,12 +12,81 @@
  * line is a summary and stays inert, which the missing chevron signals.
  */
 
-import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Linking } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Linking,
+  Animated,
+  Easing,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, s, type } from '../theme';
 import { BrandMark } from '../components/BrandMark';
-import type { SourceDashboard, StatLine } from '../api/types';
+import type { Source, SourceDashboard, StatLine } from '../api/types';
+
+/**
+ * What a board is doing while it loads, in the source's own terms.
+ *
+ * A dashboard is counted live at the provider, so it is genuinely slow: Slack
+ * asks about every channel it can see. Four grey rectangles said none of that,
+ * so a board that was working looked like a board that was broken.
+ */
+const LOADING_NOTE: Partial<Record<Source, string>> = {
+  slack: 'Counting messages across every channel and DM. This one takes a moment.',
+  github: 'Reading commits and pull requests across your repositories.',
+  linear: 'Reading your issues and their states.',
+  gmail: 'Grouping the last 30 days by sender.',
+  calendar: 'Reading the last 30 days of meetings.',
+};
+
+/** A slow pulse, so the screen is visibly alive rather than merely empty. */
+function usePulse() {
+  const value = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(value, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(value, {
+          toValue: 0.4,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [value]);
+  return value;
+}
+
+function LoadingBoard({ source }: { source?: Source }) {
+  const pulse = usePulse();
+  return (
+    <ScrollView contentContainerStyle={styles.body}>
+      <View style={styles.tiles}>
+        {[0, 1, 2, 3, 4, 5].map((n) => (
+          <Animated.View key={n} style={[styles.tileSkeleton, { opacity: pulse }]} />
+        ))}
+      </View>
+      <Text style={styles.loadingNote}>
+        {(source && LOADING_NOTE[source]) ?? 'Counting the last 30 days.'}
+      </Text>
+      {[0, 1, 2, 3, 4].map((n) => (
+        <Animated.View key={n} style={[styles.rowSkeleton, { opacity: pulse }]} />
+      ))}
+    </ScrollView>
+  );
+}
 
 export function SourceDetailScreen({
   dashboard,
@@ -47,13 +116,7 @@ export function SourceDetailScreen({
       </View>
 
       {loading || !dashboard ? (
-        <View style={styles.pad}>
-          <View style={styles.tiles}>
-            {[0, 1, 2, 3].map((n) => (
-              <View key={n} style={styles.tileSkeleton} />
-            ))}
-          </View>
-        </View>
+        <LoadingBoard source={dashboard?.source} />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.tiles}>
@@ -175,6 +238,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
+  },
+  rowSkeleton: {
+    height: s(44),
+    marginHorizontal: s(13),
+    marginBottom: s(7),
+    borderRadius: s(12),
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  loadingNote: {
+    ...type.rowSub,
+    paddingHorizontal: s(16),
+    paddingTop: s(14),
+    paddingBottom: s(10),
   },
   tileValue: { fontFamily: 'Menlo', fontSize: s(17), fontWeight: '600', color: colors.fg },
   tileLabel: { ...type.rowTitle, fontWeight: '600', color: colors.fg, marginTop: s(3) },

@@ -206,12 +206,34 @@ class SourceStatsService:
         # Every figure covers only issues assigned to this user. Linear holds a
         # lot of work nobody is assigned to, and counting it told the user they
         # had finished nothing in a month they had worked all the way through.
+        # The details spell out how the tiles relate, because six bare numbers
+        # that partly contain each other read as arithmetic that does not add
+        # up. Remaining is the whole open set; Backlog, Overdue and Due this
+        # week are all slices of it, not additions to it.
+        remaining = stats.get("remaining", 0)
+        backlog = stats.get("backlog", 0)
         board.headline += [
-            StatLine(label="Completed", value=stats.get("completed_30d", 0), detail="this month"),
-            StatLine(label="Remaining", value=stats.get("remaining", 0), detail="open"),
-            StatLine(label="Backlog", value=stats.get("backlog", 0), detail="not started"),
-            StatLine(label="Overdue", value=stats.get("overdue", 0), detail="past due"),
-            StatLine(label="Due this week", value=stats.get("due_this_week", 0), detail="next 7 days"),
+            StatLine(
+                label="Completed",
+                value=stats.get("completed_30d", 0),
+                detail="you closed, last 30 days",
+            ),
+            StatLine(label="Open", value=remaining, detail="assigned to you"),
+            StatLine(
+                label="Backlog",
+                value=backlog,
+                detail=f"of the {remaining} open, not started",
+            ),
+            StatLine(
+                label="Overdue",
+                value=stats.get("overdue", 0),
+                detail=f"of the {remaining} open, past due",
+            ),
+            StatLine(
+                label="Due this week",
+                value=stats.get("due_this_week", 0),
+                detail=f"of the {remaining} open, next 7 days",
+            ),
         ]
 
         # Per project: how much is done and how much is left, the two numbers
@@ -279,23 +301,31 @@ class SourceStatsService:
 
     def _gmail_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
         board.breakdown_title = "Senders"
-        noise = sum(1 for i in items if _tier_of(i) is Tier.NOISE)
-        senders_map: dict[tuple[str, str], int] = defaultdict(int)
-        for i in items:
-            senders_map[(i.sender_name or i.sender_handle or "unknown", i.sender_handle or "")] += 1
+        if self._gmail is None:
+            board.unavailable.append("gmail")
+            return
 
-        # "Unread" was a lie: this counts the mail that reached the feed, which
-        # is capped per refresh, not the true unread count in the mailbox. And
-        # "filtered / bulk and lists" did not say what had been filtered or why.
+        try:
+            summary = self._gmail.inbox_summary()
+        except Exception:
+            log.warning("gmail inbox summary failed", exc_info=True)
+            board.unavailable.append("unread mail")
+            return
+
+        senders_map = summary["senders"]
+        unread = summary["unread"]
+        sampled = summary["sampled"]
+
+        # Counted at Gmail, not in the feed. The feed holds only what needs a
+        # reply, so counting it said "3 emails" to a mailbox with two hundred
+        # unread. "Set aside" is gone: it named an internal tier, not anything
+        # the user had asked about.
         board.headline += [
-            StatLine(label="Emails", value=len(items), detail="in the last 30 days"),
+            StatLine(label="Unread", value=unread, detail="in the last 30 days"),
             StatLine(label="Senders", value=len(senders_map), detail="wrote to you"),
-            StatLine(
-                label="Set aside",
-                value=noise,
-                detail="newsletters and promos",
-            ),
         ]
+        if sampled < unread:
+            board.breakdown_title = f"Senders, most recent {sampled}"
         # Grouped by sender with the email count, like the GitHub repo rows.
         # Tapping opens that sender's unread mail in Gmail, not one arbitrary
         # message.
@@ -313,7 +343,7 @@ class SourceStatsService:
             )
             for (name, handle), count in sorted(
                 senders_map.items(), key=lambda kv: kv[1], reverse=True
-            )[:15]
+            )[:25]
         ]
 
     # --------------------------------------------------------------- Slack

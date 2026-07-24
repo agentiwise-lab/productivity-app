@@ -170,6 +170,47 @@ class ComposioGmailService:
         found = [message_to_raw_event(message) for message in messages]
         return [event for event in found if event is not None]
 
+    def inbox_summary(self, sample: int = 100) -> dict[str, Any]:
+        """The real unread picture, straight from Gmail.
+
+        The dashboard used to count the feed, which is capped per refresh and,
+        since noise stopped being stored, holds only the handful of mails that
+        need a reply. It reported "42 emails, 31 senders" when the mailbox had
+        two hundred unread, and after the change it would have reported three.
+
+        ``resultSizeEstimate`` gives the true unread total in one call; the
+        sample is only for the per-sender breakdown, and says how far it reached.
+        """
+        # ``verbose`` is off deliberately. The full form carries every body and
+        # blew past Composio's payload ceiling with a 413 at this sample size,
+        # and the summary only needs who sent what: the compact form still
+        # carries ``sender`` and the unread estimate, which is all of it.
+        data = self._execute(
+            "GMAIL_FETCH_EMAILS",
+            {
+                "query": "is:unread newer_than:30d",
+                "max_results": sample,
+                "verbose": False,
+            },
+        )
+        messages = data.get("messages") or data.get("emails") or []
+        senders: dict[tuple[str, str], int] = {}
+        for message in messages:
+            from_header = message.get("sender") or _header(
+                message.get("payload") or {}, "From"
+            )
+            name, email = _sender(from_header or "")
+            key = (name or email or "unknown", email)
+            senders[key] = senders.get(key, 0) + 1
+
+        return {
+            "unread": data.get("resultSizeEstimate")
+            or data.get("result_size_estimate")
+            or len(messages),
+            "sampled": len(messages),
+            "senders": senders,
+        }
+
     def reply(self, source_ref: str, body: str) -> None:
         thread_id = source_ref.split(":", 1)[1] if ":" in source_ref else source_ref
         self._execute(

@@ -20,6 +20,13 @@ import type {
 const CACHE_KEY = 'feed.cache.v1';
 const CACHE_AT_KEY = 'feed.cache.at.v1';
 const TIMEOUT_MS = 12000;
+/**
+ * Source dashboards count every conversation live at the provider, so they are
+ * slower than anything else by design. At the shared 12s budget Slack's board
+ * was aborted mid-flight and the screen bounced back to Sources, which read as
+ * "this page is broken" rather than "this page is slow".
+ */
+const DASHBOARD_TIMEOUT_MS = 60000;
 
 export type FeedResult = {
   rows: FeedRow[];
@@ -49,9 +56,13 @@ export class ApiClient {
     this.baseUrl = url.replace(/\/$/, '');
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs: number = TIMEOUT_MS,
+  ): Promise<T> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
@@ -125,7 +136,11 @@ export class ApiClient {
   }
 
   sourceDashboard(provider: string): Promise<SourceDashboard> {
-    return this.request<SourceDashboard>(`/sources/${provider}`);
+    return this.request<SourceDashboard>(
+      `/sources/${provider}`,
+      {},
+      DASHBOARD_TIMEOUT_MS,
+    );
   }
 
   connectUrl(provider: string): Promise<{ url: string }> {

@@ -114,7 +114,12 @@ class _SummaryTools:
             for token in self.failing:
                 if token in query:
                     raise RuntimeError("ratelimited")
-            total = {"#eng": 130, "#design": 47, "<@U_PRIYA>": 12}
+            if "is:dm" in query:
+                # One search covers every DM; twelve messages in Priya's.
+                return {"data": {"messages": {"matches": [
+                    {"channel": {"id": "D1", "name": "U_PRIYA", "is_im": True}}
+                ] * 12}}}
+            total = {"#eng": 130, "#design": 47}
             for token, value in total.items():
                 if token in query:
                     return {"data": {"messages": {"total": value}}}
