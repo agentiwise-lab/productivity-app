@@ -74,7 +74,11 @@ export function needsComposer(actionId: string): boolean {
   return COMPOSER.has(actionId);
 }
 
-const EVERYWHERE = new Set(['open', 'snooze', 'mark_read', 'bring_back']);
+// `mark_read` is deliberately absent here: it only makes sense where a source
+// has a read state to move, which is Slack and Gmail, and it is in each of
+// their tables. Offering "Read" on a Linear issue or a GitHub PR was offering
+// to mark-as-read a thing that has no unread state.
+const EVERYWHERE = new Set(['open', 'snooze', 'bring_back']);
 
 export function isImplemented(source: Source, actionId: string): boolean {
   return EVERYWHERE.has(actionId) || IMPLEMENTED[source].has(actionId);

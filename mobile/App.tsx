@@ -129,6 +129,10 @@ function Shell() {
   const [stale, setStale] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [selected, setSelected] = useState<FeedRow | null>(null);
+  // Whether the sheet should open straight into its composer. True only when the
+  // sheet was opened by tapping Reply or Comment, so opening it to read does not
+  // shove a keyboard up at you.
+  const [composeOnOpen, setComposeOnOpen] = useState(false);
   const [snoozing, setSnoozing] = useState<FeedRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
@@ -222,6 +226,12 @@ function Shell() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Open the sheet to read (compose=false) or straight into the composer.
+  const openRow = useCallback((row: FeedRow, compose = false) => {
+    setComposeOnOpen(compose);
+    setSelected(row);
+  }, []);
 
   const act = useCallback(
     async (row: FeedRow, action: string, body?: string) => {
@@ -349,7 +359,7 @@ function Shell() {
                 sourcesUnknown={sourcesFailed}
                 sourcesLoading={loadingSources}
                 onRefresh={refresh}
-                onOpen={setSelected}
+                onOpen={openRow}
                 onConnect={() => connectSource('github')}
               />
             )}
@@ -360,7 +370,7 @@ function Shell() {
                 rows={rows}
                 loading={loading}
                 onAction={act}
-                onOpen={setSelected}
+                onOpen={openRow}
               />
             )}
           </Tab.Screen>
@@ -422,6 +432,7 @@ function Shell() {
         <DetailSheet
           row={selected}
           busy={busy}
+          startComposing={composeOnOpen}
           onClose={() => setSelected(null)}
           onAction={act}
         />

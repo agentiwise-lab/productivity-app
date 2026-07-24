@@ -30,7 +30,7 @@ export function FeedScreen({
   rows: FeedRow[];
   loading: boolean;
   onAction: (row: FeedRow, action: string) => void;
-  onOpen: (row: FeedRow) => void;
+  onOpen: (row: FeedRow, compose?: boolean) => void;
 }) {
   const c = useTheme();
   const { width, height: screen } = useWindowDimensions();

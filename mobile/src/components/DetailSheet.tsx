@@ -12,7 +12,7 @@
  * under a green "By EOD" chip is the same colour claiming two different things.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -36,7 +36,8 @@ import {
 import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
 import { BigButton, Chip, T, Wash } from './ui';
-import { canCompose, overflowFor, railFor } from '../lib/actions';
+import { needsComposer, overflowFor, railFor } from '../lib/actions';
+import { headerSubline, primaryLine } from '../lib/rowText';
 import { readable } from '../lib/subtext';
 import { ago, deadlineLabel } from '../lib/time';
 import type { FeedRow } from '../api/types';
@@ -44,28 +45,60 @@ import type { FeedRow } from '../api/types';
 interface Props {
   row: FeedRow | null;
   busy: boolean;
+  /** Open straight into the composer, set when the sheet was opened by Reply. */
+  startComposing?: boolean;
   onClose: () => void;
   onAction: (row: FeedRow, action: string, body?: string) => void;
 }
 
-export function DetailSheet({ row, busy, onClose, onAction }: Props) {
+export function DetailSheet({
+  row,
+  busy,
+  startComposing = false,
+  onClose,
+  onAction,
+}: Props) {
   const c = useTheme();
   const [draft, setDraft] = useState('');
+  // Which action, if any, the composer is open for. Null means it is closed and
+  // the buttons are showing. It opens only when a reply or comment button is
+  // pressed, or when the sheet was opened by one.
+  const [composing, setComposing] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!row) return;
+    const composeId = railFor(row).find((a) => needsComposer(a.id))?.id ?? null;
+    setComposing(startComposing ? composeId : null);
+    setDraft('');
+  }, [row?.id, startComposing]);
+
   if (!row) return null;
 
   const category = CATEGORY_OF_TIER[row.tier];
   const rail = railFor(row);
-  const [primary, secondary] = rail;
   const overflow = overflowFor(row);
-  const compose = canCompose(row);
+  // Everything actionable except Open, which is a link at the top now, and
+  // deduped so the primary and the overflow never draw the same button twice.
+  const buttons = dedupe([...rail, ...overflow]).filter((a) => a.id !== 'open');
+  const canOpen = !!row.url;
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
-  const above =
-    row.sender_name || row.sender_handle || row.context_chip || 'Unknown sender';
-  const body = readable(row.body) || row.title;
+  const above = headerSubline(row) ?? 'Unknown sender';
+  const body = readable(row.body) || primaryLine(row);
 
   const send = (action: string) => {
     onAction(row, action, draft.trim() || undefined);
     setDraft('');
+    setComposing(null);
+  };
+
+  const tap = (id: string) => {
+    // A reply or a comment opens the composer rather than sending; a second tap
+    // on the same one closes it again. Everything else acts at once.
+    if (needsComposer(id)) {
+      setComposing((current) => (current === id ? null : id));
+      return;
+    }
+    send(id);
   };
 
   return (
@@ -111,16 +144,38 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
               <T role="body" medium lines={1}>
                 {above}
               </T>
-              {/* The chip only when it says something the name above does not.
-                  Linear sets `context_chip` to "Linear" and has no sender, so
-                  the head read "Linear" and then "Linear ·" underneath it. */}
               <T role="secondary" tone="low" numeric lines={1}>
-                {row.context_chip && row.context_chip !== above
-                  ? `${row.context_chip} · `
-                  : ''}
                 {when}
               </T>
             </View>
+            {/* Open is a quiet link here, not a full-width button below: it
+                leaves the app rather than doing anything to the item, so it
+                does not belong among the actions that decide it. */}
+            {canOpen ? (
+              <Pressable
+                onPress={() => onAction(row, 'open')}
+                hitSlop={10}
+                accessibilityLabel="Open"
+                style={({ pressed }) => [
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.xxs,
+                    paddingVertical: space.xxs,
+                    paddingHorizontal: space.xs,
+                    borderRadius: radius.sm,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                  },
+                  pressed ? { opacity: 0.6 } : null,
+                ]}
+              >
+                <T role="label" tone="mid">
+                  Open
+                </T>
+                <Icon name="external" size={13} color={c.mid} />
+              </Pressable>
+            ) : null}
             {CATEGORY_LABEL[category] ? (
               <Chip
                 label={CATEGORY_LABEL[category]}
@@ -132,7 +187,7 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
 
           {/* Subject. */}
           <T role="title" lines={2} style={{ marginTop: space.md }}>
-            {row.title}
+            {primaryLine(row)}
           </T>
 
           {/* Why this category. */}
@@ -154,19 +209,24 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
             </View>
           ) : null}
 
-          {/* The only region that scrolls. */}
+          {/* The only region that scrolls. Empty when the body would only
+              repeat the title, which is the case for a mail whose subject was
+              its message. */}
           <ScrollView
             style={{ flex: 1, marginTop: space.md }}
             contentContainerStyle={{ paddingBottom: space.md }}
           >
-            <T role="body" tone="mid">
-              {body}
-            </T>
+            {body && body !== primaryLine(row) ? (
+              <T role="body" tone="mid">
+                {body}
+              </T>
+            ) : null}
           </ScrollView>
 
           {/* Footer. */}
           <View style={{ gap: space.sm }}>
-            {compose ? (
+            {/* The composer, only when a reply or comment button opened it. */}
+            {composing ? (
               <View
                 style={{
                   borderWidth: 1,
@@ -182,14 +242,12 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
-                  // Named where there is a person to name. A Linear issue has
-                  // no sender, and "Reply to this" read as a sentence that had
-                  // lost its last word.
+                  autoFocus
                   placeholder={
-                    row.sender_name
-                      ? `Reply to ${row.sender_name}`
-                      : primary?.id === 'comment'
-                        ? 'Add a comment'
+                    composing === 'comment'
+                      ? 'Add a comment'
+                      : row.sender_name
+                        ? `Reply to ${row.sender_name}`
                         : 'Write a reply'
                   }
                   placeholderTextColor={c.low}
@@ -209,11 +267,11 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                   ]}
                 />
                 <Pressable
-                  // An empty reply is rejected server-side, so the button is
-                  // inert until there is something to send rather than
-                  // offering a round trip that can only fail.
+                  // Inert until there is something to send: an empty reply is
+                  // rejected server-side, so the button offers no round trip
+                  // that can only fail, and it is never pre-selected.
                   disabled={busy || !draft.trim()}
-                  onPress={() => send(primary?.id ?? 'reply')}
+                  onPress={() => send(composing)}
                   accessibilityLabel="Send"
                   style={{
                     width: 44,
@@ -230,41 +288,37 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
               </View>
             ) : null}
 
-            <View style={{ flexDirection: 'row', gap: space.sm }}>
-              {primary ? (
-                <BigButton
-                  label={busy ? 'Working...' : primary.label}
-                  variant="primary"
-                  disabled={busy}
-                  onPress={() => send(primary.id)}
-                  style={{ flex: 1 }}
-                />
-              ) : null}
-              {secondary ? (
-                <BigButton
-                  label={secondary.label}
-                  disabled={busy}
-                  onPress={() => send(secondary.id)}
-                  style={{ flex: 1 }}
-                />
-              ) : null}
-            </View>
-
-            {overflow.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-                {overflow.map((action) => (
-                  <Chip
+            {/* The actions. A reply or comment button opens the composer above
+                and highlights; the rest act at once. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {buttons.map((action, index) => {
+                const composerButton = needsComposer(action.id);
+                const active = composing === action.id;
+                const lead = index === 0;
+                return (
+                  <BigButton
                     key={action.id}
-                    label={action.label}
-                    variant="outline"
-                    onPress={() => send(action.id)}
+                    label={busy && !composerButton ? 'Working...' : action.label}
+                    variant={active || (lead && !composing) ? 'primary' : 'secondary'}
+                    disabled={busy}
+                    onPress={() => tap(action.id)}
+                    style={{ flexGrow: 1, flexBasis: buttons.length > 2 ? '30%' : 0 }}
                   />
-                ))}
-              </View>
-            ) : null}
+                );
+              })}
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+/** First occurrence of each action id wins, so the same button is never drawn
+ *  twice when the rail and the overflow overlap. */
+function dedupe<T extends { id: string }>(actions: T[]): T[] {
+  const seen = new Set<string>();
+  return actions.filter((action) =>
+    seen.has(action.id) ? false : (seen.add(action.id), true),
   );
 }

@@ -55,7 +55,7 @@ export function FeedCard({
   row: FeedRow;
   onAction: (row: FeedRow, action: string) => void;
   /** Tapping the body opens the sheet, where the decision is actually made. */
-  onOpen: (row: FeedRow) => void;
+  onOpen: (row: FeedRow, compose?: boolean) => void;
 }) {
   const c = useTheme();
   const safeArea = useSafeAreaInsets();
@@ -180,7 +180,7 @@ export function FeedCard({
               // composer rather than firing an empty send. Everything else is
               // one shot and acts in place.
               if (needsComposer(action.id)) {
-                onOpen(row);
+                onOpen(row, true);
                 return;
               }
               haptics.commit();
