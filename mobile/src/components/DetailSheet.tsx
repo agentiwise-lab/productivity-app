@@ -37,6 +37,7 @@ import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
 import { BigButton, Chip, T, Wash } from './ui';
 import { canCompose, overflowFor, railFor } from '../lib/actions';
+import { readable } from '../lib/subtext';
 import { ago, deadlineLabel } from '../lib/time';
 import type { FeedRow } from '../api/types';
 
@@ -58,7 +59,9 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
   const overflow = overflowFor(row);
   const compose = canCompose(row);
   const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
-  const body = row.body?.trim() || row.title;
+  const above =
+    row.sender_name || row.sender_handle || row.context_chip || 'Unknown sender';
+  const body = readable(row.body) || row.title;
 
   const send = (action: string) => {
     onAction(row, action, draft.trim() || undefined);
@@ -106,13 +109,15 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
             <BrandMark source={row.source} size={32} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <T role="body" medium lines={1}>
-                {row.sender_name ||
-                  row.sender_handle ||
-                  row.context_chip ||
-                  'Unknown sender'}
+                {above}
               </T>
+              {/* The chip only when it says something the name above does not.
+                  Linear sets `context_chip` to "Linear" and has no sender, so
+                  the head read "Linear" and then "Linear ·" underneath it. */}
               <T role="secondary" tone="low" numeric lines={1}>
-                {row.context_chip ? `${row.context_chip} · ` : ''}
+                {row.context_chip && row.context_chip !== above
+                  ? `${row.context_chip} · `
+                  : ''}
                 {when}
               </T>
             </View>
@@ -177,7 +182,16 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
-                  placeholder={`Reply to ${row.sender_name ?? 'this'}...`}
+                  // Named where there is a person to name. A Linear issue has
+                  // no sender, and "Reply to this" read as a sentence that had
+                  // lost its last word.
+                  placeholder={
+                    row.sender_name
+                      ? `Reply to ${row.sender_name}`
+                      : primary?.id === 'comment'
+                        ? 'Add a comment'
+                        : 'Write a reply'
+                  }
                   placeholderTextColor={c.low}
                   multiline
                   style={{

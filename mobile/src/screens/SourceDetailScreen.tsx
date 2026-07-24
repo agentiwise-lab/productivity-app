@@ -118,7 +118,10 @@ export function SourceDetailScreen({
               {dashboard.breakdown.map((line, index) => (
                 <Row
                   key={`${line.label}-${index}`}
-                  category="none"
+                  // A repository, a sender or a project is not a category, and
+                  // a coloured rule down its edge promised a priority signal
+                  // the row has no way to mean.
+                  category={null}
                   leading={<BrandMark source={dashboard.source} size={32} />}
                   title={line.label}
                   subtitle={line.detail}

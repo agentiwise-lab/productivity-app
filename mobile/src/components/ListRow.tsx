@@ -95,7 +95,11 @@ export function Row({
         ) : null}
       </View>
       {value ? (
-        <T role="heading" numeric>
+        // Secondary rather than heading, and the prose face rather than mono.
+        // A board's value is often a phrase ("16 done · 13 left"), and set at
+        // 17pt in Geist Mono it outweighed the project it belonged to and read
+        // as terminal output.
+        <T role="secondary" tone="mid" lines={1}>
           {value}
         </T>
       ) : null}
