@@ -31,6 +31,13 @@ export function subtext(row: {
         .replace(/^#{1,6}\s*/, '')       // heading
         .replace(/^[-*+]\s+/, '')        // bullet
         .replace(/^>\s*/, '')            // quote
+        // Inline markup, which is markup we are never going to render. A link
+        // left whole put a hundred characters of URL in the middle of a
+        // sentence: keep the words, drop the address.
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')  // link
+        .replace(/`([^`]+)`/g, '$1')                 // code span
+        .replace(/\*\*([^*]+)\*\*/g, '$1')          // bold
+        .replace(/\s+/g, ' ')
         .trim(),
     )
     .find((line) => line.length > 0);

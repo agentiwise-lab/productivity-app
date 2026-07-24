@@ -61,3 +61,18 @@ class GitHubService(Protocol):
         leave the pull request blocked while telling the user it was unblocked.
         """
         ...
+
+    def request_changes_on_pull_request(self, ref: PRRef, body: str) -> None:
+        """Submit a changes-requested review. The mirror of approving, and
+        separate from commenting for the same reason: a comment saying "please
+        change this" leaves the pull request mergeable.
+
+        The body is required rather than optional, by GitHub and by the person
+        on the other end: a rejection with no reason is not a review.
+        """
+        ...
+
+    def assign_to_me(self, ref: PRRef) -> None:
+        """Take the issue. The one action here that changes who is responsible
+        rather than what has been said."""
+        ...

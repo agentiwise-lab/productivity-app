@@ -18,7 +18,13 @@ from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.actions import ActionFailed, DefaultActionService, UnknownAction
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.rules import DefaultRuleClassifier
-from tests.fakes import FakeGitHubService, FakeSlackService, make_event
+from tests.fakes import (
+    FakeCalendarService,
+    FakeGitHubService,
+    FakeLinearService,
+    FakeSlackService,
+    make_event,
+)
 
 NOW = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
 PREFS = UserPreferences(user_id="me")
@@ -193,3 +199,156 @@ def test_dismissing_marks_it_read_upstream_too():
 
     assert slack.read == ["slack:D01ABC:1784812011.000100"]
     assert item.id not in [row.id for row in feed.list_feed("me", PREFS)]
+
+
+# --- the actions the card offered and the backend rejected -----------------
+#
+# `actionsFor` promised six actions `perform` raised `UnknownAction` on, so the
+# app drew buttons that could only fail. These are those actions.
+
+
+def build_with_edges():
+    """The service with every upstream it can reach, all faked."""
+    repo = InMemoryFeedRepository()
+    github = FakeGitHubService()
+    slack = FakeSlackService()
+    linear = FakeLinearService()
+    calendar = FakeCalendarService()
+    feed = DefaultFeedService(
+        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+    )
+    actions = DefaultActionService(
+        repo=repo,
+        github=github,
+        slack=slack,
+        linear=linear,
+        calendar=calendar,
+        clock=lambda: NOW,
+    )
+    return actions, feed, github, linear, calendar
+
+
+def linear_event(**overrides):
+    defaults = dict(
+        source="linear",
+        source_ref="linear:ENG-412",
+        reason="linear_assigned",
+        subject_type="Issue",
+        title="Ship the token layer",
+        url="https://linear.app/x",
+        repo="",
+    )
+    defaults.update(overrides)
+    return make_event(**defaults)
+
+
+def calendar_event(**overrides):
+    defaults = dict(
+        source="calendar",
+        source_ref="calendar:evt_9",
+        reason="calendar_invite",
+        subject_type="Event",
+        title="Design review",
+        url="https://calendar.google.com/x",
+        repo="",
+    )
+    defaults.update(overrides)
+    return make_event(**defaults)
+
+
+def test_requesting_changes_submits_a_review_rather_than_a_comment():
+    """The mirror of approving. A comment reading "please change this" leaves
+    the pull request mergeable, which is the opposite of what was asked."""
+    actions, feed, github, _, _ = build_with_edges()
+    item = feed.ingest("me", make_event(source_ref="octo/repo#7"), PREFS)
+
+    actions.perform("me", item.id, "request_changes", body="the race is still here")
+
+    assert github.change_requests == [("octo/repo", 7, "the race is still here")]
+    assert github.comments == []
+
+
+def test_requesting_changes_without_a_reason_is_refused():
+    """GitHub requires a body on a changes-requested review, and so does the
+    person receiving it: a rejection with no reason is not review."""
+    actions, feed, github, _, _ = build_with_edges()
+    item = feed.ingest("me", make_event(source_ref="octo/repo#7"), PREFS)
+
+    with pytest.raises(ActionFailed):
+        actions.perform("me", item.id, "request_changes", body="   ")
+
+    assert github.change_requests == []
+    # And the item is still open, because nothing happened upstream.
+    assert actions._repo.get("me", item.id).status is FeedStatus.UNREAD
+
+
+def test_assigning_to_me_takes_the_issue_and_closes_the_item():
+    actions, feed, github, _, _ = build_with_edges()
+    item = feed.ingest("me", make_event(source_ref="octo/repo#7"), PREFS)
+
+    result = actions.perform("me", item.id, "assign_to_me")
+
+    assert github.assignments == [("octo/repo", 7)]
+    assert result.status is FeedStatus.ACTED
+
+
+def test_commenting_on_linear_reaches_linear():
+    """`_send` used to raise UnknownAction for anything that was not Slack or
+    GitHub, while the card offered Comment on every Linear issue."""
+    actions, feed, _, linear, _ = build_with_edges()
+    item = feed.ingest("me", linear_event(), PREFS)
+
+    actions.perform("me", item.id, "comment", body="picking this up now")
+
+    assert linear.comments == [("linear:ENG-412", "picking this up now")]
+
+
+def test_accepting_and_declining_are_the_same_call_with_a_different_answer():
+    actions, feed, _, _, calendar = build_with_edges()
+    accepted = feed.ingest("me", calendar_event(source_ref="calendar:a"), PREFS)
+    declined = feed.ingest("me", calendar_event(source_ref="calendar:b"), PREFS)
+
+    actions.perform("me", accepted.id, "accept")
+    actions.perform("me", declined.id, "decline")
+
+    assert calendar.responses == [("calendar:a", True), ("calendar:b", False)]
+
+
+def test_an_rsvp_on_something_that_is_not_a_meeting_is_refused():
+    actions, feed, _, _, calendar = build_with_edges()
+    item = feed.ingest("me", make_event(source_ref="octo/repo#7"), PREFS)
+
+    with pytest.raises(UnknownAction):
+        actions.perform("me", item.id, "accept")
+
+    assert calendar.responses == []
+
+
+def test_an_upstream_refusal_leaves_the_item_open_rather_than_marking_it_done():
+    """The rule the whole file follows: upstream first, local state second. An
+    item that disappears while the send failed is the worst outcome there is."""
+    actions, feed, _, linear, _ = build_with_edges()
+    linear.fail = True
+    item = feed.ingest("me", linear_event(), PREFS)
+
+    with pytest.raises(ActionFailed):
+        actions.perform("me", item.id, "comment", body="picking this up")
+
+    assert actions._repo.get("me", item.id).status is FeedStatus.UNREAD
+
+
+def test_an_action_with_no_upstream_configured_is_refused_not_silently_dropped():
+    """A Linear comment on a build with no Linear client must fail loudly. A
+    silent no-op would tell the user they had commented when nobody saw it."""
+    repo = InMemoryFeedRepository()
+    github = FakeGitHubService()
+    feed = DefaultFeedService(
+        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+    )
+    actions = DefaultActionService(
+        repo=repo, github=github, slack=FakeSlackService(), clock=lambda: NOW
+    )
+    item = feed.ingest("me", linear_event(), PREFS)
+
+    with pytest.raises(UnknownAction):
+        actions.perform("me", item.id, "comment", body="hello")

@@ -22,6 +22,8 @@ class FakeGitHubService:
         self._notifications = notifications or []
         self.comments: list[tuple[PRRef, str]] = []
         self.approvals: list[tuple[str, int]] = []
+        self.change_requests: list[tuple[str, int, str]] = []
+        self.assignments: list[tuple[str, int]] = []
 
     def list_notifications(self, since: datetime | None = None) -> list[RawEvent]:
         return list(self._notifications)
@@ -40,6 +42,12 @@ class FakeGitHubService:
 
     def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
         self.approvals.append((ref.repo, ref.number))
+
+    def request_changes_on_pull_request(self, ref: PRRef, body: str) -> None:
+        self.change_requests.append((ref.repo, ref.number, body))
+
+    def assign_to_me(self, ref: PRRef) -> None:
+        self.assignments.append((ref.repo, ref.number))
 
 
 class FakeSlackService:
@@ -104,3 +112,31 @@ def make_event(**overrides) -> RawEvent:
     )
     defaults.update(overrides)
     return RawEvent(**defaults)
+
+
+class FakeLinearService:
+    """Records comments. ``fail`` makes the next call raise, which is how the
+    tests exercise "the upstream said no"."""
+
+    def __init__(self) -> None:
+        self.comments: list[tuple[str, str]] = []
+        self.fail = False
+
+    def comment(self, source_ref: str, body: str) -> None:
+        if self.fail:
+            raise RuntimeError("linear said no")
+        self.comments.append((source_ref, body))
+
+
+class FakeCalendarService:
+    """Records RSVPs as (event, accepted) so a test can tell an accept from a
+    decline rather than merely observing that something was sent."""
+
+    def __init__(self) -> None:
+        self.responses: list[tuple[str, bool]] = []
+        self.fail = False
+
+    def respond(self, source_ref: str, accepted: bool) -> None:
+        if self.fail:
+            raise RuntimeError("calendar said no")
+        self.responses.append((source_ref, accepted))

@@ -91,9 +91,13 @@ The last two exist because plenty of rows have no category: a meeting, a reposit
 
 Dark runs warm, R above G above B at every step. Light is the **sage teal from `ad_analytics`**, whose own tokens name it *weathered copper*: `--accent-spend: #6B9B9A`, hue 179 at 19% saturation. That mutedness is the character.
 
-**Contrast, measured, all clearing AA.** Chip text on the six fills: dark 6.7 to 12.6, light 4.7 to 6.5. Body text on `surface`: dark 4.8 to 16.5, light 4.8 to 14.6.
+**Contrast, measured against every surface the tone lands on.** Chip text on the six fills: dark 6.7 to 12.6, light 4.7 to 6.5.
 
-Writing this plan is what caught the last failure: dark `low` was `#7A736C` and measured **4.0:1** on `surface`, under the floor, so it is now `#888179` at 4.8. **Every text and fill pair is measured, not assumed, and both floors sit at 4.8, so re-measure before changing any of them.**
+Measuring against `surface` alone is what let two failures through, and running the audit against the built app is what caught them. `low` cleared 4.8 on `surface` and was signed off, but section labels, the eyebrow, the tab labels and the ring key all sit on `canvas`, and the unselected segments sit on `overlay`. There it measured **4.3 and 3.8**. Both values moved: dark `low` `#888179` to **`#918A81`**, light `low` `#566E6D` to **`#47605F`**. Worst case is now 4.63 dark and 4.69 light, on `overlay` in both cases.
+
+`faint` is deliberately below AA and is therefore **never** text a reader has to read. It is the off-state toggle knob and nothing else; the row's submeta and the composer placeholder both moved off it.
+
+**Every text and fill pair is measured against canvas, surface, raised and overlay, not assumed.**
 
 ### Two exemptions, and only two
 
@@ -299,7 +303,22 @@ The UI expresses `OFF` as the toggle, so the enum gains a value while the contro
 
 `SourceDashboard.headline` is an unordered `StatLine[]` but the board wants one number at 34pt above the rest. Either add `hero: StatLine | null`, or fix the convention that `headline[0]` is the hero and document it on the model. **Convention is cheaper and reversible.**
 
-### 6.5 Deliberately not proposed
+### 6.5 What landed, and what did not
+
+Four of the six shipped, each with a failing test written first:
+
+| Action | State |
+|---|---|
+| `request_changes` | **Done.** Same review endpoint as approve with `event=REQUEST_CHANGES`; the body is required, by GitHub and by the person receiving it |
+| `assign_to_me` | **Done.** Assignees endpoint, with the authenticated login read from GitHub |
+| `comment` on Linear | **Done.** `_send` gained a Linear branch over the `commentCreate` mutation the client already had |
+| `accept` / `decline` | **Done.** One call with a different answer in it, patching only this user's own attendee row |
+| `reply` on Google Docs | **Not done.** Needs the Drive comments API, which is an integration this build does not have |
+| `reply` on Gmail | **Not done.** Its own project: send scope, threading, quoting, signature |
+
+The two that did not land have no button. `IMPLEMENTED` in [`mobile/src/lib/actions.ts`](../mobile/src/lib/actions.ts) is the single source of truth for which actions render, so shipping either one is a one-line change there.
+
+### 6.6 Deliberately not proposed
 
 **Diff stats on GitHub cards.** `FeedRow` has no file list or line counts. The v3 mockup invented them, the card works without them, and adding a field to feed one card is the wrong trade.
 
@@ -321,8 +340,27 @@ The script that ran against the mockup becomes a test. It currently passes on al
 
 ---
 
-## 8. Open questions
+## 8. What the browser verification found
 
-1. **Sequencing against the other session.** `mobile/` and `backend/` are both being edited on this branch. Phase 1 rewrites `theme.ts` and every screen, so it needs a clean handoff or its own branch.
-2. **`Tier.TODAY` is labelled "By EOD" everywhere.** The wire value stays `today`. Worth confirming nothing else reads that string as a display label.
-3. **Gmail reply** is the one Phase 2 item large enough to want its own plan.
+Reading the code would not have caught any of these. Each was found by running the audit or by looking at the built app beside the mockup.
+
+| Found | Cause |
+|---|---|
+| The feed card never filled its screen | A percentage height on a horizontal list's item resolves against a content container that is itself auto-height. The bloom ended up above the fold and the rail floated over the middle of the copy |
+| The bloom was invisible | `stopColor` was given the bare `"r,g,b"` triple the washes use. An invalid stop colour renders fully transparent and warns about nothing |
+| The bloom was a small circle rather than a wide ellipse | `RadialGradient` has no `rx`/`ry`; both were silently dropped |
+| `low` failed AA at 4.3 and 3.8 | Measured on `surface` only. See §2 |
+| The Later strip's active label measured 3.6 | The category hue as text on a tinted `overlay` |
+| A UUID rendered at 34pt as a person's name | Dev builds authenticate with a bare user id |
+| Gmail subjects arrived HTML-escaped | `&#39;` and `&quot;` rendered verbatim mid-sentence |
+| Two gradients painted each other's colour | SVG gradient ids share one global namespace on the web renderer |
+
+Three defects in the mockup were fixed at source before transcription: the light card still drew the invented diff stats, `i-up` was referenced by the Later card and never defined, and the card rail passed a **source** key into a map keyed by **category**, so every card's top tint set itself to `display:none`.
+
+## 9. Still open
+
+1. **`Tier.TODAY` is labelled "By EOD" everywhere.** The wire value stays `today`. Worth confirming nothing else reads that string as a display label.
+2. **Gmail reply** is the one item large enough to want its own plan.
+3. **Docs reply** needs a Drive comments integration that does not exist yet.
+4. **Archivo's width axis.** The mockup sets `font-stretch: 88%`, which only a variable font carries and React Native cannot address. Regular-width Archivo is the closest cut that exists; Archivo Narrow is far tighter than 88%.
+5. **No JavaScript test runner.** `subtext` and `railFor` are pure functions that deserve tests, and the repo has no JS test infrastructure to put them in. Adding one is a dependency decision, not a drive-by.

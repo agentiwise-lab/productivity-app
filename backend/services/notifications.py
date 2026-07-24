@@ -30,14 +30,27 @@ log = logging.getLogger(__name__)
 
 
 class NotifyLevel(str, Enum):
+    """Four on the wire, three on the screen: the toggle in You expresses OFF,
+    so the segmented control never has to offer it.
+
+    `urgent_today` keeps its wire value even though it is labelled "By EOD"
+    everywhere a person can see it. Renaming a persisted enum because its label
+    changed is a migration that buys nothing.
+    """
+
     URGENT = "urgent"
     URGENT_TODAY = "urgent_today"
+    ALL = "all"
     OFF = "off"
 
 
+#: `Tier.NOISE` is deliberately absent from every level, including ALL. Later is
+#: by definition what did not need you, and buzzing about it would undo the one
+#: promise the product makes.
 _ALLOWED: dict[NotifyLevel, set[Tier]] = {
     NotifyLevel.URGENT: {Tier.URGENT},
     NotifyLevel.URGENT_TODAY: {Tier.URGENT, Tier.TODAY},
+    NotifyLevel.ALL: {Tier.URGENT, Tier.TODAY, Tier.CAN_WAIT},
     NotifyLevel.OFF: set(),
 }
 

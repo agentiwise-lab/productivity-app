@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from backend.integrations.github import GitHubService, PRRef
 from backend.integrations.slack_service import SlackService
@@ -57,10 +57,18 @@ class DefaultActionService:
         github: GitHubService,
         slack: SlackService,
         clock: Callable[[], datetime] | None = None,
+        *,
+        linear: Any | None = None,
+        calendar: Any | None = None,
     ) -> None:
         self._repo = repo
         self._github = github
         self._slack = slack
+        # Optional, and absent means the action is refused rather than quietly
+        # skipped. A build with no Linear client must not tell somebody their
+        # comment was posted.
+        self._linear = linear
+        self._calendar = calendar
         self._now = clock or (lambda: datetime.now(timezone.utc))
 
     def perform(
@@ -72,6 +80,12 @@ class DefaultActionService:
             self._send(item, body)
         elif action == "approve":
             self._approve(item)
+        elif action == "request_changes":
+            self._request_changes(item, body)
+        elif action == "assign_to_me":
+            self._assign(item)
+        elif action in {"accept", "decline"}:
+            self._respond(item, accepted=action == "accept")
         elif action in {"mark_read", "dismiss"}:
             self._mark_read(item)
         else:
@@ -118,6 +132,10 @@ class DefaultActionService:
                 self._github.comment_on_pull_request(
                     _pr_ref_from_source_ref(item.source_ref), text
                 )
+            elif item.source == "linear":
+                if self._linear is None:
+                    raise UnknownAction("cannot reply on linear")
+                self._linear.comment(item.source_ref, text)
             else:
                 raise UnknownAction(f"cannot reply on {item.source}")
         except UnknownAction:
@@ -137,6 +155,48 @@ class DefaultActionService:
             )
         except Exception as error:
             log.warning("approve failed for %s", item.source_ref, exc_info=True)
+            raise ActionFailed(str(error)) from error
+
+    def _request_changes(self, item: FeedItem, body: str | None) -> None:
+        """The mirror of approving, and separate from commenting for the same
+        reason: a comment saying "please change this" leaves the pull request
+        mergeable, which is the opposite of what was asked."""
+        if item.source != "github":
+            raise UnknownAction(f"cannot request changes on {item.source}")
+        text = (body or "").strip()
+        if not text:
+            # GitHub refuses this too, but the better reason is the human one:
+            # a rejection with no reason is not review.
+            raise ActionFailed("requesting changes needs a reason")
+        try:
+            self._github.request_changes_on_pull_request(
+                _pr_ref_from_source_ref(item.source_ref), text
+            )
+        except Exception as error:
+            log.warning("request changes failed for %s", item.source_ref, exc_info=True)
+            raise ActionFailed(str(error)) from error
+
+    def _assign(self, item: FeedItem) -> None:
+        if item.source != "github":
+            raise UnknownAction(f"cannot assign on {item.source}")
+        try:
+            self._github.assign_to_me(_pr_ref_from_source_ref(item.source_ref))
+        except Exception as error:
+            log.warning("assign failed for %s", item.source_ref, exc_info=True)
+            raise ActionFailed(str(error)) from error
+
+    def _respond(self, item: FeedItem, accepted: bool) -> None:
+        """Accept and decline are one call with a different answer in it, which
+        is why they share a method: two methods would eventually disagree about
+        which attendee row they were touching."""
+        if item.source != "calendar":
+            raise UnknownAction(f"cannot rsvp to {item.source}")
+        if self._calendar is None:
+            raise UnknownAction("calendar not configured")
+        try:
+            self._calendar.respond(item.source_ref, accepted)
+        except Exception as error:
+            log.warning("rsvp failed for %s", item.source_ref, exc_info=True)
             raise ActionFailed(str(error)) from error
 
     def _mark_read(self, item: FeedItem) -> None:

@@ -47,6 +47,11 @@ class StatLine(BaseModel):
 class SourceDashboard(BaseModel):
     source: Source
     label: str
+    #: **``headline[0]`` is the hero**, drawn at 34pt above the rest of the
+    #: board; everything after it becomes the summary grid. A convention rather
+    #: than a `hero` field, because a convention costs nothing and can be
+    #: reversed without a migration. Anything that inserts a stat at position 0
+    #: is therefore choosing the headline number for the whole screen.
     headline: list[StatLine] = []
     breakdown: list[StatLine] = []
     breakdown_title: str = "Breakdown"

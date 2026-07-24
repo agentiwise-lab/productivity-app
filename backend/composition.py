@@ -141,6 +141,7 @@ def build_app() -> FastAPI:
         stats=stats,
         later=later,
         calendar=calendar,
+        linear=linear,
         sync=sync,
         verify_webhook=verify_webhook,
         cors_origins=[

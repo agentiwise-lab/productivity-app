@@ -127,11 +127,25 @@ class ComposioCalendarService:
     """Reads the calendar. Never writes without an explicit user action."""
 
     def __init__(
-        self, composio: Any, user_id: str, version: str = CALENDAR_TOOLKIT_VERSION
+        self,
+        composio: Any,
+        user_id: str,
+        version: str = CALENDAR_TOOLKIT_VERSION,
+        email: str | None = None,
     ) -> None:
         self._composio = composio
         self._user_id = user_id
         self._version = version
+        self._own_email = email
+
+    @property
+    def _email(self) -> str:
+        """Which attendee row is ours. Asked once and remembered, because an
+        RSVP that patched the wrong attendee would answer for someone else."""
+        if self._own_email is None:
+            data = self._execute("GOOGLECALENDAR_GET_CALENDAR", {"calendar_id": "primary"})
+            self._own_email = str(data.get("id") or "")
+        return self._own_email
 
     def _execute(self, slug: str, arguments: dict[str, Any]) -> dict[str, Any]:
         result = self._composio.tools.execute(
@@ -154,6 +168,28 @@ class ComposioCalendarService:
             },
         )
         return data.get("items") or data.get("events") or []
+
+    def respond(self, source_ref: str, accepted: bool) -> None:
+        """Accept or decline, which is one call with a different answer in it.
+
+        Only this user's own attendee row moves. Patching the event itself
+        would be answering on everyone's behalf.
+        """
+        event_id = source_ref.split(":", 1)[-1]
+        self._execute(
+            "GOOGLECALENDAR_UPDATE_EVENT",
+            {
+                "calendar_id": "primary",
+                "event_id": event_id,
+                "attendees": [
+                    {
+                        "email": self._email,
+                        "responseStatus": "accepted" if accepted else "declined",
+                        "self": True,
+                    }
+                ],
+            },
+        )
 
     def day_window(self, now: datetime | None = None) -> list[Meeting]:
         """Meetings around the present moment, for the ruler.

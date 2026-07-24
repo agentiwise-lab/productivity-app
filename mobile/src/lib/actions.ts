@@ -1,14 +1,16 @@
 /**
  * What a card offers, and why it is never more than that.
  *
- * The previous matrix promised six actions the backend raises `UnknownAction`
- * on: reply on Docs, comment on Linear, accept and decline on Calendar,
- * request changes, and assign to me. A button that fails is worse than a button
- * that is absent, so the table below is the single source of truth for which
- * actions exist, and the rail is built from it rather than from a wish.
+ * The previous matrix promised six actions the backend raised `UnknownAction`
+ * on, so the app drew buttons that could only fail. Four of them now exist:
+ * request changes and assign on GitHub, comment on Linear, and accept and
+ * decline on Calendar. Two do not, and their buttons are therefore absent,
+ * because a button that fails is worse than one that is not there.
  *
- * When an action lands in the backend, flip its entry here and the button
- * appears. Nothing else has to change.
+ * The table below is the single source of truth for which actions exist, and
+ * the rail is built from it rather than from a wish. When an action lands in
+ * the backend, flip its entry here and the button appears. Nothing else has to
+ * change.
  */
 
 import type { FeedRow, Source } from '../api/types';
@@ -48,7 +50,10 @@ const IMPLEMENTED: Record<Source, Set<string>> = {
   slack: new Set(['reply', 'mark_read']),
   linear: new Set(['comment']),
   calendar: new Set(['accept', 'decline']),
-  google_docs: new Set(['reply']),
+  // Replying to a Docs comment needs the Drive comments API, which is an
+  // integration this build does not have. Until it exists, Docs opens and
+  // nothing else: a button that fails is worse than one that is absent.
+  google_docs: new Set<string>(),
   // Sending mail is its own project: a send scope, threading, quoting and a
   // signature. Until that lands, Gmail opens and nothing else.
   gmail: new Set<string>(),

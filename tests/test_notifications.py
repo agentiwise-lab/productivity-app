@@ -164,3 +164,24 @@ def test_a_message_falls_back_to_the_title_when_there_is_no_summary():
     model has said anything about it."""
     message = build_message("token-1", [make_item(summary=None)])
     assert message["body"] == "can you unblock the staging deploy?"
+
+
+def test_the_all_level_covers_everything_that_reached_the_feed():
+    """You loses its AI section and gains a third notification level. `All`
+    means every tier the feed shows, which is urgent, by EOD and can wait.
+
+    `Tier.NOISE` stays out deliberately: Later is by definition what did not
+    need you, and buzzing about it would undo the product.
+    """
+    service, push, prefs, _ = build()
+    items = [
+        make_item(Tier.URGENT, id="a"),
+        make_item(Tier.TODAY, id="b"),
+        make_item(Tier.CAN_WAIT, id="c"),
+        make_item(Tier.NOISE, id="d"),
+    ]
+
+    service.notify("tok", items, prefs, NotifyLevel.ALL)
+
+    assert len(push.sent) == 1
+    assert push.sent[0]["title"] == "3 things need you"

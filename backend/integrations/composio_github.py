@@ -198,6 +198,44 @@ class ComposioGitHubService:
             id=str(data.get("id", "")), url=data.get("html_url") or "", body=body
         )
 
+    def request_changes_on_pull_request(self, ref: PRRef, body: str) -> None:
+        """Same endpoint as approving, one field apart. GitHub rejects a
+        CHANGES_REQUESTED review with no body, so the caller checks first and
+        this never sends an empty one."""
+        owner, name = ref.repo.split("/", 1)
+        self._execute(
+            "GITHUB_CREATE_A_REVIEW_FOR_A_PULL_REQUEST",
+            {
+                "owner": owner,
+                "repo": name,
+                "pull_number": ref.number,
+                "event": "REQUEST_CHANGES",
+                "body": body,
+            },
+        )
+
+    def assign_to_me(self, ref: PRRef) -> None:
+        """Pull requests are issues as far as the assignees endpoint is
+        concerned, which is why one call covers both."""
+        owner, name = ref.repo.split("/", 1)
+        login = self._login()
+        if not login:
+            raise RuntimeError("cannot assign without knowing who you are")
+        self._execute(
+            "GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE",
+            {
+                "owner": owner,
+                "repo": name,
+                "issue_number": ref.number,
+                "assignees": [login],
+            },
+        )
+
+    def _login(self) -> str | None:
+        data = self._execute("GITHUB_GET_THE_AUTHENTICATED_USER", {})
+        value = data.get("login")
+        return str(value) if value else None
+
     def repositories(self, limit: int = 8) -> list[dict[str, Any]]:
         """The user's repositories, most recently pushed first."""
         data = self._execute(

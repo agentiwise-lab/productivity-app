@@ -27,7 +27,7 @@ export function Grain() {
 
 const styles = StyleSheet.create({
   layer: {
-    opacity: 0.055,
+    opacity: 0.045,
     zIndex: 30,
     // Overlay rather than normal, so the noise darkens and lightens around the
     // colour under it instead of simply fogging it grey. Platforms without

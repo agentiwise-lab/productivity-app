@@ -57,6 +57,12 @@ class _UnconfiguredGitHubService:
     def approve_pull_request(self, ref: PRRef, body: str = "") -> None:
         raise NotImplementedError("GitHub client not configured")
 
+    def request_changes_on_pull_request(self, ref: PRRef, body: str) -> None:
+        raise NotImplementedError("GitHub client not configured")
+
+    def assign_to_me(self, ref: PRRef) -> None:
+        raise NotImplementedError("GitHub client not configured")
+
 
 class _UnconfiguredSlackService:
     """Fails loudly. A Slack action that silently did nothing would tell the
@@ -128,6 +134,7 @@ def create_app(
     stats: Any | None = None,
     later: Any | None = None,
     calendar: Any | None = None,
+    linear: Any | None = None,
     sync: Any | None = None,
     verify_webhook: Callable[[bytes, dict], dict] | None = None,
     cors_origins: list[str] | None = None,
@@ -140,7 +147,13 @@ def create_app(
         repo=repo, rules=DefaultRuleClassifier(), github=github
     )
     action_service = DefaultActionService(
-        repo=repo, github=github, slack=slack or _UnconfiguredSlackService()
+        repo=repo,
+        github=github,
+        slack=slack or _UnconfiguredSlackService(),
+        # Absent means the action is refused rather than quietly skipped. A
+        # build with no Linear client must not report a comment nobody saw.
+        linear=linear,
+        calendar=calendar,
     )
     ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
     current_user = build_current_user(auth_mode, jwt_secret)

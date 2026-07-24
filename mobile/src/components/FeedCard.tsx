@@ -43,6 +43,15 @@ const SOURCE_NAME: Record<Source, string> = {
   google_docs: 'Google Docs',
 };
 
+/** The line under the source name, or nothing when it would only repeat it. */
+function context(row: FeedRow): string | null {
+  const value = row.context_chip || row.repo || row.sender_handle || '';
+  if (!value) return null;
+  return value.toLowerCase() === SOURCE_NAME[row.source].toLowerCase()
+    ? null
+    : value;
+}
+
 export function FeedCard({
   row,
   onAction,
@@ -79,9 +88,14 @@ export function FeedCard({
           <BrandMark source={row.source} size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <T role="heading">{SOURCE_NAME[row.source]}</T>
-            <T role="secondary" tone="low" numeric lines={1}>
-              {row.context_chip || row.repo || row.sender_handle || ''}
-            </T>
+            {/* Only when it says something the line above does not. Linear
+                sets `context_chip` to "Linear", which read as the source name
+                printed twice. */}
+            {context(row) ? (
+              <T role="secondary" tone="low" numeric lines={1}>
+                {context(row)}
+              </T>
+            ) : null}
           </View>
           {CATEGORY_LABEL[category] ? (
             <Chip

@@ -329,6 +329,7 @@
   <g id="i-tier-b"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.6a8.4 8.4 0 0 1 0 16.8Z" fill="currentColor" stroke="none"/></g>
   <g id="i-tier-c"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></g>
   <g id="i-tier-l"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></g>
+  <g id="i-up"><path d="M12 20.4V4.6M5.4 11.2L12 4.6l6.6 6.6"/></g>
   <g id="i-more"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></g>
   <g id="i-send"><path d="M21 3L10.5 13.5M21 3l-6.6 18-3.9-7.5L3 9.6 21 3Z"/></g>
   <g id="i-cal"><rect x="3.4" y="5" width="17.2" height="16" rx="2.6"/><path d="M3.4 10h17.2M8 3v4M16 3v4"/></g>
@@ -501,11 +502,8 @@
         <span class="chip solid">Urgent</span></div>
       <div class="t-display clamp3" style="margin-top:32px">Fix the auth race in the session refresh</div>
       <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
-      <div class="fmid mono t-secondary">
-        <div class="kv"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
-        <div class="sep full"></div>
-        <div class="kv"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
-      </div>
+      <div class="fmid why"><div class="t-label c-mid">Why this is urgent</div>
+        <div class="t-body c-high" style="margin-top:8px">Changes requested on a pull request you own, and two issues are waiting behind it.</div></div>
       <div style="flex:1"></div>
       <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Blocking</span>
         <span class="mono t-secondary c-low">2h ago &middot; 3 files</span></div>
@@ -879,11 +877,8 @@
         <span class="chip solid">Urgent</span></div>
       <div class="t-display clamp3" style="margin-top:32px">Fix the auth race in the session refresh</div>
       <div class="t-body c-mid clamp3" style="margin-top:16px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
-      <div class="fmid mono t-secondary">
-        <div class="kv"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
-        <div class="sep full"></div>
-        <div class="kv"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
-      </div>
+      <div class="fmid why"><div class="t-label c-mid">Why this is urgent</div>
+        <div class="t-body c-high" style="margin-top:8px">Changes requested on a pull request you own, and two issues are waiting behind it.</div></div>
     </div>
     <div class="frail">
       <span class="fbtn pri"><span class="ring"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
@@ -1201,7 +1196,7 @@ const CARDS=[
 const cardsRail=document.querySelector('[data-cards]');
 if(cardsRail) cardsRail.innerHTML=CARDS.map(c=>`
  <div class="cell"><div class="ph" data-tab="feed"><div class="bd"><div class="fcard">
-  <div class="tint" data-tint="${c.src}"></div><div class="beneath ${c.tier}"></div>
+  <div class="tint" data-tint="${c.tier}"></div><div class="beneath ${c.tier}"></div>
   <div class="fbody">
    <div class="fhead"><span class="mark s44" data-mark="${c.src}"></span>
     <span class="stack grow"><span class="t-heading">${c.name}</span>
