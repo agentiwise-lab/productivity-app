@@ -205,7 +205,7 @@
 <p class="eyebrow">v5 · one tab changes</p>
 <h1>To-dos, as a scrollable feed</h1>
 <p class="lede">The Feed was a full-screen deck: one card filling the screen, swiped sideways to reach the next, an action rail stacked bottom-right the way Reels and Stories stack theirs. It looked like a place to <b>consume</b>, not a queue to <b>clear</b>. v5 turns it into a vertical scroll of bounded cards, the shape LinkedIn and Instagram use for their main feed: <b>several items visible at once</b>, scanned top to bottom, each with its actions on a bar beneath it.</p>
-<p class="note"><b>What is kept.</b> The palette in both modes, the brand marks, the seven type roles, and the rule that colour means tier and only tier. <b>The detail sheet and its composer are unchanged</b>: tapping a card opens the sheet, and Reply or Comment open the composer rather than firing an empty send. <b>What changes.</b> The card is bounded, the tier bloom becomes a quiet top wash, the vertical rail becomes a horizontal action bar under the content, and the tier grouping the swipe order used to encode is now spelled out as section labels. There is no page title over the list: the section labels and the chips already name everything, so the list simply begins.</p>
+<p class="note"><b>What is kept.</b> The palette in both modes, the brand marks, the seven type roles, and the rule that colour means tier and only tier. <b>The detail sheet and its composer are unchanged</b>: tapping a card opens the sheet, and Reply or Comment open the composer rather than firing an empty send. <b>What changes.</b> The card is bounded, the tier bloom becomes a quiet top wash, and the vertical rail becomes a horizontal action bar under the content. The list flows continuously, most pressing first: no page title, no section labels, no counts. The wash and the chip on each card carry the tier, so nothing above or between the cards needs to.</p>
 </div>
 
 <!-- ══ FEED, DARK + LIGHT ══ -->
@@ -214,7 +214,7 @@
 <div class="rail">
   <div class="cell">
     <div class="ph" data-tab="feed" data-feed></div>
-    <p class="cap"><b>The queue, top to bottom <span class="rec">recommended</span></b>No page header: the list starts on the first section label. Grouped Urgent, By EOD, Can wait, Later, with a count over each run. Tier reads from the top wash and the chip, no left edge line. Only Urgent and By EOD earn a filled primary action; nothing that can wait gets the strongest affordance.</p>
+    <p class="cap"><b>The queue, top to bottom <span class="rec">recommended</span></b>A continuous stream, most pressing first. No page header, no section labels, no counts, no left edge line: tier reads from the top wash and the chip alone. Only Urgent and By EOD earn a filled primary action; nothing that can wait gets the strongest affordance.</p>
   </div>
   <div class="cell">
     <div class="ph lightmode" data-tab="feed" data-feed></div>
@@ -321,12 +321,11 @@ function cardHtml(c){
 }
 
 function feedHtml(){
- const secs=SECTIONS.map((s,i)=>`
-   <div class="sectlab${i===0?' first':''}"><span class="t-label">${s.label}</span>
-     <span class="grow"></span><span class="mono t-secondary c-low">${s.count}</span></div>
-   ${s.cards.map(cardHtml).join('')}`).join('');
- return `<div class="scroll"><div style="padding-bottom:24px">
-   ${secs}
+ // One continuous stream, most pressing first. No section labels, no counts,
+ // no page title: the wash and the chip on each card carry the tier.
+ const cards=SECTIONS.flatMap(s=>s.cards).map(cardHtml).join('');
+ return `<div class="scroll"><div style="padding-top:12px;padding-bottom:24px">
+   ${cards}
  </div></div>`;
 }
 

@@ -15,8 +15,9 @@ Reels deck swiped one card at a time and becomes a **vertical scroll of bounded
 cards**, the LinkedIn/Instagram feed shape. Per the review of the mock:
 
 - **No left edge line.** Tier reads from a single quiet top wash plus the chip.
-- **No page header.** The list begins on the first section label; the section
-  labels and the per-card chips already name everything.
+- **No page header, no section labels, no counts.** The list flows
+  continuously, most pressing first. The wash and the chip on each card carry
+  the tier, so nothing above or between the cards has to.
 - **The modal flow is kept verbatim.** Tapping a card opens the detail sheet.
   Reply and Comment open the composer rather than firing an empty send.
 - The vertical action rail becomes a **horizontal action bar** under each card.
@@ -144,9 +145,9 @@ existed to serve.
 
 | Current (Reels deck) | New (scrollable feed) |
 |---|---|
-| Horizontal `FlatList`, `pagingEnabled`, one card per screen | Vertical `FlatList`, section-grouped, several cards per screen |
+| Horizontal `FlatList`, `pagingEnabled`, one card per screen | Vertical `FlatList`, one continuous stream, several cards per screen |
 | Swipe left/right to move between items | Scroll |
-| Tier order encoded by swipe sequence | Tier order encoded by **section labels** (Urgent / By EOD / Can wait / Later) with a count |
+| Tier order encoded by swipe sequence | Tier order encoded by **sort only** (most pressing first); no section labels or counts, the wash and chip carry the tier |
 | Full-bleed bloom + top tint carry tier | A single low-alpha **top wash** carries tier |
 | No left edge (never had one); category also on chip | Same: chip carries the label, wash carries the hue |
 | `t-display` (34pt) title, vertically centred to fill the screen | `t-heading` (17pt) title, top-anchored in a bounded card |
@@ -168,17 +169,13 @@ still passes the same `onOpen` and `onAction` handlers from `App.tsx`.
 ### 4.1 `FeedScreen.tsx`
 
 - Keep the input props and the filter/sort. Replace the horizontal paging
-  `FlatList` with a vertical one whose data is a flattened, section-grouped
-  array so headers virtualize with the cards:
-  - Group `ordered` by tier in `ORDER` (`urgent, today, can_wait, noise`).
-  - Build `Item[] = sections.flatMap(s => [{kind:'header', label, count}, ...s.rows.map(row => ({kind:'card', row}))])`.
-  - `renderItem` switches on `kind`: `header` renders `SectionLabel`, `card`
-    renders `FeedCard`.
-  - `keyExtractor`: `header:${label}` / `card:${row.id}`.
+  `FlatList` with a plain vertical one over `ordered` (the tier-then-priority
+  sort), rendering one `FeedCard` per row. No section headers, no grouping.
+- `contentContainerStyle.paddingTop = topInset(insets.top)` so the first card
+  clears the status bar; `paddingBottom = space.xl`.
 - Drop `useWindowDimensions`, the measured `height`, `getItemLayout`, and the
   `onLayout` seed: a vertical list sizes itself.
 - `Skeleton` (loading) and `Clear` (empty) states unchanged.
-- Section labels use the existing `SectionLabel` (`tight` on the first).
 
 ### 4.2 `FeedCard.tsx`
 
@@ -219,9 +216,9 @@ label ("To-dos"), and the entire backend.
 Frontend-only, so no TDD (per the frontend rule), but proven live:
 
 1. `npm run web`, render the To-dos tab at 393x852 in both appearances.
-2. Confirm: no left line, no page header, list starts on the first section
-   label, cards separated, action bar renders the right buttons per source,
-   primary emphasis only on Urgent/By EOD.
+2. Confirm: no left line, no page header, no section labels or counts, cards
+   flow continuously and stay separated, action bar renders the right buttons
+   per source, primary emphasis only on Urgent/By EOD.
 3. Tap a card -> sheet opens. Tap Reply -> sheet opens with composer focused.
    Tap a one-shot (Snooze/Approve) -> acts in place. This exercises the kept
    modal flow end to end.
