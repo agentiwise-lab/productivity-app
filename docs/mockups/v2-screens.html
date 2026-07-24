@@ -1,0 +1,1060 @@
+<title>v2 · screens, options and interactions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&family=Instrument+Serif&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   DRAWN AT TRUE DEVICE SIZE. 1 CSS px = 1 iOS pt. 393x852 = iPhone 15 Pro.
+   No scale factor anywhere. The old mockups were drawn at 272 and multiplied
+   by 1.379, so nothing landed on a whole point and no two gaps were related.
+   Read a number off this page and type it into the stylesheet.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pg{
+  --canvas:#0A0A0A; --surface:#121212; --raised:#1A1A1A; --overlay:#232323;
+  --hairline:#2B2B2B; --border:#383838;
+  --faint:#545454; --low:#757575; --mid:#A0A0A0; --high:#F2F2F2;
+  --accent:#5FE3C0; --alarm:#FF5A5F; --onSolid:#0A0A0A;
+  --github:#A371F7; --linear:#5E6AD2; --slack:#36C5F0;
+  --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
+  --tabbg:rgba(10,10,10,.72);
+  --page:#161616; --pagefg:#EDEDED; --pagedim:#8C8C8C; --pageln:#2E2E2E;
+  --phedge:#333;
+  background:var(--page); color:var(--pagefg); margin:0; padding:56px 32px 140px;
+  font-family:"Geist",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* the light theme, applied to any .ph inside .lightmode */
+.lightmode{
+  --canvas:#F7F7F6; --surface:#FFFFFF; --raised:#FFFFFF; --overlay:#EFEFED;
+  --hairline:#E6E6E4; --border:#D6D6D3;
+  --faint:#A3A3A0; --low:#8A8A87; --mid:#5C5C59; --high:#141414;
+  --accent:#0E8F72; --alarm:#D9342B; --onSolid:#FFFFFF;
+  --tabbg:rgba(247,247,246,.78); --phedge:#C9C9C6;
+}
+.pg *{box-sizing:border-box;}
+
+/* ── page chrome, deliberately not the product ──────────────────── */
+.pg h1{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;margin:0 0 12px;}
+.pg h2{font-family:"Archivo";font-size:24px;line-height:30px;letter-spacing:-.5px;font-weight:600;margin:0 0 8px;}
+.pg .lede{font-size:15px;line-height:24px;color:var(--pagedim);max-width:78ch;margin:0 0 8px;}
+.pg .lede b,.pg .note b{color:var(--pagefg);font-weight:600;}
+.pg .note{font-size:13px;line-height:20px;color:var(--pagedim);max-width:80ch;margin:8px 0 0;}
+.pgsec{margin:0;padding:64px 0 0;border-top:1px solid var(--pageln);margin-top:64px;}
+.pgsec:first-of-type{border-top:0;margin-top:0;padding-top:0;}
+.eyebrow{font-family:"Archivo";font-size:11px;line-height:16px;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--pagedim);font-weight:600;margin:0 0 10px;}
+.rail{display:flex;gap:32px;overflow-x:auto;padding:32px 4px 24px;align-items:flex-start;}
+.rail::-webkit-scrollbar{height:10px;}
+.rail::-webkit-scrollbar-thumb{background:var(--pageln);border-radius:5px;}
+.cell{flex:none;width:393px;}
+.cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;}
+.cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
+.cap .rec{color:#5FE3C0;}
+.swatches{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+.sw-item{width:100px;}
+.sw-chip{height:44px;border-radius:8px;border:1px solid var(--pageln);}
+.sw-nm{font-size:10px;line-height:14px;color:var(--pagedim);margin-top:5px;font-family:"Geist Mono",monospace;}
+
+/* ═══ THE DEVICE ═══════════════════════════════════════════════════ */
+.ph{width:393px;height:852px;border-radius:48px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;background:var(--canvas);color:var(--high);
+  border:1px solid var(--phedge);}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;z-index:20;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+.sb{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 24px 8px;font-size:15px;font-weight:600;letter-spacing:-.1px;position:relative;z-index:6;}
+.sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:125px;height:36px;border-radius:999px;background:#000;}
+.lightmode .sb .isl{background:#111;}
+.bd{flex:1;overflow:hidden;position:relative;}
+.scroll{position:absolute;inset:0;overflow:hidden;}
+
+/* ═══ TYPE ROLES ═══ seven, and nothing else ═══════════════════════ */
+.t-hero{font-family:"Archivo";font-size:56px;line-height:56px;letter-spacing:-1.4px;font-weight:600;font-variant-numeric:tabular-nums;}
+.t-display{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;}
+.t-title{font-size:22px;line-height:28px;letter-spacing:-.4px;font-weight:600;}
+.t-heading{font-size:17px;line-height:24px;letter-spacing:-.1px;font-weight:600;}
+.t-body{font-size:15px;line-height:20px;letter-spacing:0;font-weight:400;}
+.t-secondary{font-size:13px;line-height:20px;letter-spacing:.1px;font-weight:400;}
+.t-label{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;}
+.t-serif{font-family:"Instrument Serif";font-size:34px;line-height:40px;letter-spacing:0;font-weight:400;}
+.mono{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.num{font-variant-numeric:tabular-nums;}
+.c-high{color:var(--high);}.c-mid{color:var(--mid);}.c-low{color:var(--low);}
+.c-faint{color:var(--faint);}.c-accent{color:var(--accent);}.c-alarm{color:var(--alarm);}
+.stack{display:flex;flex-direction:column;min-width:0;}
+.spread{display:flex;align-items:center;justify-content:space-between;}
+.grow{flex:1;min-width:0;}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* ═══ TAB BAR ═══ 49 + 34 = 83 ════════════════════════════════════ */
+.tabbar{flex:none;height:83px;padding-bottom:34px;display:flex;position:relative;z-index:12;
+  background:var(--tabbg);backdrop-filter:blur(24px) saturate(160%);
+  border-top:.5px solid var(--hairline);}
+.tabitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;position:relative;height:49px;}
+.tabitem .tl{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:12px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--low);}
+.tabitem.on .tl{color:var(--high);}
+.tabitem.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--accent);}
+.tabbadge{position:absolute;top:-1px;left:calc(50% + 7px);min-width:16px;height:16px;
+  border-radius:999px;background:var(--alarm);color:var(--onSolid);font-size:11px;font-weight:600;
+  display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
+
+/* ═══ ROWS ═══ 44 / 56 / 72 ═══════════════════════════════════════ */
+.row{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 16px;}
+.row.two{min-height:72px;}.row.one{min-height:44px;}
+/* tier at row scale: the edge bar, no chip. Option 1 degraded. */
+.row.tier-u{box-shadow:inset 3px 0 0 var(--alarm);}
+.row.tier-b{box-shadow:inset 3px 0 0 var(--accent);}
+.row.tier-c{box-shadow:none;}
+.hr{height:1px;background:var(--hairline);margin:0 16px;}
+.hr.full{margin:0;}
+.sectlab{padding:0 16px;margin:32px 0 8px;color:var(--low);}
+.sectlab.tight{margin-top:24px;}
+
+/* ═══ BRAND MARKS ═══ real marks, dark tile, specular top edge ═════ */
+.mark{flex:none;border-radius:8px;display:grid;place-items:center;
+  background:var(--overlay);position:relative;overflow:hidden;}
+.mark::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);}
+.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(0,0,0,.10),transparent);}
+.mark.s20{width:20px;height:20px;border-radius:4px;}
+.mark.s24{width:24px;height:24px;border-radius:8px;}
+.mark.s32{width:32px;height:32px;border-radius:8px;}
+.mark.s40{width:40px;height:40px;border-radius:12px;}
+
+/* ═══ CHIPS ═══ one shape: 28 high, 10 pad, radius 8 ══════════════ */
+.chip{height:28px;padding:0 12px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;
+  font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;white-space:nowrap;}
+.chip.solid{background:var(--alarm);color:var(--onSolid);}
+.chip.solid.acc{background:var(--accent);}
+.chip.outline{border:1px solid var(--border);color:var(--mid);}
+.chip.outline.acc{border-color:var(--accent);color:var(--accent);}
+.chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
+.chip.ghost{color:var(--low);padding:0;}
+.seg{display:flex;height:32px;border-radius:999px;background:var(--overlay);padding:2px;}
+.seg i{flex:1;border-radius:999px;display:grid;place-items:center;font-style:normal;
+  font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;color:var(--low);}
+.seg i.on{background:var(--raised);color:var(--high);box-shadow:inset 0 0 0 1px var(--border);}
+
+/* ═══ TOP BARS ════════════════════════════════════════════════════ */
+.topA{padding:8px 16px 0;}
+.topA-col{height:44px;display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:var(--tabbg);backdrop-filter:blur(24px);border-bottom:.5px solid var(--hairline);}
+.topB{height:44px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;border-bottom:.5px solid var(--hairline);}
+.topC{position:absolute;top:8px;left:16px;right:16px;height:44px;z-index:8;border-radius:999px;
+  background:var(--tabbg);backdrop-filter:blur(24px);border:.5px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 16px;}
+.gauge{display:flex;gap:2px;width:64px;height:4px;}
+.gauge i{display:block;height:4px;border-radius:999px;}
+.avatar{width:28px;height:28px;border-radius:999px;background:var(--overlay);
+  display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--mid);flex:none;}
+
+/* ═══ THE DAY ARC ═══ the one material object on Your Day ═════════ */
+.arcwrap{position:relative;height:216px;display:grid;place-items:center;margin-top:24px;}
+.arcglow{position:absolute;width:240px;height:240px;border-radius:999px;
+  background:radial-gradient(circle,rgba(255,90,95,.13) 0%,rgba(255,90,95,0) 64%);}
+.lightmode .arcglow{background:radial-gradient(circle,rgba(217,52,43,.09) 0%,rgba(217,52,43,0) 64%);}
+.arcnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+
+/* ═══ TIER BAR ═══ weighted, not three equal tiles ═══════════════ */
+.tiers{display:flex;gap:24px;padding:0 16px;margin-top:24px;align-items:flex-start;}
+.tier{display:flex;gap:8px;}
+.tier .bar{width:3px;border-radius:999px;flex:none;align-self:stretch;}
+.tier .lb{color:var(--low);display:block;margin-top:2px;}
+.tier.sel{outline:1px solid var(--border);outline-offset:8px;border-radius:4px;}
+.tier.sel .lb{color:var(--high);}
+
+/* ═══ FEED CARD ═══ full screen ══════════════════════════════════ */
+.fcard{position:absolute;inset:0;display:flex;flex-direction:column;
+  background:var(--surface);overflow:hidden;}
+.fcard .tint{position:absolute;top:0;left:0;right:0;height:300px;pointer-events:none;z-index:0;}
+.rail-prog{display:flex;gap:4px;padding:8px 16px 0;flex:none;position:relative;z-index:3;}
+.rail-prog i{flex:1;height:2px;border-radius:999px;background:var(--border);}
+.rail-prog i.done{background:var(--mid);}
+.rail-prog i.now{background:var(--high);}
+.fbody{flex:1;padding:0 16px;position:relative;z-index:3;display:flex;flex-direction:column;min-height:0;}
+.fmeta{display:flex;align-items:center;gap:12px;padding-top:24px;}
+.swipeaff{display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:24px 0;color:var(--faint);}
+.swipeaff svg{opacity:.7;}
+.factions{display:flex;gap:12px;padding:0 16px 16px;position:relative;z-index:3;}
+.btn{flex:1;height:48px;border-radius:12px;display:grid;place-items:center;
+  font-size:15px;font-weight:600;letter-spacing:-.1px;}
+.btn.pri{background:var(--accent);color:var(--onSolid);}
+.btn.pri.alm{background:var(--alarm);}
+.btn.sec{border:1px solid var(--border);color:var(--high);}
+.quote{border-left:2px solid var(--border);padding-left:12px;}
+.quote.acc{border-left-color:var(--accent);}
+/* tier OPTION 1: edge light */
+.edge{position:absolute;top:0;bottom:0;left:0;z-index:4;}
+.edge.u{width:4px;background:var(--alarm);}
+.edge.b{width:4px;background:var(--accent);}
+.edge.c{width:1px;background:var(--hairline);}
+.edgeglow{position:absolute;top:0;bottom:0;left:0;width:40px;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,90,95,.11),rgba(255,90,95,0));}
+/* tier OPTION 2: containment level */
+.o2-u{background:var(--raised);}
+.o2-u .wash{position:absolute;top:0;left:0;right:0;height:260px;z-index:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(255,90,95,.16),rgba(255,90,95,0) 62%);}
+.o2-b{background:var(--surface);box-shadow:inset 0 0 0 1px var(--hairline);}
+.o2-c{background:var(--canvas);}
+.o2-rule{height:1px;background:var(--hairline);}
+/* tier OPTION 3: instrument frame */
+.frame{position:absolute;inset:16px;z-index:4;pointer-events:none;}
+.frame i{position:absolute;width:20px;height:20px;}
+.frame i.tl{top:0;left:0;border-top:2px solid;border-left:2px solid;}
+.frame i.tr{top:0;right:0;border-top:2px solid;border-right:2px solid;}
+.frame i.bl{bottom:0;left:0;border-bottom:2px solid;border-left:2px solid;}
+.frame i.br{bottom:0;right:0;border-bottom:2px solid;border-right:2px solid;}
+.frame.u i{border-color:var(--alarm);}
+.frame.b i{border-color:var(--accent);}
+.framelab{position:absolute;top:8px;left:44px;z-index:5;background:var(--surface);padding:0 8px;}
+.divcard{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;background:var(--canvas);}
+
+/* ═══ SWIPE STATE ═════════════════════════════════════════════════ */
+.swipehint{position:absolute;left:0;right:0;bottom:0;top:0;z-index:2;pointer-events:none;
+  background:linear-gradient(0deg,rgba(95,227,192,.16),rgba(95,227,192,0) 34%);}
+.swipepill{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:6;
+  height:44px;padding:0 24px;border-radius:999px;background:var(--accent);color:var(--onSolid);
+  display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;}
+
+/* ═══ SHEET ═══ medium detent + grabber ══════════════════════════ */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:9;}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:56%;z-index:10;
+  background:var(--raised);border-radius:16px 16px 0 0;padding:0 16px 34px;overflow:hidden;}
+.grab{width:36px;height:5px;border-radius:999px;background:var(--border);margin:8px auto 16px;}
+.menu{position:absolute;left:16px;right:16px;bottom:100px;z-index:10;border-radius:16px;
+  background:var(--raised);overflow:hidden;box-shadow:inset 0 0 0 1px var(--border);}
+.menu .mi{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;}
+
+/* ═══ TILES / ACTIVITY ════════════════════════════════════════════ */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;}
+.tile{background:var(--surface);border-radius:12px;padding:12px;}
+.sparks{display:flex;align-items:flex-end;gap:3px;height:24px;}
+.sparks i{flex:1;background:var(--accent);border-radius:0;opacity:.8;min-height:2px;}
+.scard{margin:0 16px 12px;background:var(--surface);border-radius:16px;padding:16px;
+  position:relative;overflow:hidden;}
+.scard .tint{position:absolute;top:0;left:0;width:220px;height:130px;pointer-events:none;z-index:0;}
+.scard>*{position:relative;z-index:2;}
+.snums{display:flex;gap:32px;margin-top:16px;}
+.acts{display:flex;gap:12px;justify-content:center;margin-top:24px;}
+.act{width:44px;height:44px;border-radius:999px;background:var(--overlay);
+  border:1px solid var(--border);display:grid;place-items:center;}
+.statusdot{width:8px;height:8px;border-radius:999px;flex:none;}
+.statusdot.live{background:var(--accent);}
+.statusdot.bad{background:var(--alarm);}
+.statusdot.off{border:1px solid var(--border);}
+
+/* ═══ TOGGLE ══════════════════════════════════════════════════════ */
+.sw{width:51px;height:31px;border-radius:999px;background:var(--overlay);padding:2px;display:flex;flex:none;
+  box-shadow:inset 0 0 0 1px var(--hairline);}
+.sw i{width:27px;height:27px;border-radius:999px;background:var(--faint);display:block;}
+.sw.on{background:var(--accent);box-shadow:none;}
+.sw.on i{margin-left:20px;background:var(--onSolid);}
+.bubble{min-width:20px;height:20px;border-radius:999px;background:var(--alarm);color:var(--onSolid);
+  font-size:11px;font-weight:600;display:grid;place-items:center;padding:0 8px;font-variant-numeric:tabular-nums;}
+.skel{background:var(--overlay);border-radius:4px;}
+.optbadge{display:inline-block;background:#5FE3C0;color:#0A0A0A;font-size:11px;font-weight:600;
+  padding:2px 8px;border-radius:4px;letter-spacing:.4px;text-transform:uppercase;font-family:"Archivo";}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="i-sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M21.4 12H19M5 12H2.6M18.6 5.4l-1.7 1.7M7.1 16.9l-1.7 1.7M18.6 18.6l-1.7-1.7M7.1 7.1L5.4 5.4"/></g>
+  <g id="i-cards"><rect x="3" y="7.5" width="14" height="13" rx="2.6"/><path d="M7.2 4.4h10.4a2.6 2.6 0 0 1 2.6 2.6v10.2"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 6.8V12l3.6 2.1"/></g>
+  <g id="i-pulse"><path d="M2.8 12h4l2.4-6.4 4.4 12.8L16 12h5.2"/></g>
+  <g id="i-user"><circle cx="12" cy="8.2" r="4"/><path d="M4.2 20.4a8.2 8.2 0 0 1 15.6 0"/></g>
+  <g id="i-ext"><path d="M14 4h6v6M20 4l-8.6 8.6"/><path d="M18 14.4V19a1.6 1.6 0 0 1-1.6 1.6H5A1.6 1.6 0 0 1 3.4 19V7.6A1.6 1.6 0 0 1 5 6h4.6"/></g>
+  <g id="i-refresh"><path d="M20.4 11.2A8.4 8.4 0 1 0 18 17.6"/><path d="M20.8 5.6v6h-6"/></g>
+  <g id="i-filter"><path d="M3.6 5.6h16.8M6.8 12h10.4M10.4 18.4h3.2"/></g>
+  <g id="i-plus"><path d="M12 5.2v13.6M5.2 12h13.6"/></g>
+  <g id="i-chev"><path d="M9.4 5.6L15.8 12l-6.4 6.4"/></g>
+  <g id="i-up"><path d="M12 19V5M5.6 11.4L12 5l6.4 6.4"/></g>
+  <g id="i-snooze"><circle cx="12" cy="13" r="8"/><path d="M12 9.4V13l2.6 1.6M9 2.6h6"/></g>
+  <g id="i-check"><path d="M4.8 12.6l4.8 4.8L19.2 7.8"/></g>
+</defs></svg>
+
+<div class="pg">
+
+<h1>Design system v2, drawn at true size</h1>
+<p class="lede">Every phone below is <b>393&times;852</b>, an iPhone 15 Pro in points, and <b>1 CSS pixel = 1 iOS point</b>. There is no scale factor in this file. That is the entire point: the previous mockups were drawn at 272pt and multiplied by 1.379, so no size landed on a whole point and no two gaps in the app were deliberately related. <b>Read a number off this page and type it into the stylesheet.</b></p>
+<p class="note">Spacing is only <b>4 / 8 / 12 / 16 / 24 / 32 / 48 / 96</b>. Radii are only <b>4 / 8 / 12 / 16 / pill</b>, nested as <b>inner = outer &minus; padding</b>. Type is the seven roles and nothing else. Rows are 44 / 56 / 72. Chips are one shape: 28 tall, 10 side padding, radius 8. <b>There is not one shadow in this file</b>: elevation is surface lightness in dark and a hairline in light. Rules in <b>design-system-v2.md</b>, screens in <b>redesign-spec.md</b>.</p>
+
+<div class="swatches">
+  <div class="sw-item"><div class="sw-chip" style="background:#0A0A0A"></div><div class="sw-nm">canvas 0A0A0A</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#121212"></div><div class="sw-nm">surface 121212</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#1A1A1A"></div><div class="sw-nm">raised 1A1A1A</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#232323"></div><div class="sw-nm">overlay 232323</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#2B2B2B"></div><div class="sw-nm">hairline 2B2B2B</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#383838"></div><div class="sw-nm">border 383838</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#757575"></div><div class="sw-nm">low 757575</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#A0A0A0"></div><div class="sw-nm">mid A0A0A0</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#F2F2F2"></div><div class="sw-nm">high F2F2F2</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#5FE3C0"></div><div class="sw-nm">accent 5FE3C0</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#FF5A5F"></div><div class="sw-nm">alarm FF5A5F</div></div>
+</div>
+
+<!-- ═══════════ 1 · TOP BAR ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Decide &middot; 1 of 3</p>
+<h2>The top bar</h2>
+<p class="lede">Same screen, three headers. The current bar is a centred 14pt title on a hairline band, on all five tabs, carrying almost nothing. A centred title is a web pattern, which is why none of these is centred.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="topA">
+      <div class="t-label c-low">Thu 24 Jul</div>
+      <div class="t-serif" style="margin-top:4px">Good morning, Vicky</div>
+    </div>
+    <div class="arcwrap" data-arc></div>
+    <div class="tiers">
+      <div class="tier"><div class="bar" style="background:var(--alarm)"></div><div><div class="t-title num">3</div><div class="t-label lb">Urgent</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--accent)"></div><div><div class="t-heading num">3</div><div class="t-label lb">By you</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--border)"></div><div><div class="t-body num">1</div><div class="t-label lb">Can wait</div></div></div>
+    </div>
+    <div class="sectlab t-label">Next</div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-accent">10:30</span><span class="t-body grow trunc">Design review</span><span class="mono t-secondary c-low">45m</span></div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-mid">14:00</span><span class="t-body grow trunc">1:1 with Sam</span><span class="mono t-secondary c-low">30m</span></div><div class="hr"></div>
+    <div style="padding:16px"><span class="t-secondary c-mid">2h 15m free before 10:30</span></div>
+  </div></div>
+</div><p class="cap"><b>A &middot; Dissolving header <span class="rec">recommended</span></b>No bar at rest. The date is an 11pt eyebrow and the greeting is the one Instrument Serif line in the app. Maximum content area, and the only option with room for the serif moment.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="topA-col"><span class="t-heading grow">Your day</span>
+      <span class="gauge"><i style="width:26px;background:var(--alarm)"></i><i style="width:26px;background:var(--accent)"></i><i style="width:8px;background:var(--border)"></i></span></div>
+    <div class="sectlab t-label tight">Urgent</div><div class="hr"></div>
+    <div class="row two tier-u"><span class="mark s24" data-mark="github"></span>
+      <span class="grow stack"><span class="t-body trunc">Fix the auth race in session refresh</span><span class="mono t-secondary c-low">acme/api &middot; 2h ago</span></span>
+      <span class="t-label c-alarm">Blocking</span></div><div class="hr"></div>
+    <div class="row two tier-u"><span class="mark s24" data-mark="slack"></span>
+      <span class="grow stack"><span class="t-body trunc">Sam needs a call on the pricing tier</span><span class="mono t-secondary c-low">#product &middot; 25m ago</span></span></div><div class="hr"></div>
+    <div class="row two tier-u"><span class="mark s24" data-mark="gmail"></span>
+      <span class="grow stack"><span class="t-body trunc">Contract redline back from legal</span><span class="mono t-secondary c-low">nina@ &middot; 1h ago</span></span></div><div class="hr"></div>
+    <div class="sectlab t-label">By you</div><div class="hr"></div>
+    <div class="row two tier-b"><span class="mark s24" data-mark="linear"></span>
+      <span class="grow stack"><span class="t-body trunc">Ship the token layer</span><span class="mono t-secondary c-low">ENG-412 &middot; today</span></span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>A &middot; collapsed on scroll</b>34pt drops to 17pt and survives on weight alone, which is the iOS hierarchy move. The pressure gauge from B rides in the collapsed bar so the information is never lost. Note the rows carry the tier as a 3pt edge bar, not a chip: a repeated solid chip down a list burns the alarm colour.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="topB"><span class="t-label c-low">Thu 24 Jul</span>
+      <span class="gauge"><i style="width:26px;background:var(--alarm)"></i><i style="width:26px;background:var(--accent)"></i><i style="width:8px;background:var(--border)"></i></span>
+      <span class="avatar">VP</span></div>
+    <div class="arcwrap" data-arc></div>
+    <div class="tiers">
+      <div class="tier"><div class="bar" style="background:var(--alarm)"></div><div><div class="t-title num">3</div><div class="t-label lb">Urgent</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--accent)"></div><div><div class="t-heading num">3</div><div class="t-label lb">By you</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--border)"></div><div><div class="t-body num">1</div><div class="t-label lb">Can wait</div></div></div>
+    </div>
+    <div class="sectlab t-label">Next</div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-accent">10:30</span><span class="t-body grow trunc">Design review</span><span class="mono t-secondary c-low">45m</span></div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-mid">14:00</span><span class="t-body grow trunc">1:1 with Sam</span><span class="mono t-secondary c-low">30m</span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>B &middot; Instrument strip</b>Permanent 44pt bar always carrying the gauge. Denser and more instrument-like, but it costs 44pt on every screen, adds a rule near the top of the app, and leaves no room for a greeting.</p></div>
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd">
+    <div class="topC"><span class="t-heading">Your day</span><span class="avatar">VP</span></div>
+    <div class="scroll" style="padding-top:48px">
+    <div class="arcwrap" data-arc></div>
+    <div class="tiers">
+      <div class="tier"><div class="bar" style="background:var(--alarm)"></div><div><div class="t-title num">3</div><div class="t-label lb">Urgent</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--accent)"></div><div><div class="t-heading num">3</div><div class="t-label lb">By you</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--border)"></div><div><div class="t-body num">1</div><div class="t-label lb">Can wait</div></div></div>
+    </div>
+    <div class="sectlab t-label">Next</div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-accent">10:30</span><span class="t-body grow trunc">Design review</span><span class="mono t-secondary c-low">45m</span></div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-mid">14:00</span><span class="t-body grow trunc">1:1 with Sam</span><span class="mono t-secondary c-low">30m</span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>C &middot; Floating pill</b>Content bleeds to the top edge, a blurred pill floats over it. Most current-looking and least informative, and it occludes whatever it floats over. On the table, not winning.</p></div>
+
+</div></div>
+
+<!-- ═══════════ 2 · TIER VARIANTS ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Decide &middot; 1 of 3</p>
+<h2>How a card shows its tier</h2>
+<p class="lede">Identical content, three treatments. All three change <b>form</b>, not only hue, because colour alone cannot carry state and each must survive a greyscale screenshot. Each is shown urgent, then the same option at row scale, which is where two of the three struggle.</p>
+<div class="rail">
+
+<!-- Option 1 -->
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.16),rgba(163,113,247,0) 60%)"></div>
+    <div class="edgeglow"></div><div class="edge u"></div>
+    <div class="rail-prog"><i class="done"></i><i class="now"></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px">
+        <span class="t-label c-alarm">Blocking</span>
+        <span class="mono t-secondary c-low">2h ago &middot; +142 &minus;38</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Approve</span><span class="btn sec">Comment</span></div>
+  </div></div>
+</div><p class="cap"><b>Option 1 &middot; Edge light <span class="rec">recommended</span></b>4pt alarm bar with a 40pt glow bleeding right at 11%. By you is a 4pt accent bar with no glow. Can wait is a 1pt hairline. Two axes vary at once, thickness and glow, so the tiers stay distinct in greyscale.</p></div>
+
+<!-- Option 2 -->
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard o2-u">
+    <div class="wash"></div>
+    <div class="rail-prog"><i class="done"></i><i class="now"></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px">
+        <span class="t-label c-alarm">Blocking</span>
+        <span class="mono t-secondary c-low">2h ago &middot; +142 &minus;38</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Approve</span><span class="btn sec">Comment</span></div>
+  </div></div>
+</div><p class="cap"><b>Option 2 &middot; Containment level</b>Urgent is <span class="mono">raised</span> plus an alarm wash from the top-left. By you is <span class="mono">surface</span> with a hairline. Can wait has no fill at all, just rules. Conceptually cleanest: importance <i>is</i> how much substance a thing has. Weakest at row scale, where there is little containment left to take away.</p></div>
+
+<!-- Option 3 -->
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.14),rgba(163,113,247,0) 60%)"></div>
+    <div class="frame u"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+    <div class="framelab t-label c-alarm">Urgent</div>
+    <div class="rail-prog" style="padding-top:8px"><i class="done"></i><i class="now"></i><i></i></div>
+    <div class="fbody" style="padding:0 32px">
+      <div class="fmeta" style="padding-top:32px"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div class="t-title clamp3" style="margin-top:24px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px">
+        <span class="t-label c-alarm">Blocking</span>
+        <span class="mono t-secondary c-low">2h ago &middot; +142 &minus;38</span></div>
+    </div>
+    <div class="factions" style="padding:0 32px 32px"><span class="btn pri">Approve</span><span class="btn sec">Comment</span></div>
+  </div></div>
+</div><p class="cap"><b>Option 3 &middot; Instrument frame</b>Corner brackets with the tier set into a gap in the top bracket. The most distinctive and the most on-brand for an instrument, in Halide's register. Highest risk: brackets fight the card's own corner radius and cost 16pt of gutter on all four sides.</p></div>
+
+<!-- all three at row scale -->
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="scroll">
+    <div class="sectlab t-label" style="margin-top:16px">Option 1 at row scale</div><div class="hr"></div>
+    <div class="row two tier-u"><span class="mark s24" data-mark="github"></span><span class="grow stack"><span class="t-body trunc">Fix the auth race in session refresh</span><span class="mono t-secondary c-low">acme/api &middot; 2h ago</span></span></div><div class="hr"></div>
+    <div class="row two tier-b"><span class="mark s24" data-mark="linear"></span><span class="grow stack"><span class="t-body trunc">Ship the token layer</span><span class="mono t-secondary c-low">ENG-412 &middot; today</span></span></div><div class="hr"></div>
+    <div class="row two tier-c"><span class="mark s24" data-mark="gdocs"></span><span class="grow stack"><span class="t-body trunc">Comment on the Q3 brief</span><span class="mono t-secondary c-low">4h ago</span></span></div><div class="hr"></div>
+
+    <div class="sectlab t-label">Option 2 at row scale</div><div class="hr"></div>
+    <div class="row two" style="background:var(--raised)"><span class="mark s24" data-mark="github"></span><span class="grow stack"><span class="t-body trunc">Fix the auth race in session refresh</span><span class="mono t-secondary c-low">acme/api &middot; 2h ago</span></span></div>
+    <div class="row two" style="background:var(--surface)"><span class="mark s24" data-mark="linear"></span><span class="grow stack"><span class="t-body trunc">Ship the token layer</span><span class="mono t-secondary c-low">ENG-412 &middot; today</span></span></div>
+    <div class="row two"><span class="mark s24" data-mark="gdocs"></span><span class="grow stack"><span class="t-body trunc">Comment on the Q3 brief</span><span class="mono t-secondary c-low">4h ago</span></span></div><div class="hr"></div>
+
+    <div class="sectlab t-label">Option 3 at row scale</div><div class="hr"></div>
+    <div class="row two" style="position:relative"><span style="position:absolute;left:16px;top:10px;width:12px;height:12px;border-top:2px solid var(--alarm);border-left:2px solid var(--alarm)"></span><span style="position:absolute;left:16px;bottom:10px;width:12px;height:12px;border-bottom:2px solid var(--alarm);border-left:2px solid var(--alarm)"></span>
+      <span class="mark s24" style="margin-left:12px" data-mark="github"></span><span class="grow stack"><span class="t-body trunc">Fix the auth race in session</span><span class="mono t-secondary c-low">acme/api &middot; 2h ago</span></span></div><div class="hr"></div>
+    <div style="padding:16px"><span class="t-secondary c-mid">Only Option 1 survives the drop unchanged.</span></div>
+  </div></div>
+</div><p class="cap"><b>The deciding test</b>The same three options on a 72pt row, which is what Your Day, Later and Activity all use. This is why Option 1 is the recommendation: it is the only one that degrades without being redrawn.</p></div>
+
+</div></div>
+
+<!-- ═══════════ 3 · FEED, PER SOURCE ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>Feed, one card per source</h2>
+<p class="lede">Chrome is identical on every card. What changes is the middle block and the two actions, taken from the existing matrix in <span class="mono">lib/actions.ts</span> so nothing currently reachable is lost. Tier is drawn with Option 1. The source tint is a radial wash at 6&ndash;10%, behind the top edge only, never filling a surface.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="divcard">
+    <div class="t-label c-alarm">Group 1 of 4</div>
+    <div class="t-display" style="margin-top:8px">Urgent</div>
+    <div class="t-body c-mid" style="margin-top:8px">3 things are blocking someone</div>
+    <div style="margin-top:32px" class="mono t-secondary c-low">swipe to begin</div>
+  </div></div>
+</div><p class="cap"><b>Divider card</b>Group boundaries get a full screen. Cheap to build, makes the grouping legible while swiping, and gives a natural rest point between tiers.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.16),rgba(163,113,247,0) 60%)"></div>
+    <div class="edgeglow"></div><div class="edge u"></div>
+    <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="margin-top:24px" class="mono t-secondary">
+        <div class="spread" style="padding:4px 0"><span class="c-low">src/auth/session.ts</span><span><span class="c-high">+96</span> <span class="c-low">&minus;12</span></span></div>
+        <div class="spread" style="padding:4px 0"><span class="c-low">src/auth/refresh.ts</span><span><span class="c-high">+38</span> <span class="c-low">&minus;24</span></span></div>
+        <div class="spread" style="padding:4px 0"><span class="c-low">tests/test_session.py</span><span><span class="c-high">+8</span> <span class="c-low">&minus;2</span></span></div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Blocking</span><span class="mono t-secondary c-low">2h ago &middot; 3 files</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Approve</span><span class="btn sec">Comment</span></div>
+  </div></div>
+</div><p class="cap"><b>GitHub &middot; review</b>Middle block is a three-line diff stat in Geist Mono, tabular so the columns align. Actions come straight from the matrix: Approve and Comment for a review, Comment and Snooze otherwise.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(54,197,240,.15),rgba(54,197,240,0) 60%)"></div>
+    <div class="edgeglow"></div><div class="edge u"></div>
+    <div class="rail-prog"><i class="done"></i><i class="now"></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="slack"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">Slack</span><span class="mono t-secondary c-low">#product</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Sam needs a call on the pricing tier</div>
+      <div class="quote acc" style="margin-top:24px">
+        <div class="spread"><span class="t-secondary c-mid">Sam Okafor</span><span class="mono t-secondary c-low">25m ago</span></div>
+        <div class="t-body clamp3" style="margin-top:4px">Can you confirm before the 11:00 call whether we are holding the 3-seat floor? Legal needs it today.</div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Mentioned you</span><span class="mono t-secondary c-low">4 in thread</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Reply</span><span class="btn sec">Mark read</span></div>
+  </div></div>
+</div><p class="cap"><b>Slack &middot; mention</b>The message is quoted behind a 2pt accent rule rather than restated. Sender and age share one line so the quote reads as a quote.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(234,67,53,.13),rgba(234,67,53,0) 60%)"></div>
+    <div class="edgeglow"></div><div class="edge u"></div>
+    <div class="rail-prog"><i class="done"></i><i class="done"></i><i class="now"></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="gmail"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">Gmail</span><span class="mono t-secondary c-low">nina@brightlaw.co</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-heading" style="margin-top:16px">Nina Vasquez</div>
+      <div class="t-title clamp2" style="margin-top:4px">Contract redline back from legal</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Two changes on the liability cap and one on the termination window. Both need a decision from you before we can counter-sign.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Waiting on you</span><span class="mono t-secondary c-low">1h ago &middot; 2 attach</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Open</span><span class="btn sec">Snooze</span></div>
+  </div></div>
+</div><p class="cap"><b>Gmail</b>Sender at 17pt above the subject at 22pt, address in mono. Note Gmail's tint sits next to the alarm hue: that adjacency is safe only because tier is carried by the leading edge and the chip, in a different position from the wash.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(94,106,210,.16),rgba(94,106,210,0) 60%)"></div>
+    <div class="edge b"></div>
+    <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="linear"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">Linear</span><span class="mono t-secondary c-low">ENG-412</span></span></div>
+      <div style="margin-top:24px;display:flex;gap:8px">
+        <span class="chip outline acc">By you</span><span class="chip outline">In progress</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Ship the token layer for dark mode</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Assigned to you by Priya. Blocks four issues in the Design System project.</div>
+      <div style="margin-top:24px;display:flex;align-items:center;gap:12px">
+        <span class="t-label c-low">Priority</span>
+        <span style="display:flex;gap:3px;align-items:flex-end;height:14px">
+          <i style="width:3px;height:6px;background:var(--accent);display:block;border-radius:999px"></i>
+          <i style="width:3px;height:9px;background:var(--accent);display:block;border-radius:999px"></i>
+          <i style="width:3px;height:12px;background:var(--accent);display:block;border-radius:999px"></i>
+          <i style="width:3px;height:14px;background:var(--border);display:block;border-radius:999px"></i></span>
+        <span class="t-secondary c-mid">High</span></div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-low">Due today</span><span class="mono t-secondary c-low">assigned 3d ago</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Comment</span><span class="btn sec">Open</span></div>
+  </div></div>
+</div><p class="cap"><b>Linear &middot; by you</b>The accent tier: 4pt bar, no glow, outline chip rather than solid. State and priority are the middle block, priority as a 4-bar glyph so it reads without a word.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(52,168,83,.15),rgba(52,168,83,0) 60%)"></div>
+    <div class="edge b"></div>
+    <div class="rail-prog"><i class="done"></i><i class="now"></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="calendar"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">Calendar</span><span class="mono t-secondary c-low">Google Meet</span></span></div>
+      <div style="margin-top:24px"><span class="chip outline acc">By you</span></div>
+      <div class="t-hero" style="margin-top:16px">10:30</div>
+      <div class="t-title clamp2" style="margin-top:8px">Design review</div>
+      <div style="margin-top:16px;display:flex;align-items:center;gap:8px">
+        <span class="avatar" style="width:24px;height:24px;font-size:11px">SO</span>
+        <span class="avatar" style="width:24px;height:24px;font-size:11px;margin-left:-12px">PR</span>
+        <span class="avatar" style="width:24px;height:24px;font-size:11px;margin-left:-12px">NV</span>
+        <span class="t-secondary c-mid" style="margin-left:4px">3 others, 1 not replied</span></div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-low">In 49 minutes</span><span class="mono t-secondary c-low">45m &middot; 10:30&ndash;11:15</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Accept</span><span class="btn sec">Open</span></div>
+  </div></div>
+</div><p class="cap"><b>Calendar &middot; rsvp</b>The one other place the 56pt hero role appears, because on a calendar card the time <i>is</i> the content. Overlapping 24pt avatars at &minus;12 give the attendee list without a row of names.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(66,133,244,.10),rgba(66,133,244,0) 60%)"></div>
+    <div class="edge c"></div>
+    <div class="rail-prog"><i class="now"></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="gdocs"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">Google Docs</span><span class="mono t-secondary c-low">Q3 positioning brief</span></span></div>
+      <div style="margin-top:24px"><span class="chip ghost">Can wait</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Priya left a comment on the pricing section</div>
+      <div class="quote" style="margin-top:24px">
+        <div class="spread"><span class="t-secondary c-mid">Priya Raman</span><span class="mono t-secondary c-low">4h ago</span></div>
+        <div class="t-body c-mid clamp3" style="margin-top:4px">Should we lead with the triage story here rather than the integrations list?</div></div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-low">No deadline</span><span class="mono t-secondary c-low">1 of 2 threads</span></div>
+    </div>
+    <div class="factions"><span class="btn sec" style="flex:1">Reply</span><span class="btn sec">Open</span></div>
+  </div></div>
+</div><p class="cap"><b>Google Docs &middot; can wait</b>The quietest live tier: 1pt hairline edge, ghost chip with no border or fill, and <b>no primary button</b>. Nothing that can wait gets a filled accent button, so the accent stays under 2% of pixels.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard" style="background:var(--canvas)">
+    <div class="rail-prog"><i class="done"></i><i class="now"></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="slack" data-dim="1"></span>
+        <span class="stack grow"><span class="t-secondary c-low">Slack</span><span class="mono t-secondary c-faint">#design-system</span></span></div>
+      <div style="margin-top:24px"><span class="chip ghost">Later &middot; snoozed</span></div>
+      <div class="t-title clamp3 c-mid" style="margin-top:16px">Thread on the icon family decision</div>
+      <div class="t-body c-low clamp3" style="margin-top:12px">You snoozed this yesterday. It comes back at 17:00.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-faint">Returns 17:00</span><span class="mono t-secondary c-faint">in 4h 12m</span></div>
+    </div>
+    <div class="factions"><span class="btn sec">Bring back</span><span class="btn sec">Open</span></div>
+  </div></div>
+</div><p class="cap"><b>Later, inside the Feed</b>The final group. Sits on <span class="mono">canvas</span> rather than <span class="mono">surface</span>, so it reads as recessed rather than merely faded, and every text role drops one step down the ladder. Still fully tappable.</p></div>
+
+</div></div>
+
+<!-- ═══════════ 4 · INTERACTIONS ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Interactions</p>
+<h2>What the Feed does when you touch it</h2>
+<p class="lede">Every gesture tracks the finger 1:1 and can be reversed or re-grabbed mid-flight, which is the difference between native and wrapped-website. <b>No gesture is the only path to anything</b>: the two buttons stay visible on every card and the long-press menu holds the rest.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.16),rgba(163,113,247,0) 60%)"></div>
+    <div class="edgeglow"></div><div class="edge u"></div>
+    <div class="swipehint"></div>
+    <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+    <div class="fbody" style="transform:translateY(-28px)">
+      <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+    </div>
+    <div class="swipepill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>Release to approve</div>
+  </div></div>
+</div><p class="cap"><b>Swipe up, past the threshold</b>The card lifts 28pt, an accent field rises from the bottom, and the pill commits. <span class="mono">impactAsync(Light)</span> fires once at the threshold, not continuously through the drag: haptics mark a change of state, never motion. Reversing below the threshold puts everything back.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard">
+      <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.16),rgba(163,113,247,0) 60%)"></div>
+      <div class="edgeglow"></div><div class="edge u"></div>
+      <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+      <div class="fbody">
+        <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+          <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+        <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+        <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      </div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="t-label c-low">Why this is urgent</div>
+      <div class="t-body" style="margin-top:8px">Sam requested changes and marked the PR as blocking the staging deploy. Two other issues are waiting behind it.</div>
+      <div class="hr full" style="margin:24px 0 0"></div>
+      <div class="row one" style="padding:0"><span class="t-label c-low grow">Full thread</span><span class="mono t-secondary c-low">6 comments</span></div>
+      <div class="hr full"></div>
+      <div style="padding:16px 0"><div class="quote"><div class="t-secondary c-mid">Sam Okafor</div>
+        <div class="t-body c-mid clamp3" style="margin-top:4px">The refresh path still double-writes when two tabs race. Can you gate it on the session id?</div></div></div>
+      <div class="hr full"></div>
+      <div style="display:flex;gap:12px;padding-top:16px">
+        <span class="btn pri">Approve</span><span class="btn sec">Request changes</span></div>
+    </div>
+  </div>
+</div><p class="cap"><b>Tap the body &rarr; detail sheet</b>Opens at the <span class="mono">medium</span> detent with a visible grabber, because there is more than one detent. Drag up for full height. The current sheet is a fixed <span class="mono">82%</span> with no detents and no grabber, which is a web dialog wearing a sheet's clothes.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd">
+    <div class="fcard" style="filter:brightness(.55)">
+      <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.16),rgba(163,113,247,0) 60%)"></div>
+      <div class="edge u"></div>
+      <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+      <div class="fbody">
+        <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+          <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+        <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+        <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      </div>
+    </div>
+    <div class="menu">
+      <div class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="t-body grow">Request changes</span></div>
+      <div class="hr full"></div>
+      <div class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg><span class="t-body grow">Open in GitHub</span></div>
+      <div class="hr full"></div>
+      <div class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-snooze"/></svg><span class="t-body grow">Snooze</span><span class="mono t-secondary c-low">until 17:00</span></div>
+      <div class="hr full"></div>
+      <div class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"/></svg><span class="t-body c-mid grow">Mark read</span></div>
+    </div>
+  </div>
+</div><p class="cap"><b>Long-press &rarr; the rest of the matrix</b>Everything <span class="mono">overflowFor()</span> returns, in one sheet-anchored menu near the thumb. This is the mobile answer to the web overflow menu, which relies on a hover state that does not exist here.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard" style="background:var(--canvas)">
+    <div class="fbody" style="align-items:center;justify-content:center;text-align:center;padding:0 48px">
+      <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+        <circle cx="60" cy="60" r="52" stroke="#2B2B2B" stroke-width="8"/>
+        <circle cx="60" cy="60" r="52" stroke="#5FE3C0" stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="327" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+      </svg>
+      <div class="t-display" style="margin-top:32px">All clear</div>
+      <div class="t-body c-mid" style="margin-top:8px">Nothing is waiting on you. 4 things arrived and went to Later.</div>
+      <div style="margin-top:32px"><span class="chip outline">See Later</span></div>
+    </div>
+  </div></div>
+</div><p class="cap"><b>Empty, told honestly</b>The single highest-severity trust failure in the research is faking an empty state as a full one. No placeholder rows, no sample cards. The ring completes, the one Lottie moment fires with <span class="mono">notificationAsync(Success)</span>, and the screen says what actually happened to the other four items.</p></div>
+
+</div></div>
+
+<!-- ═══════════ 5 · LATER + ACTIVITY + YOU ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">Screens</p>
+<h2>Later, Activity and You</h2>
+<p class="lede">Later keeps its job and is restyled, not redesigned. Activity is the renamed Sources tab with no Connect button, rebuilt so the numbers have a focal point. You receives the connection flow and compresses the notification block from a stack of boxes into one toggle.</p>
+<div class="rail">
+
+<div class="cell"><div class="ph" data-tab="later">
+  <div class="bd"><div class="scroll">
+    <div class="topA"><div class="t-label c-low">14 items</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="sectlab t-label">Snoozed &middot; 3</div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="slack"></span>
+      <span class="grow stack"><span class="t-body trunc">Thread on the icon family decision</span><span class="mono t-secondary c-low">#design-system</span></span>
+      <span class="mono t-secondary c-accent">in 4h</span></div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="github"></span>
+      <span class="grow stack"><span class="t-body trunc">Bump the Expo SDK to 57</span><span class="mono t-secondary c-low">acme/mobile</span></span>
+      <span class="mono t-secondary c-accent">tomorrow</span></div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="gmail"></span>
+      <span class="grow stack"><span class="t-body trunc">Invoice from Pangram Pangram</span><span class="mono t-secondary c-low">billing@</span></span>
+      <span class="mono t-secondary c-accent">Mon</span></div><div class="hr"></div>
+    <div class="sectlab t-label">No date set &middot; 5</div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="linear"></span>
+      <span class="grow stack"><span class="t-body trunc">Audit the empty states</span><span class="mono t-secondary c-low">ENG-388 &middot; backlog</span></span></div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="linear"></span>
+      <span class="grow stack"><span class="t-body trunc">Replace Menlo everywhere</span><span class="mono t-secondary c-low">ENG-401 &middot; backlog</span></span></div><div class="hr"></div>
+    <div class="sectlab t-label c-faint">Handled &middot; 5</div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="github" data-dim="1"></span>
+      <span class="grow stack"><span class="t-body c-low trunc">Merge the tier rename</span><span class="mono t-secondary c-faint">yesterday</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>Later</b>Grouped by <i>why it is here</i>, not by source. Countdowns are tabular mono, right-aligned, so they form a real column. Swipe right promotes back into the Feed, left dismisses, both with full-swipe past the threshold.</p></div>
+
+<div class="cell"><div class="ph" data-tab="activity">
+  <div class="bd"><div class="scroll">
+    <div class="topA"><div class="t-label c-low">Last 30 days</div><div class="t-display" style="margin-top:4px">Activity</div></div>
+    <div style="height:24px"></div>
+    <div class="scard">
+      <div class="tint" style="background:radial-gradient(100% 100% at 0% 0%,rgba(163,113,247,.13),rgba(163,113,247,0) 65%)"></div>
+      <div class="spread"><span style="display:flex;gap:12px;align-items:center">
+        <span class="mark s32" data-mark="github"></span><span class="t-heading">GitHub</span></span>
+        <span style="display:flex;gap:8px;align-items:center"><span class="statusdot live"></span><span class="t-label c-low">Live</span></span></div>
+      <div class="snums">
+        <div><div class="t-title num">47</div><div class="t-label c-low">Events</div></div>
+        <div><div class="t-title num">12</div><div class="t-label c-low">Open</div></div>
+        <div><div class="t-title num c-accent">3</div><div class="t-label c-low">Yours</div></div></div>
+      <div class="sparks" style="margin-top:16px">
+        <i style="height:30%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:35%"></i><i style="height:100%"></i><i style="height:60%"></i><i style="height:25%"></i><i style="height:45%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:85%"></i></div>
+    </div>
+    <div class="scard">
+      <div class="tint" style="background:radial-gradient(100% 100% at 0% 0%,rgba(54,197,240,.13),rgba(54,197,240,0) 65%)"></div>
+      <div class="spread"><span style="display:flex;gap:12px;align-items:center">
+        <span class="mark s32" data-mark="slack"></span><span class="t-heading">Slack</span></span>
+        <span style="display:flex;gap:8px;align-items:center"><span class="statusdot live"></span><span class="t-label c-low">Live</span></span></div>
+      <div class="snums">
+        <div><div class="t-title num">218</div><div class="t-label c-low">Messages</div></div>
+        <div><div class="t-title num">9</div><div class="t-label c-low">Mentions</div></div>
+        <div><div class="t-title num c-accent">2</div><div class="t-label c-low">Yours</div></div></div>
+      <div class="sparks" style="margin-top:16px">
+        <i style="height:60%"></i><i style="height:80%"></i><i style="height:45%"></i><i style="height:30%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:55%"></i><i style="height:35%"></i><i style="height:65%"></i><i style="height:75%"></i><i style="height:40%"></i></div>
+    </div>
+    <div class="scard">
+      <div class="tint" style="background:radial-gradient(100% 100% at 0% 0%,rgba(255,90,95,.10),rgba(255,90,95,0) 65%)"></div>
+      <div class="spread"><span style="display:flex;gap:12px;align-items:center">
+        <span class="mark s32" data-mark="linear"></span><span class="t-heading">Linear</span></span>
+        <span style="display:flex;gap:8px;align-items:center"><span class="statusdot bad"></span><span class="t-label c-alarm">Expired</span></span></div>
+      <div class="t-secondary c-mid" style="margin-top:16px">Access expired 2 days ago, so these numbers stop at 22 Jul.</div>
+      <div style="margin-top:16px"><span class="chip outline alm">Reconnect</span></div>
+    </div>
+  </div></div>
+</div><p class="cap"><b>Activity &middot; root</b>One card per <i>connected</i> source, which the current screen does not do: it lists all six regardless, correct when this tab owned connection and wrong now. Status is a dot <i>and</i> a word, because a filled dot on its own reads as a notification badge.</p></div>
+
+<div class="cell"><div class="ph" data-tab="activity">
+  <div class="bd"><div class="scroll">
+    <div class="topA-col"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><use href="#i-chev"/></svg>
+      <span class="t-heading grow">GitHub</span><span class="t-label c-low">30 days</span></div>
+    <div style="display:grid;place-items:center;padding:32px 0 0;position:relative">
+      <div style="position:absolute;width:220px;height:160px;background:radial-gradient(circle,rgba(163,113,247,.14),rgba(163,113,247,0) 66%)"></div>
+      <div class="t-hero" style="position:relative">12</div>
+      <div class="t-label c-low" style="margin-top:8px;position:relative">Open pull requests</div></div>
+    <div class="acts">
+      <span class="act"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
+      <span class="act"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-filter"/></svg></span>
+      <span class="act"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>
+    <div style="height:32px"></div>
+    <div class="tiles">
+      <div class="tile"><div class="t-label c-low">Reviews on you</div><div class="t-title num" style="margin-top:4px">3</div><div class="t-secondary c-mid">2 blocking</div></div>
+      <div class="tile"><div class="t-label c-low">Merged</div><div class="t-title num" style="margin-top:4px">28</div><div class="t-secondary c-mid">+4 vs June</div></div>
+      <div class="tile"><div class="t-label c-low">Your PRs</div><div class="t-title num" style="margin-top:4px">5</div><div class="t-secondary c-mid">1 has conflicts</div></div>
+      <div class="tile"><div class="t-label c-low">Median to merge</div><div class="t-title num" style="margin-top:4px">6h</div><div class="t-secondary c-mid">was 11h</div></div>
+    </div>
+    <div style="padding:16px"><span class="t-secondary c-low">Not available from this source: review latency per reviewer, draft age.</span></div>
+    <div class="sectlab t-label">Open pull requests</div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="github"></span>
+      <span class="grow stack"><span class="t-body trunc">Fix the auth race in session refresh</span>
+        <span style="display:flex;gap:8px;align-items:center"><span class="mono t-secondary c-low">acme/api &middot; 2d</span><span class="chip outline alm">Blocking</span></span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div><div class="hr"></div>
+    <div class="row two"><span class="mark s20" data-mark="github"></span>
+      <span class="grow stack"><span class="t-body trunc">Bump the Expo SDK to 57</span>
+        <span class="mono t-secondary c-low">acme/mobile &middot; 4d</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>Activity &middot; source detail</b>One 56pt hero numeral gives the focal point the current screen lacks, then Alpian's row of 44pt circular glyphs, then a two-column tile grid. <b>Unavailable fields are one honest sentence, never a tile with a dash in it.</b> Listings use the external-link glyph, not a chevron, because a chevron promises in-app navigation that never happens.</p></div>
+
+<div class="cell"><div class="ph" data-tab="you">
+  <div class="bd"><div class="scroll">
+    <div class="topA"><div class="t-label c-low">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+    <div class="sectlab t-label">Notifications</div><div class="hr"></div>
+    <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
+      <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span>
+      <span class="sw on"><i></i></span></div>
+    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
+    <div class="hr"></div>
+    <div class="sectlab t-label">AI summaries</div><div class="hr"></div>
+    <div class="row two"><span class="grow stack"><span class="t-heading">Summarise and rank</span>
+      <span class="t-secondary c-mid">On for 2 of 3 sources</span></span>
+      <span class="sw on"><i></i></span></div>
+    <div style="padding:0 16px 16px"><span class="t-secondary c-low">Text goes to OpenRouter, a third-party model provider. Off falls back to rules only.</span></div>
+    <div class="hr"></div>
+    <div class="sectlab t-label" style="display:flex;align-items:center;gap:8px">Connections <span class="bubble">1</span>
+      <span class="grow"></span><span style="display:flex;align-items:center;gap:4px;color:var(--accent)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><use href="#i-plus"/></svg>Connect</span></div><div class="hr"></div>
+    <div class="row"><span class="mark s24" data-mark="github"></span><span class="t-body grow">GitHub</span>
+      <span class="t-label c-low">Live</span><span class="sw on"><i></i></span></div><div class="hr"></div>
+    <div class="row"><span class="mark s24" data-mark="slack"></span><span class="t-body grow">Slack</span>
+      <span class="t-label c-low">Live</span><span class="sw on"><i></i></span></div><div class="hr"></div>
+    <div class="row"><span class="mark s24" data-mark="linear"></span><span class="t-body grow">Linear</span>
+      <span class="chip outline alm">Fix</span></div><div class="hr"></div>
+    <div class="row"><span class="t-body c-alarm grow">Sign out</span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>You</b>The notification block was three full-width bordered cards, roughly 200pt of stacked boxes reading like a web settings document. It is now one row, one toggle, one subtext line, with the level segmented control appearing only when the toggle is on: about 60pt. The bubble counts <i>only</i> what needs action, so an unconnected optional source never badges.</p></div>
+
+<div class="cell"><div class="ph" data-tab="you">
+  <div class="bd">
+    <div class="scroll">
+      <div class="topA"><div class="t-label c-low">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+      <div class="sectlab t-label">Notifications</div><div class="hr"></div>
+      <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
+        <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="height:46%">
+      <div class="grab"></div>
+      <div class="t-title">Connect a source</div>
+      <div class="t-secondary c-mid" style="margin-top:8px">This opens the provider's own sign-in. Nothing is stored here beyond the connection itself.</div>
+      <div style="height:24px"></div>
+      <div class="hr full"></div>
+      <div class="row" style="padding:0"><span class="mark s24" data-mark="calendar"></span><span class="t-body grow">Google Calendar</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+      <div class="hr full"></div>
+      <div class="row" style="padding:0"><span class="mark s24" data-mark="gdocs"></span><span class="t-body grow">Google Docs</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
+      <div class="hr full"></div>
+    </div>
+  </div>
+</div><p class="cap"><b>Connect, as a sheet from You</b>The footnote about the provider's own sign-in moves here, where it is relevant, instead of sitting at the bottom of a whole tab. Only unconnected sources are listed.</p></div>
+
+</div></div>
+
+<!-- ═══════════ 6 · LIGHT ═══════════ -->
+<div class="pgsec">
+<p class="eyebrow">The alternate</p>
+<h2>Light</h2>
+<p class="lede">Dark is the default and light is a real second design, not an inverted skin. <b>Elevation swaps mechanism</b>: dark separates surfaces by lightness, light separates them by hairline, and neither uses a shadow. The accent darkens to <span class="mono">#0E8F72</span> and the alarm to <span class="mono">#D9342B</span>, because the dark-mode values are luminous against near-black and illegible against white.</p>
+<div class="rail lightmode">
+
+<div class="cell"><div class="ph" data-tab="day">
+  <div class="bd"><div class="scroll">
+    <div class="topA"><div class="t-label c-low">Thu 24 Jul</div>
+      <div class="t-serif" style="margin-top:4px">Good morning, Vicky</div></div>
+    <div class="arcwrap" data-arc data-light="1"></div>
+    <div class="tiers">
+      <div class="tier"><div class="bar" style="background:var(--alarm)"></div><div><div class="t-title num">3</div><div class="t-label lb">Urgent</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--accent)"></div><div><div class="t-heading num">3</div><div class="t-label lb">By you</div></div></div>
+      <div class="tier"><div class="bar" style="background:var(--border)"></div><div><div class="t-body num">1</div><div class="t-label lb">Can wait</div></div></div>
+    </div>
+    <div class="sectlab t-label">Next</div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-accent">10:30</span><span class="t-body grow trunc">Design review</span><span class="mono t-secondary c-low">45m</span></div><div class="hr"></div>
+    <div class="row"><span class="mono t-body c-mid">14:00</span><span class="t-body grow trunc">1:1 with Sam</span><span class="mono t-secondary c-low">30m</span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>Your day, light</b>Same geometry, same type, same spacing. Only the ladder and the two hues move.</p></div>
+
+<div class="cell"><div class="ph" data-tab="feed">
+  <div class="bd"><div class="fcard">
+    <div class="tint" style="background:radial-gradient(120% 80% at 12% 0%,rgba(163,113,247,.12),rgba(163,113,247,0) 60%)"></div>
+    <div class="edgeglow" style="background:linear-gradient(90deg,rgba(217,52,43,.08),rgba(217,52,43,0))"></div>
+    <div class="edge u"></div>
+    <div class="rail-prog"><i class="now"></i><i></i><i></i></div>
+    <div class="fbody">
+      <div class="fmeta"><span class="mark s40" data-mark="github"></span>
+        <span class="stack grow"><span class="t-secondary c-mid">GitHub</span><span class="mono t-secondary c-low">acme/api &middot; #4821</span></span></div>
+      <div style="margin-top:24px"><span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp3" style="margin-top:16px">Fix the auth race in the session refresh</div>
+      <div class="t-body c-mid clamp3" style="margin-top:12px">Sam requested changes 2h ago and the deploy to staging is blocked behind it.</div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <span class="swipeaff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-up"/></svg><span class="t-label">Swipe up to act</span></span></div>
+      <div class="hr full" style="margin-bottom:12px"></div>
+      <div class="spread" style="padding-bottom:16px"><span class="t-label c-alarm">Blocking</span><span class="mono t-secondary c-low">2h ago &middot; 3 files</span></div>
+    </div>
+    <div class="factions"><span class="btn pri">Approve</span><span class="btn sec">Comment</span></div>
+  </div></div>
+</div><p class="cap"><b>Feed card, light</b>The card is <span class="mono">#FFFFFF</span> on a <span class="mono">#F7F7F6</span> canvas, so the surface still reads as raised with no shadow at all. The edge glow drops from 11% to 8%, because a light field carries a tint further.</p></div>
+
+<div class="cell"><div class="ph" data-tab="you">
+  <div class="bd"><div class="scroll">
+    <div class="topA"><div class="t-label c-low">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
+    <div class="sectlab t-label">Notifications</div><div class="hr"></div>
+    <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
+      <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
+    <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
+    <div class="hr"></div>
+    <div class="sectlab t-label">AI summaries</div><div class="hr"></div>
+    <div class="row two"><span class="grow stack"><span class="t-heading">Summarise and rank</span>
+      <span class="t-secondary c-mid">On for 2 of 3 sources</span></span><span class="sw on"><i></i></span></div>
+    <div style="padding:0 16px 16px"><span class="t-secondary c-low">Text goes to OpenRouter, a third-party model provider. Off falls back to rules only.</span></div>
+    <div class="hr"></div>
+    <div class="sectlab t-label" style="display:flex;align-items:center;gap:8px">Connections <span class="bubble">1</span>
+      <span class="grow"></span><span style="display:flex;align-items:center;gap:4px;color:var(--accent)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><use href="#i-plus"/></svg>Connect</span></div><div class="hr"></div>
+    <div class="row"><span class="mark s24" data-mark="github"></span><span class="t-body grow">GitHub</span><span class="t-label c-low">Live</span></div><div class="hr"></div>
+    <div class="row"><span class="mark s24" data-mark="linear"></span><span class="t-body grow">Linear</span><span class="chip outline alm">Fix</span></div><div class="hr"></div>
+  </div></div>
+</div><p class="cap"><b>You, light</b>The toggle track uses an inset hairline when off, since a light-on-light switch has no lightness step to rely on.</p></div>
+
+</div></div>
+
+</div>
+
+<script>
+/* ── brand marks, real paths, Simple Icons (CC0) ─────────────────── */
+const MARKS = {
+  github:{c:'#A371F7',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
+  slack:{c:'#36C5F0',p:'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z'},
+  linear:{c:'#5E6AD2',p:'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z'},
+  gmail:{c:'#EA4335',p:'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z'},
+  gdocs:{c:'#4285F4',p:'M14 2H6.4C5.1 2 4 3.1 4 4.4v15.2C4 20.9 5.1 22 6.4 22h11.2c1.3 0 2.4-1.1 2.4-2.4V8l-6-6zm-1 7V3.6L18.4 9H13zM8 12.4h8v1.4H8v-1.4zm0 3.2h8V17H8v-1.4zM8 9h4v1.4H8V9z'},
+  calendar:{c:'#34A853',p:'M6.6 2v2H4.8C3.8 2 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
+};
+document.querySelectorAll('[data-mark]').forEach(el=>{
+  const m=MARKS[el.dataset.mark]; if(!m) return;
+  const box=el.classList.contains('s40')?22:el.classList.contains('s32')?18:el.classList.contains('s24')?14:12;
+  el.innerHTML=`<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="${m.c}"
+    style="opacity:${el.dataset.dim?'.45':'1'}"><path d="${m.p}"/></svg>`;
+});
+
+/* ── the day arc ─────────────────────────────────────────────────
+   The ring is THE DAY (08:00-20:00 clockwise): elapsed time, meeting
+   blocks, and a now-marker. The number inside is what needs you.
+   Deliberately NOT a restatement of the tier bar below it, which
+   would make the hero object redundant with the row under it.      */
+const R=82, C=2*Math.PI*R, DAY_START=8, DAY_H=12;
+const frac=h=>(h-DAY_START)/DAY_H;
+function seg(from,to,colour,w){
+  const a=frac(from)*C, len=(frac(to)-frac(from))*C;
+  return `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${colour}" stroke-width="${w||8}"
+    stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-a}" transform="rotate(-90 90 90)"/>`;
+}
+document.querySelectorAll('[data-arc]').forEach(el=>{
+  const light=el.dataset.light;
+  const track=light?'#EFEFED':'#1A1A1A', past=light?'#C9C9C6':'#3F3F3F';
+  const acc=light?'#0E8F72':'#5FE3C0', alm=light?'#D9342B':'#FF5A5F';
+  const nowH=9+41/60, ang=frac(nowH)*360;
+  el.innerHTML=`
+  <div class="arcglow"></div>
+  <svg width="180" height="180" viewBox="0 0 180 180" style="position:relative">
+    <circle cx="90" cy="90" r="${R}" fill="none" stroke="${track}" stroke-width="8"/>
+    ${seg(DAY_START,nowH,past)}
+    ${seg(10.5,11.25,acc)}${seg(14,14.5,acc)}${seg(16,17,acc)}
+    <g transform="rotate(${ang} 90 90)"><circle cx="90" cy="8" r="4.5" fill="${alm}"/></g>
+  </svg>
+  <div class="arcnum"><div class="t-hero">7</div>
+    <div class="t-label c-low" style="margin-top:4px">need you</div></div>`;
+});
+
+/* ── the swipe affordance names the primary action of its own card ── */
+document.querySelectorAll('.fcard').forEach(card=>{
+  const aff=card.querySelector('.swipeaff .t-label'), btn=card.querySelector('.factions .btn');
+  if(aff&&btn) aff.textContent='Swipe up to '+btn.textContent.trim().toLowerCase();
+});
+
+/* ── status bar + tab bar, injected so all 28 phones stay identical ── */
+const TABS=[['day','Day','i-sun'],['feed','Feed','i-cards'],['later','Later','i-clock'],
+            ['activity','Activity','i-pulse'],['you','You','i-user']];
+document.querySelectorAll('.ph').forEach(ph=>{
+  const cur=ph.dataset.tab;
+  ph.insertAdjacentHTML('afterbegin',
+    `<div class="grain"></div>
+     <div class="sb"><span class="isl"></span><span>9:41</span>
+       <span style="font-size:13px;letter-spacing:1px">&#9679;&#9679;&#9679; &#9646;</span></div>`);
+  ph.insertAdjacentHTML('beforeend','<div class="tabbar">'+TABS.map(([id,label,icon])=>{
+    const on=id===cur;
+    return `<div class="tabitem${on?' on':''}">
+      <svg width="25" height="25" viewBox="0 0 24 24" fill="none"
+        stroke="${on?'var(--high)':'var(--low)'}" stroke-width="${on?2.2:1.6}"
+        stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"/></svg>
+      <span class="tl">${label}</span>
+      ${id==='feed'?'<span class="tabbadge">3</span>':''}</div>`;
+  }).join('')+'</div>');
+});
+</script>

@@ -218,6 +218,8 @@ Ship two spacer primitives, `<VStack n>` and `<HStack n>`, taking a scale index 
 
 Five values replacing eleven. The current set includes 15.2 / 16.5 / 19.3 / 20.7, which all read as "roughly the same rounded corner" and therefore communicate no difference in elevation while conspicuously failing to match.
 
+**Chart geometry takes radius 0.** A sparkline bar, a gauge tick or a progress segment is data, not a surface. Rounding a 3pt-wide bar to a capsule turns a bar chart into a row of beads, which is what happened the first time these were drawn. Surfaces get the ramp; marks that encode a value get 0 or a full capsule, never something in between.
+
 **Nested radii are derived, never chosen:**
 
 ```
@@ -235,9 +237,14 @@ One chip shape. The app currently ships three, with three paddings and two compe
 | | Value |
 |---|---|
 | Height | **28** (min touch target expanded to 44 via `hitSlop`, never by inflating the graphic) |
-| Padding | 10 horizontal, 0 vertical (height does the work) |
+| Padding | **12** horizontal, 0 vertical (height does the work) |
 | Radius | `sm` (8) |
 | Type | `label`, 11pt Archivo Condensed 600, uppercase, +0.8 tracking |
+| Inner gap | 8, when the chip carries a glyph |
+
+> This originally read 10 horizontal, which is **not on the spacing scale**. Drawing the mockups caught it. Corrected to 12, and it is worth naming the general rule: if a value cannot be expressed on the scale, the value is wrong, not the scale.
+
+**28 is the only chip height.** Never scale a chip down for a dense context: a `transform: scale(0.8)` on a 31pt control renders it 25pt, below the touch floor, and it also renders its text below the 11pt minimum. If a context cannot fit a 28pt chip, it does not want a chip, it wants a label.
 
 **Not pill-shaped.** Material's own chip spec is an 8dp radius at a 32dp minimum height, and pills read as filter controls. Reserve `pill` for things that genuinely are filters.
 
