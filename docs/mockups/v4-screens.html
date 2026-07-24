@@ -131,6 +131,18 @@
 .sep.full{margin-left:0;}
 .sep.gut{margin-left:16px;margin-right:16px;}
 .sectlab{padding:0 16px;margin:32px 0 8px;color:var(--low);display:flex;align-items:center;gap:8px;}
+/* Rows are discrete cards with air between them, not text on a hairline.
+   A rule between two rows separates them by exactly one pixel, which is why
+   a hairline list reads as one undifferentiated block. */
+.lrow{display:flex;align-items:center;gap:12px;margin:0 16px 8px;padding:12px;
+  background:var(--surface);border-radius:12px;position:relative;overflow:hidden;min-height:64px;}
+.lrow .ltier{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:2;}
+.lrow .lwash{position:absolute;left:0;top:0;bottom:0;width:120px;pointer-events:none;z-index:0;}
+.lrow>*{position:relative;z-index:1;}
+.lrow .lmeta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none;}
+.mono11{font-size:11px;line-height:16px;}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px;}
+.statcard{background:var(--surface);border-radius:12px;padding:12px;}
 .sectlab.tight{margin-top:24px;}
 
 /* ═══ MARKS ══════════════════════════════════════════════════════ */
@@ -211,9 +223,10 @@
 .frail{position:absolute;right:16px;bottom:16px;z-index:6;display:flex;flex-direction:column;
   align-items:center;gap:12px;}
 .fbtn{display:flex;flex-direction:column;align-items:center;gap:4px;width:64px;}
-.fbtn .ring{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;
-  background:var(--overlay);border:1px solid var(--border);}
-.fbtn.pri .ring{background:var(--high);border-color:var(--high);}
+/* No ring, no border, no fill. The glyph is the button, which is how
+   Instagram does it. Hierarchy comes from glyph size and label weight,
+   never from colour, so the tier hues stay meaningful. */
+.fbtn .ring{width:48px;height:48px;display:grid;place-items:center;}
 .fbtn .cap2{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;letter-spacing:.8px;
   text-transform:uppercase;font-weight:600;color:var(--mid);}
 .fbtn.pri .cap2{color:var(--high);}
@@ -291,6 +304,8 @@
   <g id="i-check"><path d="M4.8 12.6l4.8 4.8L19.2 7.8"/></g>
   <g id="i-reply"><path d="M9 6.4L3.4 12 9 17.6"/><path d="M3.4 12h9.2a8 8 0 0 1 8 8v.6"/></g>
   <g id="i-snooze"><circle cx="12" cy="13" r="8"/><path d="M12 9.4V13l2.6 1.6M9 2.6h6"/></g>
+  <g id="i-chat"><path d="M20.4 11.6a7.6 7.6 0 0 1-8.2 7.6L6.2 21.4l1.4-4.2A7.6 7.6 0 1 1 20.4 11.6Z"/></g>
+  <g id="i-checks"><path d="M2.6 12.6l4 4L14.2 9"/><path d="M10.4 15.4l1.2 1.2L21.4 6.8"/></g>
   <g id="i-more"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></g>
   <g id="i-send"><path d="M21 3L10.5 13.5M21 3l-6.6 18-3.9-7.5L3 9.6 21 3Z"/></g>
   <g id="i-cal"><rect x="3.4" y="5" width="17.2" height="16" rx="2.6"/><path d="M3.4 10h17.2M8 3v4M16 3v4"/></g>
@@ -332,7 +347,7 @@
 <div class="pgsec">
 <p class="eyebrow">Decided, and re-encoded</p>
 <h2>The day object</h2>
-<p class="lede">The dual ring is chosen. The review's question was the right one: <b>what did the green and the red actually mean?</b> In v3 they meant two things each. Green was <i>meetings</i> on the outer ring and <i>by you</i> on the inner one. Red was <i>now</i> on the outer ring and <i>urgent</i> on the inner one. Two collisions, on the one element that is supposed to be read at a glance.</p>
+<p class="lede">The dual ring is chosen. The review's question was the right one: <b>what did the green and the red actually mean?</b> In v3 they meant two things each. Green was <i>meetings</i> on the outer ring and <i>by EOD</i> on the inner one. Red was <i>now</i> on the outer ring and <i>urgent</i> on the inner one. Two collisions, on the one element that is supposed to be read at a glance.</p>
 <p class="note"><b>The fix is a rule, not a repaint. The outer ring is time, so it is monochrome. The inner ring is work, so it is the only place a tier colour appears.</b> Outer runs a four-step grey ladder: <span class="mono">hairline</span> for the day still to come, <span class="mono">border</span> for what has gone, <span class="mono">mid</span> for a meeting, and the brightest thing on the screen, <span class="mono">high</span>, for now. Inner is alarm, accent, and neutral in proportion, with a 2pt gap so three tiers are countable rather than merely proportional. <b>And the inner ring needs no legend, because the tier selector immediately below it is the legend</b>, in the same three colours and the same order.</p>
 <div class="rail">
 
@@ -342,7 +357,7 @@
       <div class="t-display" style="margin-top:4px">Your day</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="none"></div>
-    <div class="sectlab t-label">Next</div><div class="sep full"></div>
+    <div class="sectlab t-label">Next</div>
     <div data-next></div>
   </div></div>
 </div><p class="cap"><b>Dual ring, re-encoded</b>Outer: 08:00 to 20:00 clockwise, meetings brighter than elapsed, now brightest of all. Inner: 3 urgent, 3 by you, 1 can wait, matching the row underneath exactly. The 56pt count in the middle is a third fact again, not a restatement of either ring.</p></div>
@@ -354,7 +369,6 @@
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
-    <div class="sep full"></div>
     <div data-list="urgent"></div>
   </div></div>
 </div><p class="cap"><b>With a tier selected</b>Read the alarm arc on the inner ring and the selected cell below it together: same colour, same quantity, same order. That is what makes the ring representative rather than decorative, and it is why the outer ring had to give up its hues.</p></div>
@@ -373,7 +387,7 @@
     <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="none"></div>
-    <div class="sectlab t-label">Next</div><div class="sep full"></div>
+    <div class="sectlab t-label">Next</div>
     <div data-next></div>
   </div></div>
 </div><p class="cap"><b>Resting &middot; nothing selected</b>All three cells are transparent, counts at <span class="mono">mid</span>, labels at <span class="mono">low</span>. The list below is the meetings, which is what the screen is for when nothing is pressing.</p></div>
@@ -384,7 +398,6 @@
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
-    <div class="sep full"></div>
     <div data-list="urgent"></div>
   </div></div>
 </div><p class="cap"><b>Urgent selected</b>The cell fills to <span class="mono">surface</span>, gains a border, its bar runs the full height, and the label goes to <span class="mono">high</span>. Four signals, only one of which is colour. The list below is now those three items, with the count in the section header.</p></div>
@@ -394,11 +407,10 @@
     <div class="hdr"><div class="t-label eb">Thu 24 Jul</div><div class="t-display" style="margin-top:4px">Your day</div></div>
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="byyou"></div>
-    <div class="sectlab t-label">By you <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
-    <div class="sep full"></div>
-    <div data-list="byyou"></div>
+    <div class="sectlab t-label">By EOD <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
+    <div data-list="byeod"></div>
   </div></div>
-</div><p class="cap"><b>By you selected</b>Identical mechanics, accent instead of alarm. Tapping the selected cell again clears it and the meetings come back. The row never scrolls and never grows.</p></div>
+</div><p class="cap"><b>By EOD selected</b>Identical mechanics, accent instead of alarm. Tapping the selected cell again clears it and the meetings come back. The row never scrolls and never grows.</p></div>
 
 <div class="cell"><div class="ph" data-tab="day">
   <div class="bd"><div class="scroll">
@@ -406,7 +418,6 @@
     <div class="arcwrap" data-day="dual"></div>
     <div data-tiersel="canwait"></div>
     <div class="sectlab t-label">Can wait <span class="grow"></span><span class="mono t-secondary c-low">1 item</span></div>
-    <div class="sep full"></div>
     <div data-list="canwait"></div>
     <div style="padding:32px 16px 0"><span class="t-secondary c-low">Nothing else is waiting. 12 things arrived today and went to Later.</span></div>
   </div></div>
@@ -440,9 +451,9 @@
       </div>
     </div>
     <div class="frail">
-      <span class="fbtn pri"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
-      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span><span class="cap2">Comment</span></span>
-      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
+      <span class="fbtn pri"><span class="ring"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
+      <span class="fbtn"><span class="ring"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chat"/></svg></span><span class="cap2">Comment</span></span>
+      <span class="fbtn"><span class="ring"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
     </div>
     <div class="fstrip"><span class="t-label c-high">Blocking</span>
       <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span>
@@ -506,7 +517,7 @@
 <div class="pgsec">
 <p class="eyebrow">Screens</p>
 <h2>A card for every source and tier</h2>
-<p class="lede">Drawn with treatment A. The glow colour is the tier: alarm for urgent, accent for by you, a neutral warm grey for can wait. The source tint stays a wash behind the top edge and never competes with it. <b>What changes per source is the middle block and the three rail actions</b>, taken from the matrix in <span class="mono">lib/actions.ts</span> so nothing reachable today is lost.</p>
+<p class="lede">Drawn with treatment A. The glow colour is the tier: alarm for urgent, accent for by EOD, a neutral warm grey for can wait. The source tint stays a wash behind the top edge and never competes with it. <b>What changes per source is the middle block and the three rail actions</b>, taken from the matrix in <span class="mono">lib/actions.ts</span> so nothing reachable today is lost.</p>
 <div class="rail" data-cards></div>
 </div>
 
@@ -526,24 +537,33 @@
         <div class="t-display clamp2" style="margin-top:32px">Contract redline back from legal</div></div>
     </div>
     <div class="scrim"></div>
-    <div class="sheet" style="height:78%">
+    <div class="sheet" style="height:82%">
       <div class="swash" data-swash="gmail"></div>
       <div class="grab"></div>
-      <div class="row two" style="padding:0"><span class="avatar s44">NV</span>
-        <span class="grow stack"><span class="t-heading">Nina Vasquez</span>
-          <span class="mono t-secondary c-low">nina@brightlaw.co</span></span>
-        <span class="mono t-secondary c-low">11:04</span></div>
-      <div class="sep full" style="margin:8px 0 0"></div>
-      <div class="t-title" style="margin-top:16px">Contract redline back from legal</div>
+      <!-- head: who, where, when, tier -->
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="mark s32" data-mark="gmail"></span>
+        <span class="grow stack" style="gap:2px"><span class="t-body w500 trunc">Nina Vasquez</span>
+          <span class="mono t-secondary c-low trunc">nina@brightlaw.co &middot; 1h</span></span>
+        <span class="chip solid">Urgent</span></div>
+      <!-- subject -->
+      <div class="t-title clamp2" style="margin-top:16px">Contract redline back from legal</div>
+      <!-- why this tier -->
+      <div class="why" style="margin-top:16px"><div class="t-label c-mid">Why this is urgent</div>
+        <div class="t-body c-high" style="margin-top:4px">Counsel is waiting on a decision before they can counter-sign.</div></div>
+      <!-- body, the only region that scrolls -->
       <div class="t-body c-mid" style="margin-top:16px">Hi Vicky,<br><br>Two changes on the liability cap and one on the termination window. Both need a decision from you before we can counter-sign.<br><br>The cap moved from 12 months of fees to 6, and termination notice is now 60 days rather than 30.</div>
-      <div style="position:absolute;left:16px;right:16px;bottom:34px;display:flex;gap:12px">
-        <span class="bigbtn pri" style="flex:1">Open in Gmail</span>
-        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-snooze"/></svg></span>
-        <span class="bigbtn sec" style="width:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span>
+      <!-- footer -->
+      <div style="position:absolute;left:16px;right:16px;bottom:34px">
+        <div style="display:flex;gap:12px">
+          <span class="bigbtn pri" style="flex:1">Open in Gmail</span>
+          <span class="bigbtn sec" style="flex:1">Snooze</span></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <span class="chip outline">Mark read</span></div>
       </div>
     </div>
   </div>
-</div><p class="cap"><b>Gmail &middot; Open</b>The whole message, since <span class="mono">body</span> is stored. The primary hands off to Gmail, because that is literally what the action does. <b>No Reply button</b>, and the sheet is red-washed rather than black.</p></div>
+</div><p class="cap"><b>Gmail &middot; Open</b>Every region <span class="mono">DetailSheet</span> already defines, in its order: head with who, where, when and tier; subject; the <span class="mono">reason</span> block; the body, which is the only part that scrolls; then the footer with primary, secondary and the overflow as chips. <b>No Reply button</b>, and the sheet is red-washed rather than black.</p></div>
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
@@ -554,27 +574,33 @@
         <div class="t-display clamp2" style="margin-top:32px">Sam needs a call on the pricing tier</div></div>
     </div>
     <div class="scrim"></div>
-    <div class="sheet" style="height:70%">
+    <div class="sheet" style="height:76%">
       <div class="swash" data-swash="slack"></div>
       <div class="grab"></div>
-      <div class="spread"><span class="t-heading">#product</span><span class="mono t-secondary c-low">4 in thread</span></div>
-      <div class="sep full" style="margin:16px 0 0"></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="mark s32" data-mark="slack"></span>
+        <span class="grow stack" style="gap:2px"><span class="t-body w500 trunc">Sam Okafor</span>
+          <span class="mono t-secondary c-low trunc">#product &middot; 25m</span></span>
+        <span class="chip solid">Urgent</span></div>
+      <div class="t-title clamp2" style="margin-top:16px">Sam needs a call on the pricing tier</div>
+      <div class="why" style="margin-top:16px"><div class="t-label c-mid">Why this is urgent</div>
+        <div class="t-body c-high" style="margin-top:4px">You were mentioned by name, and the call it refers to is in 49 minutes.</div></div>
       <div style="margin-top:16px;display:flex;gap:12px"><span class="avatar">SO</span>
         <span class="grow stack"><span class="spread"><span class="t-body w500">Sam Okafor</span><span class="mono t-secondary c-low">25m</span></span>
           <span class="t-body c-mid" style="margin-top:4px">Can you confirm before the 11:00 call whether we are holding the 3-seat floor? Legal needs it today.</span></span></div>
-      <div style="margin-top:24px;display:flex;gap:12px"><span class="avatar">PR</span>
-        <span class="grow stack"><span class="spread"><span class="t-body w500">Priya Raman</span><span class="mono t-secondary c-low">18m</span></span>
-          <span class="t-body c-mid" style="margin-top:4px">Finance modelled both. 3 is fine.</span></span></div>
       <div style="position:absolute;left:16px;right:16px;bottom:34px">
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <span class="chip outline">On it</span><span class="chip outline">Yes, 3 seats</span><span class="chip outline">Give me 10m</span></div>
         <div class="composer" style="display:flex;align-items:flex-end;gap:12px">
           <span class="grow stack"><span class="t-body c-faint">Reply to Sam&hellip;</span></span>
           <span class="sendbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-send"/></svg></span></div>
+        <div style="display:flex;gap:12px;margin-top:12px">
+          <span class="bigbtn pri" style="flex:1">Reply</span>
+          <span class="bigbtn sec" style="flex:1">Mark read</span></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <span class="chip outline">Snooze</span></div>
       </div>
     </div>
   </div>
-</div><p class="cap"><b>Slack &middot; Reply</b>The only source with a real reply. <span class="mono">_send</span> posts to the thread using <span class="mono">raw.thread_ts</span>, and an empty reply is rejected server-side, so the send button stays inert until there is text. Quick replies sit above the composer where the thumb already is.</p></div>
+</div><p class="cap"><b>Slack &middot; Reply</b>Same regions, plus the composer that <span class="mono">canReply</span> already gates on. <span class="mono">_send</span> posts to the thread using <span class="mono">raw.thread_ts</span>, and an empty reply is rejected server-side, so send stays inert until there is text. Snooze sits in the overflow chips, exactly where <span class="mono">overflowFor</span> puts it.</p></div>
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd">
@@ -645,7 +671,6 @@
     <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
     <div class="strip" data-strip="gmail"></div>
     <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
-    <div class="sep full"></div>
     <div data-later></div>
   </div></div>
 </div><p class="cap"><b>Later &middot; loaded</b>Rows are 72pt, hairlines inset to the text origin rather than running the full width, which is the iOS convention and the single biggest reason the old list read as primitive. The age column is Geist Mono, tabular, right-aligned, so it forms a real column instead of ragged text.</p></div>
@@ -655,7 +680,6 @@
     <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
     <div class="strip" data-strip="slack"></div>
     <div class="sectlab t-label tight">Slack <span class="grow"></span><span class="mono t-secondary c-low">counting&hellip;</span></div>
-    <div class="sep full"></div>
     <div data-later="slack"></div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:32px">
       <span class="spin"></span>
@@ -704,20 +728,8 @@
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span>
     </div>
-    <div class="sep full"></div>
-    <div class="row one"><span class="t-body grow">Reviews on you</span>
-      <span class="t-secondary c-low">2 blocking</span><span class="mono t-heading" style="width:48px;text-align:right">3</span></div>
-    <div class="sep gut"></div>
-    <div class="row one"><span class="t-body grow">Merged</span>
-      <span class="t-secondary c-low">+4 vs June</span><span class="mono t-heading" style="width:48px;text-align:right">28</span></div>
-    <div class="sep gut"></div>
-    <div class="row one"><span class="t-body grow">Your pull requests</span>
-      <span class="t-secondary c-low">1 has conflicts</span><span class="mono t-heading" style="width:48px;text-align:right">5</span></div>
-    <div class="sep gut"></div>
-    <div class="row one"><span class="t-body grow">Commits</span>
-      <span class="t-secondary c-low">across 6 repos</span><span class="mono t-heading" style="width:48px;text-align:right">214</span></div>
-    <div class="sep full"></div>
-    <div class="sectlab t-label tight">Busiest repositories</div><div class="sep full"></div>
+    <div class="statgrid"><div class="statcard"><div class="t-label c-low">Reviews on you</div><div class="t-title num" style="margin-top:4px">3</div><div class="t-secondary c-mid trunc">2 blocking</div></div><div class="statcard"><div class="t-label c-low">Merged</div><div class="t-title num" style="margin-top:4px">28</div><div class="t-secondary c-mid trunc">+4 vs June</div></div><div class="statcard"><div class="t-label c-low">Your PRs</div><div class="t-title num" style="margin-top:4px">5</div><div class="t-secondary c-mid trunc">1 has conflicts</div></div><div class="statcard"><div class="t-label c-low">Commits</div><div class="t-title num" style="margin-top:4px">214</div><div class="t-secondary c-mid trunc">across 6 repos</div></div></div>
+    <div class="sectlab t-label tight">Busiest repositories</div>
     <div data-break></div>
   </div></div>
 </div><p class="cap"><b>Activity &middot; board</b>Every <span class="mono">headline</span> stat keeps its <span class="mono">label</span>, <span class="mono">detail</span> and <span class="mono">value</span>, on one 44pt line instead of a three-line tile. Values are Geist Mono in a fixed 48pt column so they align whatever their width. The saving goes straight into the list, which is what the tab is for.</p></div>
@@ -734,25 +746,18 @@
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg></span>
       <span class="act" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cal"/></svg></span>
     </div>
-    <div class="sep full"></div>
-    <div class="row one"><span class="t-body grow">Meetings</span>
-      <span class="t-secondary c-low">2.8 a day</span><span class="mono t-heading" style="width:48px;text-align:right">62</span></div>
-    <div class="sep gut"></div>
-    <div class="row one"><span class="t-body grow">Longest day</span>
-      <span class="t-secondary c-low">Tue 15 Jul</span><span class="mono t-heading" style="width:48px;text-align:right">6h</span></div>
-    <div class="sep gut"></div>
-    <div class="row one"><span class="t-body grow">Organised by you</span>
-      <span class="t-secondary c-low">of 62</span><span class="mono t-heading" style="width:48px;text-align:right">14</span></div>
-    <div class="sep full"></div>
-    <div class="sectlab t-label tight">Most frequent</div><div class="sep full"></div>
-    <div class="row two"><span class="mark s24" data-mark="calendar"></span>
-      <span class="grow stack"><span class="t-body trunc">Weekly product sync</span><span class="t-secondary c-low">every Monday, 60m</span></span>
-      <span class="mono t-secondary c-mid">4</span></div>
-    <div class="sep"></div>
-    <div class="row two"><span class="mark s24" data-mark="calendar"></span>
-      <span class="grow stack"><span class="t-body trunc">1:1 with Sam</span><span class="t-secondary c-low">every Thursday, 30m</span></span>
-      <span class="mono t-secondary c-mid">4</span></div>
-    <div class="sep"></div>
+    <div class="statgrid"><div class="statcard"><div class="t-label c-low">Meetings</div><div class="t-title num" style="margin-top:4px">62</div><div class="t-secondary c-mid trunc">2.8 a day</div></div><div class="statcard"><div class="t-label c-low">Longest day</div><div class="t-title num" style="margin-top:4px">6h</div><div class="t-secondary c-mid trunc">Tue 15 Jul</div></div><div class="statcard"><div class="t-label c-low">Organised by you</div><div class="t-title num" style="margin-top:4px">14</div><div class="t-secondary c-mid trunc">of 62</div></div><div class="statcard"><div class="t-label c-low">Declined</div><div class="t-title num" style="margin-top:4px">7</div><div class="t-secondary c-mid trunc">of 62</div></div></div>
+    <div class="sectlab t-label tight">Most frequent</div>
+    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+      <span class="mark s32" data-mark="calendar"></span>
+      <span class="grow stack" style="gap:2px"><span class="t-body trunc">Weekly product sync</span>
+        <span class="t-secondary c-mid trunc">every Monday, 60m</span></span>
+      <span class="mono t-heading">4</span></div>
+    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+      <span class="mark s32" data-mark="calendar"></span>
+      <span class="grow stack" style="gap:2px"><span class="t-body trunc">1:1 with Sam</span>
+        <span class="t-secondary c-mid trunc">every Thursday, 30m</span></span>
+      <span class="mono t-heading">4</span></div>
     <div style="padding:24px 16px 0"><span class="t-secondary c-low">These rows have no url, so they carry no link glyph and no press state. That is the rule the current screen already uses when it withholds the chevron.</span></div>
   </div></div>
 </div><p class="cap"><b>Activity &middot; a board whose rows do not link</b>Calendar frequency lines are summaries with nowhere to go. They render inert, which is the behaviour already in <span class="mono">SourceDetailScreen</span>. Worth drawing because it is the case that proves the link glyph means something.</p></div>
@@ -769,7 +774,7 @@
 <div class="cell"><div class="ph" data-tab="you">
   <div class="bd"><div class="scroll">
     <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
-    <div class="sectlab t-label">Notifications</div><div class="sep full"></div>
+    <div class="sectlab t-label">Notifications</div>
     <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
       <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
     <div style="padding:0 16px 16px"><div class="seg"><i class="on">Urgent</i><i>+ Today</i><i>All</i></div></div>
@@ -788,7 +793,7 @@
   <div class="bd">
     <div class="scroll">
       <div class="hdr"><div class="t-label eb">vicky@agentiwise.com</div><div class="t-display" style="margin-top:4px">You</div></div>
-      <div class="sectlab t-label">Notifications</div><div class="sep full"></div>
+      <div class="sectlab t-label">Notifications</div>
       <div class="row two"><span class="grow stack"><span class="t-heading">Notify me</span>
         <span class="t-secondary c-mid">Urgent only &middot; 3 sent today</span></span><span class="sw on"><i></i></span></div>
     </div>
@@ -824,7 +829,6 @@
     <div class="arcwrap" data-day="dual" data-light="1"></div>
     <div data-tiersel="urgent"></div>
     <div class="sectlab t-label">Urgent <span class="grow"></span><span class="mono t-secondary c-low">3 items</span></div>
-    <div class="sep full"></div>
     <div data-list="urgent"></div>
   </div></div>
 </div><p class="cap"><b>Your day, warm light</b>Same geometry, same type, same spacing. Only the ladder and the two hues move, and the ladder is warm at every step.</p></div>
@@ -846,9 +850,9 @@
       </div>
     </div>
     <div class="frail">
-      <span class="fbtn pri"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
-      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-reply"/></svg></span><span class="cap2">Comment</span></span>
-      <span class="fbtn"><span class="ring"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
+      <span class="fbtn pri"><span class="ring"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg></span><span class="cap2">Approve</span></span>
+      <span class="fbtn"><span class="ring"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chat"/></svg></span><span class="cap2">Comment</span></span>
+      <span class="fbtn"><span class="ring"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--mid)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="#i-more"/></svg></span><span class="cap2">More</span></span>
     </div>
     <div class="fstrip"><span class="t-label c-high">Blocking</span>
       <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span></div>
@@ -860,7 +864,6 @@
     <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
     <div class="strip" data-strip="gmail"></div>
     <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
-    <div class="sep full"></div>
     <div data-later></div>
   </div></div>
 </div><p class="cap"><b>Later, warm light</b>On sand, the inset hairline does all the separating work and no row needs a box, a border or a fill.</p></div>
@@ -888,6 +891,8 @@ function paint(root=document){
   const box=el.classList.contains('s44')?24:el.classList.contains('s32')?18:
             el.classList.contains('s24')?14:el.classList.contains('s20')?12:11;
   el.innerHTML=markSvg(el.dataset.mark,box);});
+ root.querySelectorAll('[data-lwash]').forEach(el=>{
+  el.style.background=`linear-gradient(90deg,rgba(${TINT[el.dataset.lwash]},.13),rgba(${TINT[el.dataset.lwash]},0) 100%)`;});
  root.querySelectorAll('[data-swash]').forEach(el=>{
   el.style.background=`linear-gradient(180deg,rgba(${TINT[el.dataset.swash]},.18),rgba(${TINT[el.dataset.swash]},0) 100%)`;});
  root.querySelectorAll('[data-tint]').forEach(el=>{
@@ -941,7 +946,7 @@ document.querySelectorAll('[data-daybars]').forEach(el=>{
 
 /* ═══ the tier selector ═══════════════════════════════════════════ */
 const TIERS=[{k:'urgent',n:3,l:'Urgent',c:'var(--alarm)'},
-             {k:'byyou',n:3,l:'By you',c:'var(--accent)'},
+             {k:'byyou',n:3,l:'By EOD',c:'var(--accent)'},
              {k:'canwait',n:1,l:'Can wait',c:'var(--border)'}];
 document.querySelectorAll('[data-tiersel]').forEach(el=>{
  const sel=el.dataset.tiersel;
@@ -957,7 +962,7 @@ const ITEMS={
   {s:'github',t:'Fix the auth race in session refresh',sub:'Sam requested changes and the deploy is blocked',m:'acme/api',age:'2h'},
   {s:'slack',t:'Sam needs a call on the pricing tier',sub:'Confirm the 3-seat floor before the 11:00 call',m:'#product',age:'25m'},
   {s:'gmail',t:'Contract redline back from legal',sub:'Two changes on the liability cap need a decision',m:'nina@',age:'1h'}],
- byyou:[
+ byeod:[
   {s:'linear',t:'Ship the token layer for dark mode',sub:'Assigned by Priya, blocks four issues',m:'ENG-412',age:'3d'},
   {s:'linear',t:'Audit every empty state',sub:'No placeholder rows anywhere',m:'ENG-388',age:'5d'},
   {s:'calendar',t:'Design review',sub:'3 others, 1 has not replied',m:'10:30',age:'49m'}],
@@ -965,32 +970,31 @@ const ITEMS={
   {s:'gdocs',t:'Priya commented on the pricing section',sub:'Should we lead with the triage story here?',m:'Q3 brief',age:'4h'}],
 };
 function rowHtml(it,tier){
- const bar=tier==='urgent'?'var(--alarm)':tier==='byyou'?'var(--accent)':null;
- return `<div class="row two"${bar?` style="box-shadow:inset 3px 0 0 ${bar}"`:''}>
-  <span class="mark s24" data-mark="${it.s}"></span>
-  <span class="grow stack"><span class="t-body trunc">${it.t}</span>
-   <span class="t-secondary c-low trunc">${it.sub}</span></span>
-  <span class="stack" style="align-items:flex-end;gap:2px">
-   <span class="mono t-secondary c-mid">${it.age}</span>
-   <span class="mono t-secondary c-faint" style="font-size:11px">${it.m}</span></span></div>`;
+ const bar=tier==='urgent'?'var(--alarm)':tier==='byeod'?'var(--accent)':null;
+ return `<div class="lrow">
+  ${bar?`<span class="ltier" style="background:${bar}"></span>`:''}
+  <span class="lwash" data-lwash="${it.s}"></span>
+  <span class="mark s32" data-mark="${it.s}"></span>
+  <span class="grow stack" style="gap:2px">
+   <span class="t-body trunc">${it.t}</span>
+   <span class="t-secondary c-mid trunc">${it.sub}</span></span>
+  <span class="lmeta"><span class="mono t-secondary c-mid">${it.age}</span>
+   <span class="mono mono11 c-faint">${it.m}</span></span></div>`;
 }
 document.querySelectorAll('[data-list]').forEach(el=>{
  const k=el.dataset.list;
- el.outerHTML=ITEMS[k].map(it=>rowHtml(it,k)).join('<div class="sep"></div>')+'<div class="sep"></div>';
+ el.outerHTML=ITEMS[k].map(it=>rowHtml(it,k)).join('');
 });
 document.querySelectorAll('[data-next]').forEach(el=>{
- el.outerHTML=`
- <div class="row two"><span class="mono t-heading c-accent" style="width:52px">10:30</span>
-  <span class="grow stack"><span class="t-body">Design review</span>
-   <span class="t-secondary c-low">3 others &middot; Google Meet</span></span>
-  <span class="mono t-secondary c-low">45m</span></div>
- <div class="sep" style="margin-left:68px"></div>
- <div class="row two"><span class="mono t-heading c-mid" style="width:52px">14:00</span>
-  <span class="grow stack"><span class="t-body">1:1 with Sam</span>
-   <span class="t-secondary c-low">recurring &middot; every Thursday</span></span>
-  <span class="mono t-secondary c-low">30m</span></div>
- <div class="sep full"></div>
- <div style="padding:16px"><span class="t-secondary c-mid">2h 15m free before 10:30</span></div>`;
+ const M=[['10:30','Design review','3 others · Google Meet','45m',1],
+          ['14:00','1:1 with Sam','recurring · every Thursday','30m',0]];
+ el.outerHTML=M.map(([time,title,sub,dur,next])=>`<div class="lrow">
+  <span class="lwash" data-lwash="calendar"></span>
+  <span class="mono t-heading ${next?'c-accent':'c-mid'}" style="width:52px;flex:none">${time}</span>
+  <span class="grow stack" style="gap:2px"><span class="t-body trunc">${title}</span>
+   <span class="t-secondary c-mid trunc">${sub}</span></span>
+  <span class="mono t-secondary c-low">${dur}</span></div>`).join('')+
+  `<div style="padding:16px"><span class="t-secondary c-mid">2h 15m free before 10:30</span></div>`;
 });
 
 /* ═══ Later, preserving the current shape ═════════════════════════ */
@@ -1008,16 +1012,16 @@ const LATER={
   {a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d'}],
 };
 document.querySelectorAll('[data-later]').forEach(el=>{
- const rows=LATER[el.dataset.later||'gmail'];
- el.outerHTML=rows.map(r=>`
-  <div class="row two"><span class="mark s24" data-mark="${el.dataset.later==='slack'?'slack':'gmail'}"></span>
-   <span class="grow stack">
-    <span class="t-body trunc"><span class="w500">${r.a}:</span> ${r.t}</span>
-    <span class="t-secondary c-low trunc">${r.sub}</span></span>
-   <span class="mono t-secondary c-low">${r.age}</span>
-   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div>`)
-  .join('<div class="sep"></div>')+'<div class="sep"></div>'+
-  `<div style="padding:24px 16px 0"><span class="t-secondary c-low">${rows.length} from ${el.dataset.later==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
+ const src=el.dataset.later||'gmail', rows=LATER[src];
+ el.outerHTML=rows.map(r=>`<div class="lrow">
+  <span class="lwash" data-lwash="${src}"></span>
+  <span class="mark s32" data-mark="${src}"></span>
+  <span class="grow stack" style="gap:2px">
+   <span class="t-body trunc"><span class="w500">${r.a}</span> &middot; ${r.t}</span>
+   <span class="t-secondary c-mid trunc">${r.sub}</span></span>
+  <span class="lmeta"><span class="mono t-secondary c-mid">${r.age}</span>
+   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>`).join('')+
+  `<div style="padding:16px"><span class="t-secondary c-low">${rows.length} from ${src==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
 });
 const STRIP=[['gmail','Gmail'],['slack','Slack'],['linear','Linear'],['github','GitHub']];
 document.querySelectorAll('[data-strip]').forEach(el=>{
@@ -1050,25 +1054,30 @@ document.querySelectorAll('[data-activity]').forEach(el=>{
  }).join('');
 });
 document.querySelectorAll('[data-break]').forEach(el=>{
- const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15']];
- el.outerHTML=rows.map(([a,b,c])=>`<div class="row two">
-  <span class="mark s24" data-mark="github"></span>
-  <span class="grow stack"><span class="t-body trunc">${a}</span><span class="t-secondary c-low trunc">${b}</span></span>
-  <span class="mono t-secondary c-mid">${c}</span>
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div>`)
-  .join('<div class="sep"></div>')+'<div class="sep"></div>';
+ const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15'],
+             ['acme/infra','7 commits · 2 PRs','9']];
+ el.outerHTML=rows.map(([a,b,c])=>`<div class="lrow">
+  <span class="lwash" data-lwash="github"></span>
+  <span class="mark s32" data-mark="github"></span>
+  <span class="grow stack" style="gap:2px"><span class="t-body trunc">${a}</span>
+   <span class="t-secondary c-mid trunc">${b}</span></span>
+  <span class="mono t-heading">${c}</span>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></div>`).join('');
 });
 
 /* ═══ You, connections ════════════════════════════════════════════ */
 document.querySelectorAll('[data-conn]').forEach(el=>{
- const rows=[['github','GitHub','live','Syncing · 3 need you'],['slack','Slack','live','Syncing · 2 need you'],
-             ['gmail','Gmail','live','Syncing · 64 in Later'],['linear','Linear','off','Never connected']];
- el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="row two">
-  <span class="mark s24" data-mark="${id}"></span>
-  <span class="grow stack"><span class="t-body">${n}</span><span class="t-secondary c-low">${sub}</span></span>
+ const rows=[['github','GitHub','live','3 need you · synced 4m ago'],
+             ['slack','Slack','live','2 need you · synced 4m ago'],
+             ['gmail','Gmail','live','64 in Later · synced 4m ago'],
+             ['linear','Linear','off','Never connected']];
+ el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="lrow">
+  <span class="lwash" data-lwash="${id}"></span>
+  <span class="mark s32" data-mark="${id}"></span>
+  <span class="grow stack" style="gap:2px"><span class="t-body">${n}</span>
+   <span class="t-secondary c-mid trunc">${sub}</span></span>
   ${st==='live'?'<span class="statusdot live"></span><span class="t-label c-low">Live</span>'
-              :'<span class="chip outline acc">Connect</span>'}</div>`)
-  .join('<div class="sep"></div>')+'<div class="sep"></div>';
+              :'<span class="chip outline acc">Connect</span>'}</div>`).join('');
 });
 
 /* ═══ cards, one per source ═══════════════════════════════════════ */
@@ -1078,7 +1087,7 @@ const CARDS=[
   body:'Sam requested changes and the deploy to staging is blocked behind it.',
   mid:`<div class="fmid why"><div class="t-label c-mid">Why this is urgent</div>
    <div class="t-body c-high" style="margin-top:8px">Changes requested on a pull request you own, and two issues are waiting behind it.</div></div>`,
-  acts:[['Approve','i-check',1],['Comment','i-reply',0],['Snooze','i-snooze',0]],
+  acts:[['Approve','i-check',1],['Comment','i-chat',0],['Snooze','i-snooze',0]],
   strip:['Blocking','2h ago','#4821'],
   cap:'<b>GitHub &middot; review</b>Approve and Comment are the only two actions the backend really implements for GitHub, and both are here. The middle block is <span class="mono">reason</span>, a real field that until now only appeared inside the detail sheet. <b>The diff stat from v3 is gone: <span class="mono">FeedRow</span> carries no file list and no line counts, so drawing them was inventing data.</b>'},
  {src:'slack',name:'Slack',ctx:'#product',tier:'u',tag:'Urgent',
@@ -1086,7 +1095,7 @@ const CARDS=[
   body:null,
   mid:`<div class="fmid quote acc"><div class="spread"><span class="t-body w500">Sam Okafor</span><span class="mono t-secondary c-low">25m ago</span></div>
    <div class="t-body c-mid clamp3" style="margin-top:4px">Can you confirm before the 11:00 call whether we are holding the 3-seat floor? Legal needs it today.</div></div>`,
-  acts:[['Reply','i-reply',1],['Read','i-check',0],['Snooze','i-snooze',0]],
+  acts:[['Reply','i-reply',1],['Read','i-checks',0],['Snooze','i-snooze',0]],
   strip:['Mentioned you','25m ago','#product'],
   cap:'<b>Slack &middot; mention</b>The one source where all three actions hit a real API: <span class="mono">reply</span> posts to the thread, <span class="mono">mark_read</span> calls Slack, <span class="mono">snooze</span> is local. The quote is <span class="mono">body</span>, which we already store.'},
  {src:'gmail',name:'Gmail',ctx:'nina@brightlaw.co',tier:'u',tag:'Urgent',
@@ -1095,19 +1104,19 @@ const CARDS=[
   mid:`<div class="fmid" style="display:flex;align-items:center;gap:12px">
    <span class="avatar">NV</span><span class="stack grow"><span class="t-body w500">Nina Vasquez</span>
    <span class="mono t-secondary c-low">nina@brightlaw.co</span></span></div>`,
-  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-check',0]],
+  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-checks',0]],
   strip:['Waiting on you','1h ago','Gmail'],
   cap:'<b>Gmail</b><b>No Reply button, because there is no Gmail reply.</b> <span class="mono">_send</span> raises <span class="mono">UnknownAction</span> for anything that is not Slack or GitHub. Open deep-links into Gmail, Snooze is local, Read dismisses locally. Adding a real reply is a backend job, not a drawing job.'},
- {src:'linear',name:'Linear',ctx:'ENG-412',tier:'b',tag:'By you',
+ {src:'linear',name:'Linear',ctx:'ENG-412',tier:'b',tag:'By EOD',
   title:'Ship the token layer for dark mode',
   body:'Assigned to you by Priya. Blocks four issues in the Design System project.',
   mid:`<div class="fmid" style="display:flex;gap:32px">
    <span class="stack"><span class="t-label c-low">Due</span><span class="t-body" style="margin-top:4px">Today, 18:00</span></span>
    <span class="stack"><span class="t-label c-low">Project</span><span class="t-body" style="margin-top:4px">Design System</span></span></div>`,
-  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-check',0]],
+  acts:[['Open','i-ext',1],['Snooze','i-snooze',0],['Read','i-checks',0]],
   strip:['Due today','assigned 3d ago','ENG-412'],
-  cap:'<b>Linear &middot; by you</b>The accent tier. <span class="mono">actionsFor</span> currently offers Comment here, but <span class="mono">_send</span> rejects Linear, so tapping it would fail. Open and Snooze are what actually work. The middle block is <span class="mono">deadline</span> and <span class="mono">context_chip</span>, both real.'},
- {src:'calendar',name:'Calendar',ctx:'Google Meet',tier:'b',tag:'By you',
+  cap:'<b>Linear &middot; by EOD</b>The accent tier. <span class="mono">actionsFor</span> currently offers Comment here, but <span class="mono">_send</span> rejects Linear, so tapping it would fail. Open and Snooze are what actually work. The middle block is <span class="mono">deadline</span> and <span class="mono">context_chip</span>, both real.'},
+ {src:'calendar',name:'Calendar',ctx:'Google Meet',tier:'b',tag:'By EOD',
   title:'Design review',
   body:null,
   mid:`<div class="fmid"><div class="t-hero">10:30</div>
@@ -1120,7 +1129,7 @@ const CARDS=[
   body:null,
   mid:`<div class="fmid quote"><div class="spread"><span class="t-body w500">Priya Raman</span><span class="mono t-secondary c-low">4h ago</span></div>
    <div class="t-body c-mid clamp3" style="margin-top:4px">Should we lead with the triage story here rather than the integrations list?</div></div>`,
-  acts:[['Open','i-ext',0],['Snooze','i-snooze',0],['Read','i-check',0]],
+  acts:[['Open','i-ext',0],['Snooze','i-snooze',0],['Read','i-checks',0]],
   strip:['No deadline','4h ago','1 of 2 threads'],
   cap:'<b>Google Docs &middot; can wait</b>The quietest tier: a neutral glow rather than a hue, a ghost chip, and <b>no filled button at all</b>. Reply is offered by <span class="mono">actionsFor</span> and rejected by the backend, so it is not drawn.'},
 ];
@@ -1139,8 +1148,9 @@ if(cardsRail) cardsRail.innerHTML=CARDS.map(c=>`
   </div>
   <div class="frail">${c.acts.map(([l,i,pri])=>`
    <span class="fbtn${pri?' pri':''}"><span class="ring">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${pri?'var(--canvas)':'var(--high)'}"
-     stroke-width="${pri?2.2:1.8}" stroke-linecap="round" stroke-linejoin="round"><use href="#${i}"/></svg></span>
+    <svg width="${pri?30:26}" height="${pri?30:26}" viewBox="0 0 24 24" fill="none"
+     stroke="${pri?'var(--high)':'var(--mid)'}" stroke-width="${pri?2:1.7}"
+     stroke-linecap="round" stroke-linejoin="round"><use href="#${i}"/></svg></span>
     <span class="cap2">${l}</span></span>`).join('')}</div>
   <div class="fstrip"><span class="t-label c-high">${c.strip[0]}</span>
    <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">${c.strip[1]}</span>
