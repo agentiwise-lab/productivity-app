@@ -17,7 +17,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { radius, space, useAppearance, useTheme, type Appearance } from '../theme';
+import { radius, space, topInset, useAppearance, useTheme, type Appearance } from '../theme';
 import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Icon } from '../components/Icon';
@@ -96,7 +96,7 @@ export function YouScreen({
       <AnimatedScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xl }}
+        contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
         <ScreenHeader eyebrow={local ? email : "Signed in"} title={title} />
 
@@ -176,7 +176,7 @@ export function YouScreen({
         {connections.map((info) => (
           <Row
             key={info.source}
-            category="none"
+            category={null}
             leading={<BrandMark source={info.source} size={32} />}
             title={info.label}
             subtitle={statusLine(info)}
@@ -224,7 +224,7 @@ export function YouScreen({
           <T role="body" tone="mid" style={{ flex: 1 }}>
             Sign out
           </T>
-          <Icon name="chevron" size={16} color={c.low} weight={1.8} />
+          <Icon name="chevron" size={16} color={c.low} />
         </Pressable>
         <Separator inset={0} />
       </AnimatedScrollView>
@@ -233,17 +233,24 @@ export function YouScreen({
   );
 }
 
-function statusLine(info: SourceInfo): string {
+/**
+ * Whether the connection is working, and nothing else.
+ *
+ * A connected source used to report "0 in the last 30 days" here, which is a
+ * volume figure standing in a list about plumbing: it reads as a fault when it
+ * is a quiet month, and Activity is where volume belongs anyway. A live
+ * connection therefore says nothing at all, and the `Live` marker beside it is
+ * the whole message.
+ */
+function statusLine(info: SourceInfo): string | undefined {
   switch (info.status) {
     case 'connected':
-      return info.urgent > 0
-        ? `${info.urgent} need you of ${info.count}`
-        : `${info.count} in the last 30 days`;
+      return undefined;
     case 'expired':
       return 'Sign-in expired. Connect again.';
     case 'error':
       return 'Could not read this connection.';
     default:
-      return 'Never connected';
+      return 'Not connected';
   }
 }

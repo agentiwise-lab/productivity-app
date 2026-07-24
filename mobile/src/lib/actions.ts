@@ -29,11 +29,11 @@ const APPROVE: Action = { id: 'approve', label: 'Approve', glyph: 'check' };
 const REQUEST_CHANGES: Action = {
   id: 'request_changes',
   label: 'Changes',
-  glyph: 'more',
+  glyph: 'changes',
 };
-const ASSIGN: Action = { id: 'assign_to_me', label: 'Assign', glyph: 'user' };
+const ASSIGN: Action = { id: 'assign_to_me', label: 'Assign', glyph: 'assign' };
 const ACCEPT: Action = { id: 'accept', label: 'Accept', glyph: 'check' };
-const DECLINE: Action = { id: 'decline', label: 'Decline', glyph: 'more' };
+const DECLINE: Action = { id: 'decline', label: 'Decline', glyph: 'decline' };
 const SNOOZE: Action = { id: 'snooze', label: 'Snooze', glyph: 'snooze' };
 const MARK_READ: Action = { id: 'mark_read', label: 'Read', glyph: 'checks' };
 const BRING_BACK: Action = { id: 'bring_back', label: 'Bring back', glyph: 'up' };

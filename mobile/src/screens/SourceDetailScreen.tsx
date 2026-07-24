@@ -19,7 +19,7 @@
 import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { radius, space, useTheme } from '../theme';
+import { radius, space, topInset, useTheme } from '../theme';
 import { BoardBar } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Row } from '../components/ListRow';
@@ -58,7 +58,7 @@ export function SourceDetailScreen({
   const [hero, ...rest] = dashboard?.headline ?? [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: topInset(insets.top) }}>
       <BoardBar title={dashboard?.label ?? 'Source'} right="30 days" onBack={onBack}>
         {dashboard ? <BrandMark source={dashboard.source} size={24} /> : null}
       </BoardBar>

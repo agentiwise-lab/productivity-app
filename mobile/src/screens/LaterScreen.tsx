@@ -24,7 +24,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { haptics, radius, size, space, useTheme } from '../theme';
+import { haptics, radius, size, space, topInset, useTheme } from '../theme';
 import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Row } from '../components/ListRow';
@@ -95,7 +95,7 @@ export function LaterScreen({
         onScroll={onScroll}
         scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingTop: insets.top,
+          paddingTop: topInset(insets.top),
           paddingBottom: space.xl,
         }}
       >
@@ -156,8 +156,11 @@ export function LaterScreen({
         <SectionLabel
           label={label}
           tight
-          // The header never claims a total it does not have yet.
-          count={loading ? 'counting...' : `${rows.length} items`}
+          // The header never claims a total it does not have yet. `count`
+          // renders in the mono face, which is right for a figure and wrong
+          // for a word, so the pending state is the figure's absence rather
+          // than "counting..." typed out where the figure will go.
+          count={loading ? null : `${rows.length} items`}
         />
 
         {rows.map((row) => (
@@ -187,7 +190,11 @@ export function LaterScreen({
           <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.xl }}>
             <ActivityIndicator color={c.hue.later} />
             {all.length > 0 ? (
-              <T role="secondary" tone="mid" numeric>
+              // Prose, in the prose face. `numeric` sets Geist Mono, which is
+              // for machine values a reader scans in a column: a whole
+              // sentence in it reads as console output rather than as the app
+              // talking, and this line and the one below it are the same voice.
+              <T role="secondary" tone="mid">
                 {`${all.length} from all sources so far`}
               </T>
             ) : null}

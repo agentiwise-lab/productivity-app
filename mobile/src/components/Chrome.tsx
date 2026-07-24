@@ -122,7 +122,7 @@ export function BoardBar({
       ) : null}
       <Pressable onPress={onBack} hitSlop={12} accessibilityLabel="Back">
         <View style={{ transform: [{ scaleX: -1 }] }}>
-          <Icon name="chevron" size={20} color={c.high} weight={1.8} />
+          <Icon name="chevron" size={20} color={c.high} />
         </View>
       </Pressable>
       {children}

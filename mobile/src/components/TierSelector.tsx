@@ -63,12 +63,23 @@ export function TierSelector({
               {
                 flex: 1,
                 borderRadius: radius.md,
-                padding: space.sm,
+                // A step tighter than the rest of the app's cards, and
+                // deliberately. Three cells of a 22pt number over an 11pt
+                // label need 8 to sit as one band under the ring; at 12 they
+                // read as three separate tiles competing with it.
+                paddingVertical: space.xs,
+                paddingHorizontal: space.xs,
                 overflow: 'hidden',
                 borderWidth: 1,
                 borderColor: 'transparent',
               },
-              on ? { backgroundColor: c.surface, borderColor: c.border } : null,
+              // A resting cell is still a card. Without a fill the coloured
+              // rule had nothing to sit against, so the row read as three
+              // saturated strokes floating on the canvas rather than as three
+              // controls; selection then had to be carried by the fill
+              // appearing, which is a bigger jump than a state change deserves.
+              { backgroundColor: c.surface },
+              on ? { backgroundColor: c.raised, borderColor: c.border } : null,
             ]}
           >
             <View
@@ -78,16 +89,16 @@ export function TierSelector({
                 // Inset by the cell's own padding when resting; full height
                 // when selected, which is the shape a bar makes when the row
                 // it marks becomes the row you are reading.
-                top: on ? 0 : space.sm,
-                bottom: on ? 0 : space.sm,
-                width: 3,
+                top: on ? 0 : space.xs,
+                bottom: on ? 0 : space.xs,
+                width: 2,
                 borderRadius: radius.pill,
                 backgroundColor: c.hue[category as Category],
               }}
             />
             <View
               style={{
-                marginLeft: space.sm,
+                marginLeft: space.xs,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -95,7 +106,7 @@ export function TierSelector({
             >
               <Icon
                 name={CATEGORY_GLYPH[category]}
-                size={20}
+                size={17}
                 color={c.hue[category as Category]}
               />
               <T role="title" numeric tone={on ? 'high' : 'mid'}>
@@ -105,7 +116,7 @@ export function TierSelector({
             <T
               role="label"
               tone={on ? 'high' : 'low'}
-              style={{ marginLeft: space.sm, marginTop: space.xxs }}
+              style={{ marginLeft: space.xs, marginTop: space.xxs }}
             >
               {CATEGORY_LABEL[category as Category]}
             </T>

@@ -17,7 +17,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CATEGORY_OF_TIER, space, useTheme } from '../theme';
+import { CATEGORY_OF_TIER, space, topInset, useTheme } from '../theme';
 import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
 import { DayRing, type Meeting } from '../components/YourDayCard';
 import {
@@ -84,6 +84,20 @@ export function YourDayScreen({
     [live],
   );
 
+  /**
+   * What is still to come. The section is headed "Next", and it was listing
+   * every meeting of the day including the ones already over: at 22:00 it
+   * offered a 13:15 stand-up as the next thing, directly above a line reading
+   * "Nothing else in the calendar today". Both were drawn from this same array;
+   * only one of them was filtering it.
+   */
+  const ahead = useMemo(() => {
+    const now = new Date();
+    return meetings
+      .filter((meeting) => meeting.end > now)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [meetings]);
+
   const heldBack = rows.length - live.length;
   const shown = selected
     ? live.filter((row) => CATEGORY_OF_TIER[row.tier] === selected)
@@ -98,7 +112,7 @@ export function YourDayScreen({
         onScroll={onScroll}
         scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingTop: insets.top,
+          paddingTop: topInset(insets.top),
           paddingBottom: space.xl,
         }}
         refreshControl={
@@ -152,14 +166,16 @@ export function YourDayScreen({
               </>
             ) : (
               <>
-                <SectionLabel label="Next" />
+                {/* No heading over an empty section. "Next" above "You are
+                    clear for today" is a label for a list that is not there. */}
+                {ahead.length > 0 || loading ? <SectionLabel label="Next" /> : null}
                 {loading && meetings.length === 0 ? (
                   <Skeleton rows={2} />
-                ) : meetings.length === 0 ? (
+                ) : ahead.length === 0 ? (
                   <Clear heldBack={heldBack} />
                 ) : (
                   <>
-                    {meetings.map((meeting, index) => (
+                    {ahead.map((meeting, index) => (
                       <Row
                         key={`${meeting.title}-${index}`}
                         // A meeting has no category, so it takes the hue that
@@ -183,7 +199,7 @@ export function YourDayScreen({
                     ))}
                     <View style={{ padding: space.md }}>
                       <T role="secondary" tone="mid">
-                        {freeLine(meetings)}
+                        {freeLine(ahead)}
                       </T>
                     </View>
                   </>

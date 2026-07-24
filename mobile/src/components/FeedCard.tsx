@@ -17,12 +17,13 @@
 
 import React from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CATEGORY_LABEL,
   CATEGORY_OF_TIER,
   haptics,
-  inset,
   space,
+  topInset,
   useTheme,
 } from '../theme';
 import { Bloom, TopTint } from './Bloom';
@@ -63,6 +64,7 @@ export function FeedCard({
   onOpen: (row: FeedRow) => void;
 }) {
   const c = useTheme();
+  const safeArea = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const category = CATEGORY_OF_TIER[row.tier];
   const rail = railFor(row);
@@ -76,15 +78,18 @@ export function FeedCard({
 
       <Pressable
         onPress={() => onOpen(row)}
-        // 54 for the status bar it runs under, then the screen's own 16.
+        // The card bleeds under the status bar so the category colour reaches
+        // the top of the screen; the content still has to start below it.
         style={{
           flex: 1,
-          paddingTop: inset.top + space.md,
+          paddingTop: topInset(safeArea.top) + space.xs,
           paddingHorizontal: space.md,
           minHeight: 0,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}
+        >
           <BrandMark source={row.source} size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <T role="heading">{SOURCE_NAME[row.source]}</T>
@@ -106,36 +111,50 @@ export function FeedCard({
           ) : null}
         </View>
 
-        <T role="display" lines={3} style={{ marginTop: space.xl }}>
-          {row.title}
-        </T>
-
-        {body ? (
-          <T role="body" tone="mid" lines={3} style={{ marginTop: space.md }}>
-            {body}
+        {/* Centred rather than stacked under the header.
+          A card is a whole screen and most items are a title and one line, so
+          top-anchoring left three hundred points of nothing between the copy
+          and the rail, and every card read as a page that had failed to load
+          the rest of itself. Centring costs nothing when the content is long,
+          because the block simply fills the space it is centred in. */}
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            paddingBottom: space.xxl,
+          }}
+        >
+          <T role="display" lines={3}>
+            {row.title}
           </T>
-        ) : null}
 
-        {row.reason ? (
-          // The middle block. `reason` is a real field that until now only ever
-          // appeared inside the detail sheet, so the card was asking for a
-          // decision without showing the grounds for it.
-          <View
-            style={{
-              marginTop: space.lg,
-              borderRadius: 12,
-              padding: space.sm,
-              backgroundColor: c.lift,
-            }}
-          >
-            <T role="label" tone="mid">
-              Why this is {(CATEGORY_LABEL[category] || 'here').toLowerCase()}
+          {body ? (
+            <T role="body" tone="mid" lines={3} style={{ marginTop: space.md }}>
+              {body}
             </T>
-            <T role="body" style={{ marginTop: space.xs }} lines={4}>
-              {row.reason}
-            </T>
-          </View>
-        ) : null}
+          ) : null}
+
+          {row.reason ? (
+            // The middle block. `reason` is a real field that until now only ever
+            // appeared inside the detail sheet, so the card was asking for a
+            // decision without showing the grounds for it.
+            <View
+              style={{
+                marginTop: space.lg,
+                borderRadius: 12,
+                padding: space.sm,
+                backgroundColor: c.lift,
+              }}
+            >
+              <T role="label" tone="mid">
+                Why this is {(CATEGORY_LABEL[category] || 'here').toLowerCase()}
+              </T>
+              <T role="body" style={{ marginTop: space.xs }} lines={4}>
+                {row.reason}
+              </T>
+            </View>
+          ) : null}
+        </View>
       </Pressable>
 
       <View
@@ -213,12 +232,19 @@ function RailButton({
         pressed ? { opacity: 0.6 } : null,
       ]}
     >
-      <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <Icon
           name={action.glyph}
-          size={action.primary ? 30 : 26}
+          size={action.primary ? 27 : 24}
           color={action.primary ? c.high : c.mid}
-          weight={action.primary ? 2 : 1.7}
+          weight={action.primary ? 'bold' : 'regular'}
         />
       </View>
       <T role="label" tone={action.primary ? 'high' : 'mid'}>

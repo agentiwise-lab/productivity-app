@@ -22,11 +22,17 @@ export const fonts = {
   sansSemi: 'Geist_600SemiBold',
   /**
    * The label and display faces. The mockup sets `font-stretch: 88%`, a width
-   * axis only a variable font carries; React Native cannot address one, and
-   * Archivo Narrow is far tighter than 88%, so regular-width Archivo is the
-   * closest cut that actually exists.
+   * axis only a variable font carries and React Native cannot address. Archivo
+   * ships a SemiCondensed named instance at 87.5%, which is that value to
+   * within half a per cent, so the static cut is vendored under
+   * `assets/fonts/` and loaded by name.
+   *
+   * Regular-width Archivo was what shipped first, and it was wrong by more than
+   * it sounds: every display and label string measured 10 to 13 per cent wider
+   * than the mockup, which is why titles wrapped a line early and the whole
+   * screen read heavier than it was drawn.
    */
-  display: 'Archivo_600SemiBold',
+  display: 'Archivo_SemiCondensed_600SemiBold',
   mono: 'GeistMono_400Regular',
 } as const;
 

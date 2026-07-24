@@ -66,11 +66,14 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             {on ? (
               <View style={[styles.indicator, { backgroundColor: c.high }]} />
             ) : null}
+            {/* Filled when selected, outlined when not. That is how a platform
+                bar signals selection, and unlike a tint it still reads for
+                someone who cannot separate the two colours. */}
             <Icon
               name={GLYPHS[route.name] ?? 'cards'}
               size={25}
               color={on ? c.high : c.low}
-              weight={on ? 2.2 : 1.6}
+              weight={on ? 'fill' : 'regular'}
             />
             <T role="label" tone={on ? 'high' : 'low'} style={styles.label}>
               {label}

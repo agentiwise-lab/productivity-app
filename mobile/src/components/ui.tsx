@@ -126,7 +126,7 @@ export function Chip({
         style,
       ]}
     >
-      {glyph ? <Icon name={glyph} size={14} color={text} weight={1.8} /> : null}
+      {glyph ? <Icon name={glyph} size={14} color={text} /> : null}
       <T role="label" colour={text}>
         {label}
       </T>
@@ -311,7 +311,7 @@ export function CircularAction({
         pressed ? { opacity: 0.7 } : null,
       ]}
     >
-      <Icon name={glyph} size={20} color={c.high} weight={1.7} />
+      <Icon name={glyph} size={20} color={c.high} />
     </Pressable>
   );
 }

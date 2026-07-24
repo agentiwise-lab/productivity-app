@@ -24,7 +24,6 @@ import {
   Geist_600SemiBold,
 } from '@expo-google-fonts/geist';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
-import { Archivo_600SemiBold } from '@expo-google-fonts/archivo';
 
 import { AppearanceProvider, haptics, useTheme } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
@@ -102,7 +101,12 @@ export default function App() {
     Geist_500Medium,
     Geist_600SemiBold,
     GeistMono_400Regular,
-    Archivo_600SemiBold,
+    // The mockup draws every display and label string at `font-stretch: 88%`,
+    // a width axis React Native cannot address on a variable font. Archivo's
+    // SemiCondensed named instance is 87.5%, so the static cut is vendored
+    // rather than approximated: at regular width the same strings ran 10 to 13
+    // per cent wider, which is most of what read as heavy on screen.
+    Archivo_SemiCondensed_600SemiBold: require('./assets/fonts/Archivo-SemiCondensed-SemiBold.ttf'),
   });
 
   if (!fontsReady) return null;
@@ -369,6 +373,7 @@ function Shell() {
             {() => (
               <ActivityScreen
                 sources={sources}
+                rows={rows}
                 loadingStatus={loadingSources}
                 onOpen={openSource}
               />

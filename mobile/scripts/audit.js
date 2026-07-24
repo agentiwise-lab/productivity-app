@@ -20,14 +20,29 @@
     '255,107,95', '99,228,194', '171,127,248', '242,179,102', '127,166,217', '201,183,154',
     '204,68,50', '13,129,103', '113,68,204', '150,99,31', '62,110,168', '110,90,64',
   ];
-  /** Brand marks keep their own colours. One of exactly two exemptions. */
-  const BRAND = ['171,127,248', '54,197,240', '94,106,210', '234,67,53', '66,133,244'];
+  /**
+   * Brand marks keep their own colours. One of exactly two exemptions.
+   *
+   * These are now the vendors' published marks rather than six invented
+   * approximations, so the list is the real palettes: Slack's four, Gmail's
+   * five, Calendar's six, Docs' three, and Linear's one. GitHub is absent
+   * because its mark takes the neutral ladder's `high`, which is the one brand
+   * here whose own guidance asks for an inversion.
+   */
+  const BRAND = [
+    '224,30,90', '54,197,240', '46,182,125', '236,178,46',        // Slack
+    '66,133,244', '52,168,83', '251,188,4', '234,67,53', '197,34,31', // Gmail
+    '26,115,232', '25,103,210', '24,128,56',                       // Calendar
+    '48,134,246', '12,103,214', '253,255,255',                     // Docs
+    '94,106,210',                                                  // Linear
+  ];
 
   /** The spacing scale, the two OS insets, and the fixed component heights. */
   const SPACING = new Set([
     0, 4, 8, 12, 16, 24, 32, 48, 96,
     54, 34, // the two OS insets
-    70,     // 54 + 16: the feed card's body, which bleeds under the status bar
+    62,     // 54 + 8: where a screen's first content may go, per `topInset`
+    70,     // 62 + 8: the feed card's body, which bleeds under the status bar
     2,      // (51 - 27) / 2 and (32 - 28) / 2: control insets, derived not chosen
   ]);
   const TYPE = new Set([11, 13, 15, 17, 22, 34, 56]);

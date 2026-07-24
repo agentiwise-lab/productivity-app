@@ -18,7 +18,14 @@ import { Icon, type GlyphName } from './Icon';
 import { T, Wash } from './ui';
 
 export interface RowProps {
-  category: Category;
+  /**
+   * `null` where the row has no category at all, which is not the same as
+   * "none". A connection in You is plumbing: painting a hue down its edge
+   * promises a priority signal the row has no way to mean, and five settings
+   * rows each wearing a coloured rule is the single clearest thing that made
+   * that screen read as decorated rather than designed.
+   */
+  category: Category | null;
   /** The mark, a time, or an avatar. Whatever names the row's origin. */
   leading?: React.ReactNode;
   title: React.ReactNode;
@@ -53,18 +60,22 @@ export function Row({
 
   const content = (
     <>
-      <Wash category={category} width={120} />
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          backgroundColor: c.hue[category],
-          zIndex: 2,
-        }}
-      />
+      {category ? (
+        <>
+          <Wash category={category} width={120} />
+          <View
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              backgroundColor: c.hue[category],
+              zIndex: 2,
+            }}
+          />
+        </>
+      ) : null}
       {leading}
       {/* No gap. Body is 15/20 and secondary is 13/20, so the two line boxes
           already carry their own leading, and 20 + 20 + 24 of padding lands
@@ -105,7 +116,7 @@ export function Row({
           ) : null}
         </View>
       ) : null}
-      {glyph ? <Icon name={glyph} size={14} color={c.low} weight={1.8} /> : null}
+      {glyph ? <Icon name={glyph} size={14} color={c.low} /> : null}
       {trailing}
     </>
   );

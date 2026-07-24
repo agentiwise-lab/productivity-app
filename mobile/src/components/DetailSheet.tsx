@@ -205,7 +205,7 @@ export function DetailSheet({ row, busy, onClose, onAction }: Props) {
                     opacity: draft.trim() ? 1 : 0.4,
                   }}
                 >
-                  <Icon name="send" size={20} color={c.canvas} weight={1.8} />
+                  <Icon name="send" size={20} color={c.canvas} />
                 </Pressable>
               </View>
             ) : null}

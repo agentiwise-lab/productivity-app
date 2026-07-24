@@ -14,7 +14,7 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
-import { useTheme } from "../theme";
+import { size, useTheme } from "../theme";
 import { FeedCard } from "../components/FeedCard";
 import { Clear, Skeleton } from "../components/states";
 import type { FeedRow, Tier } from "../api/types";
@@ -33,9 +33,13 @@ export function FeedScreen({
   onOpen: (row: FeedRow) => void;
 }) {
   const c = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, height: screen } = useWindowDimensions();
   const list = useRef<FlatList<FeedRow>>(null);
-  const [height, setHeight] = useState(0);
+  // Seeded rather than started at zero. `onLayout` does not fire until after
+  // the first paint, so a card mounted at height 0 drew one blank frame every
+  // time the tab was entered: the screen went black, then the card appeared.
+  // The seed is an estimate and the measurement immediately corrects it.
+  const [height, setHeight] = useState(screen - size.tabBar);
 
   const ordered = useMemo(
     () =>

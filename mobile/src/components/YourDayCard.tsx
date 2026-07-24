@@ -36,13 +36,24 @@ export interface Meeting {
   end: Date;
 }
 
-/** The window the ring draws. Outside it, a meeting is clamped to the edge. */
-const DAY_START = 8;
-const DAY_HOURS = 12;
+/**
+ * The window the ring draws, in hours.
+ *
+ * It was fixed at 08:00 to 20:00 and everything outside it was clamped to the
+ * edge, which is a quiet way of drawing the wrong answer: at 21:58 `now` came
+ * back as 1.0, so the marker sat at twelve o'clock and the ring claimed it was
+ * the start of the day. Anything you clamp, you have to be willing to be wrong
+ * about. The window is therefore derived from the day it is describing and
+ * always contains both `now` and every meeting.
+ */
+const OPENS_BY = 8;
+const CLOSES_AT = 20;
+/** Never let `now` land on the seam, where it is indistinguishable from 00:00. */
+const SEAM = 0.5;
 
-const R_TIME = 88;
-const R_WORK = 66;
-const BOX = 192;
+const R_TIME = 104;
+const R_WORK = 80;
+const BOX = 224;
 const CENTRE = BOX / 2;
 
 /** A 2pt gap between category arcs, so three of them are countable rather than
@@ -62,17 +73,17 @@ export function DayRing({
   now?: Date;
 }) {
   const c = useTheme();
-  const hours = now.getHours() + now.getMinutes() / 60;
-  const nowFrac = clamp((hours - DAY_START) / DAY_HOURS);
+  const span = dayWindow(meetings, now);
+  const nowFrac = span.at(hoursOf(now));
   const total = counts.urgent + counts.byEod + counts.canWait;
 
   const timeC = 2 * Math.PI * R_TIME;
   const workC = 2 * Math.PI * R_WORK;
 
   return (
-    <View style={{ height: 252, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
-      <View style={{ position: 'absolute', width: 260, height: 260 }}>
-        <Svg width={260} height={260}>
+    <View style={{ height: 284, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
+      <View style={{ position: 'absolute', width: 300, height: 300 }}>
+        <Svg width={300} height={300}>
           <Defs>
             <RadialGradient id="dayglow" cx="50%" cy="50%" r="50%">
               <Stop
@@ -83,7 +94,7 @@ export function DayRing({
               <Stop offset="0.62" stopColor={`rgb(${c.rgb.urgent})`} stopOpacity={0} />
             </RadialGradient>
           </Defs>
-          <Rect width={260} height={260} fill="url(#dayglow)" />
+          <Rect width={300} height={300} fill="url(#dayglow)" />
         </Svg>
       </View>
 
@@ -99,8 +110,8 @@ export function DayRing({
         />
         <Arc r={R_TIME} c={timeC} from={0} to={nowFrac} colour={c.border} width={5} />
         {meetings.map((meeting, index) => {
-          const from = clamp((hoursOf(meeting.start) - DAY_START) / DAY_HOURS);
-          const to = clamp((hoursOf(meeting.end) - DAY_START) / DAY_HOURS);
+          const from = span.at(hoursOf(meeting.start));
+          const to = span.at(hoursOf(meeting.end));
           if (to <= from) return null;
           return (
             <Arc
@@ -173,8 +184,12 @@ export function DayRing({
           gap: space.xs,
         }}
       >
-        <T role="label" tone="low">
-          Your day
+        {/* The window itself rather than the words "your day". Twelve o'clock
+            is the start of the window and the ring runs clockwise from there,
+            which is not guessable, and two numbers say it in less room than a
+            sentence would. */}
+        <T role="secondary" tone="low" numeric>
+          {`${pad(span.from)}–${pad(span.to)}`}
         </T>
         <Dot colour={c.mid} />
         <T role="label" tone="low">
@@ -231,3 +246,28 @@ function Dot({ colour }: { colour: string }) {
 
 const hoursOf = (date: Date) => date.getHours() + date.getMinutes() / 60;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const pad = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
+
+/**
+ * The hours the ring covers, and where a given hour sits on it.
+ *
+ * Starts from a normal working day and widens to swallow anything outside it:
+ * an early meeting, a late one, or the current time. `now` additionally pushes
+ * the far edge out by half an hour, because a marker sitting exactly on the
+ * seam is a marker at twelve o'clock, which reads as the start of the day.
+ *
+ * Local time throughout. `getHours` is the device's own calendar, so an item
+ * that arrives as UTC on the wire is placed where the person holding the phone
+ * would put it.
+ */
+function dayWindow(meetings: Meeting[], now: Date) {
+  const nowHour = hoursOf(now);
+  const marks = meetings.flatMap((m) => [hoursOf(m.start), hoursOf(m.end)]);
+  const from = Math.max(0, Math.floor(Math.min(OPENS_BY, nowHour, ...marks)));
+  const to = Math.min(
+    24,
+    Math.ceil(Math.max(CLOSES_AT, nowHour + SEAM, ...marks)),
+  );
+  const hours = Math.max(1, to - from);
+  return { from, to, at: (hour: number) => clamp((hour - from) / hours) };
+}
