@@ -1,0 +1,389 @@
+<title>v5 · To-dos as a scrollable feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   v5.  393x852, 1 CSS px = 1 iOS pt.
+   Only the To-dos tab changes. Everything else (palette, marks, type roles,
+   the detail sheet and its composer flow) is carried over from v4 unchanged.
+
+   The move: the Feed stops being a full-screen Reels deck swiped one card at
+   a time, and becomes a vertical scroll of bounded cards, the shape LinkedIn
+   and Instagram use for their main feed. You see several items at once and
+   scan down, rather than committing a swipe to reach the next one. Colour
+   still means tier and only tier. Tapping a card opens the same detail sheet;
+   Reply and Comment still open the composer rather than firing blind.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pg{
+  --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
+  --hairline:#2E2A26; --border:#3B352F;
+  --faint:#57504A; --low:#888179; --mid:#A79F97; --high:#F5F1EC;
+  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --later:#F2B366; --none:#7FA6D9; --stat:#C9B79A; --onSolid:#0C0B0A;
+  --tabbg:rgba(12,11,10,.74);
+  --page:#151412; --pagefg:#EDEAE5; --pagedim:#8E8880; --pageln:#2E2A26; --phedge:#332E29;
+  background:var(--page); color:var(--pagefg); margin:0; padding:56px 32px 140px;
+  font-family:"Geist",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.lightmode{
+  --canvas:#DCE6E5; --surface:#EAF1F0; --raised:#F2F7F6; --overlay:#CBDAD9;
+  --hairline:#BFD0CF; --border:#A8BEBD;
+  --faint:#86A09F; --low:#566E6D; --mid:#3E5453; --high:#12201F;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#96631F; --none:#3E6EA8; --stat:#6E5A40; --onSolid:#FFFDF9;
+  --tabbg:rgba(220,230,229,.80); --phedge:#BFD0CF;
+}
+.pg *{box-sizing:border-box;}
+
+/* ── page chrome ─────────────────────────────────────────────────── */
+.pg h1{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;margin:0 0 12px;}
+.pg .lede{font-size:15px;line-height:24px;color:var(--pagedim);max-width:80ch;margin:0 0 8px;}
+.pg .lede b{color:var(--pagefg);font-weight:600;}
+.pg .note{font-size:13px;line-height:20px;color:var(--pagedim);max-width:82ch;margin:8px 0 0;}
+.pgsec{padding:64px 0 0;border-top:1px solid var(--pageln);margin-top:64px;}
+.pgsec:first-of-type{border-top:0;margin-top:0;padding-top:0;}
+.eyebrow{font-family:"Archivo";font-size:11px;line-height:16px;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--pagedim);font-weight:600;margin:0 0 10px;}
+.rail{display:flex;gap:32px;overflow-x:auto;padding:32px 4px 24px;align-items:flex-start;}
+.rail::-webkit-scrollbar{height:10px;}
+.rail::-webkit-scrollbar-thumb{background:var(--pageln);border-radius:5px;}
+.cell{flex:none;width:393px;}
+.cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;max-width:393px;}
+.cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
+.cap .rec{color:#63E4C2;}
+
+/* ═══ DEVICE ═════════════════════════════════════════════════════ */
+.ph{width:393px;height:852px;border-radius:48px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;background:var(--canvas);color:var(--high);
+  border:1px solid var(--phedge);}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.055;mix-blend-mode:overlay;z-index:30;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+.sb{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 24px 8px;position:relative;z-index:24;}
+.sb .clock{font-size:15px;font-weight:600;letter-spacing:-.1px;font-variant-numeric:tabular-nums;}
+.sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:125px;height:36px;border-radius:999px;background:#000;}
+.lightmode .sb .isl{background:#12201F;}
+.sb .glyphs{display:flex;align-items:center;gap:4px;}
+.bd{flex:1;overflow:hidden;position:relative;}
+.scroll{position:absolute;inset:0;overflow:hidden;}
+
+/* ═══ TYPE: seven roles, nothing else ════════════════════════════ */
+.t-hero{font-family:"Archivo";font-size:56px;line-height:56px;letter-spacing:-1.4px;font-weight:600;font-variant-numeric:tabular-nums;}
+.t-display{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;}
+.t-title{font-size:22px;line-height:28px;letter-spacing:-.4px;font-weight:600;}
+.t-heading{font-size:17px;line-height:24px;letter-spacing:-.1px;font-weight:600;}
+.t-body{font-size:15px;line-height:20px;letter-spacing:0;font-weight:400;}
+.t-body.w500{font-weight:500;}
+.t-secondary{font-size:13px;line-height:20px;letter-spacing:.1px;font-weight:400;}
+.t-label{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;}
+.mono{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.c-high{color:var(--high);}.c-mid{color:var(--mid);}.c-low{color:var(--low);}
+.c-faint{color:var(--faint);}
+.stack{display:flex;flex-direction:column;min-width:0;}
+.grow{flex:1;min-width:0;}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* ═══ TAB BAR ════════════════════════════════════════════════════ */
+.tabbar{flex:none;height:83px;padding-bottom:34px;display:flex;position:relative;z-index:16;
+  background:var(--tabbg);backdrop-filter:blur(24px) saturate(160%);border-top:.5px solid var(--hairline);}
+.tabitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;position:relative;height:49px;}
+.tabitem .tl{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:12px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--low);}
+.tabitem.on .tl{color:var(--high);}
+.tabitem.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:24px;height:2px;border-radius:0 0 2px 2px;background:var(--high);}
+
+/* ═══ HEADER: dissolving, no bar ═════════════════════════════════ */
+.hdr{padding:12px 16px 0;}
+.hdr .eb{color:var(--low);margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+.sectlab{padding:0 16px;margin:24px 0 10px;color:var(--low);display:flex;align-items:center;gap:8px;}
+.sectlab.first{margin-top:20px;}
+
+/* ═══ CHIP ═══════════════════════════════════════════════════════ */
+.chip{height:24px;padding:0 10px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;
+  font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;font-weight:600;white-space:nowrap;flex:none;}
+.chip.solid{background:var(--alarm);color:var(--onSolid);}
+.chip.solid.acc{background:var(--accent);}
+.chip.solid.wait{background:var(--wait);color:var(--onSolid);}
+.chip.solid.later{background:var(--later);color:var(--onSolid);}
+
+/* ═══ MARKS ══════════════════════════════════════════════════════ */
+.mark{flex:none;border-radius:8px;display:grid;place-items:center;background:var(--overlay);
+  position:relative;overflow:hidden;}
+.mark::after{content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent);}
+.lightmode .mark::after{background:linear-gradient(90deg,transparent,rgba(18,32,31,.12),transparent);}
+.mark.s24{width:24px;height:24px;border-radius:8px;}
+.mark.s32{width:32px;height:32px;border-radius:8px;}
+.mark.s40{width:40px;height:40px;border-radius:10px;}
+
+/* ═══ v5 FEED CARD ═══════════════════════════════════════════════
+   A bounded card, not a full screen. Category shows as one quiet top wash
+   rather than a full-bleed bloom, because several cards now share the
+   viewport and one loud bloom per card would be four blooms fighting. The
+   tier chip carries the label; the wash and the chip are the whole signal.
+   Content, then a hairline, then the action bar: the LinkedIn/Instagram
+   shape, where the engagement row sits under the post. */
+.f5{margin:0 16px 12px;background:var(--surface);border-radius:16px;position:relative;
+  overflow:hidden;border:1px solid var(--hairline);}
+.f5 .f5tint{position:absolute;top:0;left:0;right:0;height:128px;pointer-events:none;z-index:0;}
+.f5>*{position:relative;z-index:1;}
+.f5head{display:flex;align-items:center;gap:12px;padding:14px 14px 0;}
+.f5body{padding:12px 14px 0;}
+.f5meta{display:flex;align-items:center;gap:8px;padding:12px 14px 14px;flex-wrap:wrap;}
+.f5why{margin:12px 14px 0;border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.04);}
+.lightmode .f5why{background:rgba(18,32,31,.05);}
+.f5acts{display:flex;border-top:1px solid var(--hairline);}
+.f5btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:50px;}
+.f5btn+.f5btn{border-left:1px solid var(--hairline);}
+.f5btn .lb{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;color:var(--mid);}
+.f5btn.pri .lb{color:var(--high);}
+
+/* tier hue: a single top wash, dark then light, low alpha throughout */
+.f5.u .f5tint{background:linear-gradient(180deg,rgba(255,107,95,.15),rgba(255,107,95,0));}
+.f5.b .f5tint{background:linear-gradient(180deg,rgba(99,228,194,.13),rgba(99,228,194,0));}
+.f5.c .f5tint{background:linear-gradient(180deg,rgba(171,127,248,.13),rgba(171,127,248,0));}
+.f5.l .f5tint{background:linear-gradient(180deg,rgba(242,179,102,.13),rgba(242,179,102,0));}
+.lightmode .f5.u .f5tint{background:linear-gradient(180deg,rgba(204,68,50,.11),rgba(204,68,50,0));}
+.lightmode .f5.b .f5tint{background:linear-gradient(180deg,rgba(13,129,103,.11),rgba(13,129,103,0));}
+.lightmode .f5.c .f5tint{background:linear-gradient(180deg,rgba(113,68,204,.11),rgba(113,68,204,0));}
+.lightmode .f5.l .f5tint{background:linear-gradient(180deg,rgba(150,99,31,.11),rgba(150,99,31,0));}
+
+/* ═══ SHEET (carried over unchanged, shown to prove the flow) ════ */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.58);z-index:18;}
+.lightmode .scrim{background:rgba(18,32,31,.34);}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:var(--raised);
+  border-radius:16px 16px 0 0;padding:0 16px 34px;overflow:hidden;height:82%;
+  display:flex;flex-direction:column;}
+.sheet .swash{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
+.sheet>*{position:relative;z-index:1;}
+.grab{width:36px;height:5px;border-radius:999px;background:var(--border);margin:8px auto 16px;}
+.openlink{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:8px;
+  border:1px solid var(--border);color:var(--mid);font-size:11px;font-family:"Archivo";
+  font-stretch:88%;letter-spacing:.8px;text-transform:uppercase;font-weight:600;}
+.composer{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface);
+  display:flex;align-items:flex-end;gap:12px;}
+.composer .field{flex:1;color:var(--mid);}
+.sendbtn{width:44px;height:44px;border-radius:999px;background:var(--high);display:grid;place-items:center;flex:none;}
+.bigbtn{height:48px;border-radius:12px;display:grid;place-items:center;font-size:15px;font-weight:600;letter-spacing:-.1px;flex:1;}
+.bigbtn.pri{background:var(--high);color:var(--canvas);}
+.bigbtn.sec{border:1px solid var(--border);color:var(--high);}
+.why{border-radius:12px;padding:12px;background:rgba(255,255,255,.04);}
+.lightmode .why{background:rgba(18,32,31,.05);}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="i-sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M21.4 12H19M5 12H2.6M18.6 5.4l-1.7 1.7M7.1 16.9l-1.7 1.7M18.6 18.6l-1.7-1.7M7.1 7.1L5.4 5.4"/></g>
+  <g id="i-cards"><rect x="3" y="7.5" width="14" height="13" rx="2.6"/><path d="M7.2 4.4h10.4a2.6 2.6 0 0 1 2.6 2.6v10.2"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 6.8V12l3.6 2.1"/></g>
+  <g id="i-pulse"><path d="M2.8 12h4l2.4-6.4 4.4 12.8L16 12h5.2"/></g>
+  <g id="i-user"><circle cx="12" cy="8.2" r="4"/><path d="M4.2 20.4a8.2 8.2 0 0 1 15.6 0"/></g>
+  <g id="i-ext"><path d="M14 4h6v6M20 4l-8.6 8.6"/><path d="M18 14.4V19a1.6 1.6 0 0 1-1.6 1.6H5A1.6 1.6 0 0 1 3.4 19V7.6A1.6 1.6 0 0 1 5 6h4.6"/></g>
+  <g id="i-check"><path d="M4.8 12.6l4.8 4.8L19.2 7.8"/></g>
+  <g id="i-reply"><path d="M9 6.4L3.4 12 9 17.6"/><path d="M3.4 12h9.2a8 8 0 0 1 8 8v.6"/></g>
+  <g id="i-snooze"><circle cx="12" cy="13" r="8"/><path d="M12 9.4V13l2.6 1.6M9 2.6h6"/></g>
+  <g id="i-chat"><path d="M20.4 11.6a7.6 7.6 0 0 1-8.2 7.6L6.2 21.4l1.4-4.2A7.6 7.6 0 1 1 20.4 11.6Z"/></g>
+  <g id="i-checks"><path d="M2.6 12.6l4 4L14.2 9"/><path d="M10.4 15.4l1.2 1.2L21.4 6.8"/></g>
+  <g id="i-up"><path d="M12 20.4V4.6M5.4 11.2L12 4.6l6.6 6.6"/></g>
+  <g id="i-x"><path d="M6 6l12 12M18 6L6 18"/></g>
+  <g id="i-changes"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/></g>
+  <g id="i-send"><path d="M21 3L10.5 13.5M21 3l-6.6 18-3.9-7.5L3 9.6 21 3Z"/></g>
+</defs></svg>
+
+<div class="pg">
+
+<div class="pgsec">
+<p class="eyebrow">v5 · one tab changes</p>
+<h1>To-dos, as a scrollable feed</h1>
+<p class="lede">The Feed was a full-screen deck: one card filling the screen, swiped sideways to reach the next, an action rail stacked bottom-right the way Reels and Stories stack theirs. It looked like a place to <b>consume</b>, not a queue to <b>clear</b>. v5 turns it into a vertical scroll of bounded cards, the shape LinkedIn and Instagram use for their main feed: <b>several items visible at once</b>, scanned top to bottom, each with its actions on a bar beneath it.</p>
+<p class="note"><b>What is kept.</b> The palette in both modes, the brand marks, the seven type roles, and the rule that colour means tier and only tier. <b>The detail sheet and its composer are unchanged</b>: tapping a card opens the sheet, and Reply or Comment open the composer rather than firing an empty send. <b>What changes.</b> The card is bounded, the tier bloom becomes a quiet top wash, the vertical rail becomes a horizontal action bar under the content, and the tier grouping the swipe order used to encode is now spelled out as section labels. There is no page title over the list: the section labels and the chips already name everything, so the list simply begins.</p>
+</div>
+
+<!-- ══ FEED, DARK + LIGHT ══ -->
+<div class="pgsec">
+<p class="eyebrow">The tab · dark and light</p>
+<div class="rail">
+  <div class="cell">
+    <div class="ph" data-tab="feed" data-feed></div>
+    <p class="cap"><b>The queue, top to bottom <span class="rec">recommended</span></b>No page header: the list starts on the first section label. Grouped Urgent, By EOD, Can wait, Later, with a count over each run. Tier reads from the top wash and the chip, no left edge line. Only Urgent and By EOD earn a filled primary action; nothing that can wait gets the strongest affordance.</p>
+  </div>
+  <div class="cell">
+    <div class="ph lightmode" data-tab="feed" data-feed></div>
+    <p class="cap"><b>Warm Sand, same structure</b>The wash alpha drops in light mode so the tint never muddies the card. Marks keep their own colour in both modes: they are identity, not priority.</p>
+  </div>
+  <div class="cell">
+    <div class="ph" data-tab="feed" data-feed data-sheet></div>
+    <p class="cap"><b>The flow is untouched</b>Tapping a card, or its Reply button, opens the same detail sheet. Reply opened the composer here rather than sending: the button lights white only because its composer is open, which is the one meaning of the active state.</p>
+  </div>
+</div>
+</div>
+
+<div class="pgsec">
+<p class="eyebrow">The card, anatomy</p>
+<p class="lede"><b>Header:</b> the source mark, its name, the item's own context (repo, sender, or channel), and the tier chip. <b>Body:</b> the subject at heading weight, then a one or two line preview of the message. <b>Meta:</b> blocking, age, repo, quiet and monospaced. <b>Action bar:</b> the same actions the rail carried, now horizontal and evenly split, glyph plus label, the primary one at full weight. An urgent card may carry a compact "why" line above its meta; everything deeper stays in the sheet, which keeps the feed scannable.</p>
+</div>
+
+</div>
+
+<script>
+const MARKS={
+ github:{c:'#AB7FF8',p:'M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1.1.8-.2 1.7-.3 2.5-.3s1.7.1 2.5.3c1.9-1.4 2.7-1.1 2.7-1.1.5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.6 5.2.3.3.7 1 .7 2v2.9c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z'},
+ slack:{c:'#36C5F0',p:'M6 15.2a2.1 2.1 0 1 1-2.1-2.1H6v2.1zm1.1 0a2.1 2.1 0 0 1 4.2 0v5.2a2.1 2.1 0 0 1-4.2 0v-5.2zM9.2 6.1a2.1 2.1 0 1 1 2.1-2.1v2.1H9.2zm0 1.1a2.1 2.1 0 0 1 0 4.2H4a2.1 2.1 0 0 1 0-4.2h5.2zM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3zm-1.1 0a2.1 2.1 0 0 1-4.2 0V4.1a2.1 2.1 0 0 1 4.2 0v5.2zM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1zm0-1.1a2.1 2.1 0 0 1 0-4.2H20a2.1 2.1 0 0 1 0 4.2h-5.2z'},
+ linear:{c:'#5E6AD2',p:'M2.2 13.9a10 10 0 0 0 7.9 7.9L2.2 13.9zM2 11.6 12.4 22a10 10 0 0 0 2.4-.5L2.5 9.2a10 10 0 0 0-.5 2.4zm1.3-4.2 13.3 13.3a10 10 0 0 0 1.7-1.3L4.6 5.7a10 10 0 0 0-1.3 1.7zM6.3 3.6a10 10 0 0 1 14.1 14.1L6.3 3.6z'},
+ gmail:{c:'#EA4335',p:'M2 6.4c0-1 .8-1.8 1.8-1.8h.9L12 10.9l7.3-6.3h.9c1 0 1.8.8 1.8 1.8v11.2c0 1-.8 1.8-1.8 1.8h-1.8V9.5L12 14.9 5.6 9.5v9.9H3.8c-1 0-1.8-.8-1.8-1.8V6.4z'},
+ calendar:{c:'#4285F4',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
+};
+function markSvg(id,box){const m=MARKS[id];
+ return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="${m.c}"><path d="${m.p}"/></svg>`;}
+
+/* icon in an action button or the sheet */
+function ic(id,box,stroke,w){return `<svg width="${box}" height="${box}" viewBox="0 0 24 24" fill="none"
+ stroke="${stroke}" stroke-width="${w||1.7}" stroke-linecap="round" stroke-linejoin="round"><use href="#${id}"/></svg>`;}
+
+/* ── the feed data. tier: u urgent, b by-eod, c can-wait, l later ── */
+const TAG={u:['solid','Urgent'],b:['solid acc','By EOD'],c:['solid wait','Can wait'],l:['solid later','Later']};
+const SECTIONS=[
+ {label:'Urgent',count:'2 items',cards:[
+  {src:'gmail',name:'Gmail',ctx:'Priya Raman',tier:'u',
+   title:'Contract redlines need your sign-off today',
+   preview:'I have marked the two clauses legal flagged. If you are good with both I can send it back this afternoon.',
+   why:'A named reply is owed and the sender set a same-day deadline.',
+   meta:['Blocking','2h ago'],
+   acts:[['Reply','i-reply',1],['Open','i-ext',0],['Snooze','i-snooze',0]]},
+  {src:'github',name:'GitHub',ctx:'agentiwise/ad_analytics',tier:'u',
+   title:'Fix retry cap on the moderation sweep',
+   preview:'Review requested by kieran. 3 files changed, touches the retry classifier.',
+   meta:['Blocking','40m ago','#412'],
+   acts:[['Approve','i-check',1],['Comment','i-chat',0],['Changes','i-changes',0]]},
+ ]},
+ {label:'By EOD',count:'2 items',cards:[
+  {src:'slack',name:'Slack',ctx:'#eng-oncall',tier:'b',
+   title:'Can someone take the 4pm deploy? I am double-booked.',
+   preview:'',
+   meta:['1h ago','#eng-oncall'],
+   acts:[['Reply','i-reply',1],['Read','i-checks',0],['Snooze','i-snooze',0]]},
+  {src:'calendar',name:'Calendar',ctx:'Design review',tier:'b',
+   title:'Design review with Harshit',
+   preview:'15:30 to 16:00 · Google Meet',
+   meta:['in 3h 10m','Meet'],
+   acts:[['Accept','i-check',1],['Decline','i-x',0],['Open','i-ext',0]]},
+ ]},
+ {label:'Can wait',count:'1 item',cards:[
+  {src:'linear',name:'Linear',ctx:'New comment',tier:'c',
+   title:'Thread on the icon family decision',
+   preview:'Should we lead with the triage story here rather than the integrations list?',
+   meta:['No deadline','4h ago'],
+   acts:[['Comment','i-chat',0],['Open','i-ext',0],['Snooze','i-snooze',0]]},
+ ]},
+ {label:'Later',count:'1 item',cards:[
+  {src:'slack',name:'Slack',ctx:'#design-system',tier:'l',
+   title:'Thread on the icon family decision',
+   preview:'You snoozed this yesterday. It comes back at 17:00.',
+   meta:['Returns 17:00','in 4h 12m'],
+   acts:[['Open','i-ext',0],['Bring back','i-up',0],['Read','i-checks',0]]},
+ ]},
+];
+
+function cardHtml(c){
+ const [chip,tag]=TAG[c.tier];
+ const meta=c.meta.map((m,i)=>i===0
+   ? `<span class="t-label c-high">${m}</span>`
+   : `<span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">${m}</span>`).join('');
+ const acts=c.acts.map(([l,i,pri])=>`
+   <span class="f5btn${pri?' pri':''}">${ic(i,20,pri?'var(--high)':'var(--mid)',pri?2:1.7)}
+    <span class="lb">${l}</span></span>`).join('');
+ return `<div class="f5 ${c.tier}">
+   <div class="f5tint"></div>
+   <div class="f5head">
+     <span class="mark s40" data-mark="${c.src}"></span>
+     <span class="stack grow">
+       <span class="t-heading trunc">${c.name}</span>
+       <span class="t-secondary c-low trunc">${c.ctx}</span></span>
+     <span class="chip ${chip}">${tag}</span></div>
+   <div class="f5body">
+     <div class="t-heading clamp2">${c.title}</div>
+     ${c.preview?`<div class="t-body c-mid clamp2" style="margin-top:4px">${c.preview}</div>`:''}
+   </div>
+   ${c.why?`<div class="f5why"><span class="t-label c-mid">Why this is urgent</span>
+     <div class="t-body c-high" style="margin-top:4px">${c.why}</div></div>`:''}
+   <div class="f5meta">${meta}</div>
+   <div class="f5acts">${acts}</div>
+ </div>`;
+}
+
+function feedHtml(){
+ const secs=SECTIONS.map((s,i)=>`
+   <div class="sectlab${i===0?' first':''}"><span class="t-label">${s.label}</span>
+     <span class="grow"></span><span class="mono t-secondary c-low">${s.count}</span></div>
+   ${s.cards.map(cardHtml).join('')}`).join('');
+ return `<div class="scroll"><div style="padding-bottom:24px">
+   ${secs}
+ </div></div>`;
+}
+
+/* the detail sheet, opened on the Gmail card with the composer showing */
+function sheetHtml(){
+ return `<div class="scrim"></div>
+ <div class="sheet">
+   <div class="swash" style="background:linear-gradient(180deg,rgba(255,107,95,.20),rgba(255,107,95,0))"></div>
+   <div class="grab"></div>
+   <div style="display:flex;align-items:center;gap:12px">
+     <span class="mark s32" data-mark="gmail"></span>
+     <span class="stack grow"><span class="t-body w500 trunc">Priya Raman</span>
+       <span class="mono t-secondary c-low">2h ago</span></span>
+     <span class="openlink">Open ${ic('i-ext',13,'var(--mid)',1.7)}</span>
+     <span class="chip solid">Urgent</span></div>
+   <div class="t-title" style="margin-top:16px">Contract redlines need your sign-off today</div>
+   <div class="why" style="margin-top:16px"><span class="t-label c-mid">Why this is urgent</span>
+     <div class="t-body c-high" style="margin-top:4px">A named reply is owed and the sender set a same-day deadline.</div></div>
+   <div class="grow" style="margin-top:16px;overflow:hidden">
+     <div class="t-body c-mid">I have marked the two clauses legal flagged. If you are good with both I can send it back this afternoon, otherwise let us jump on a quick call before 5.</div></div>
+   <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+     <div class="composer"><span class="field t-body">Reply to Priya Raman</span>
+       <span class="sendbtn">${ic('i-send',20,'var(--canvas)',1.8)}</span></div>
+     <div style="display:flex;gap:12px">
+       <span class="bigbtn pri">Reply</span>
+       <span class="bigbtn sec">Snooze</span>
+       <span class="bigbtn sec">Read</span></div>
+   </div>
+ </div>`;
+}
+
+/* ── inject feed, status bar, tab bar into every phone ── */
+const SBGLYPH=`<span class="glyphs">
+ <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+ <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 11.4 6.3 8.9a3.4 3.4 0 0 1 4.4 0l-2.2 2.5Z"/><path d="M8.5 4.4c1.9 0 3.7.7 5 2l1.5-1.7A9.4 9.4 0 0 0 8.5 2 9.4 9.4 0 0 0 2 4.7l1.5 1.7a7.4 7.4 0 0 1 5-2Z"/><path d="M8.5 7.2c1.1 0 2.2.4 3 1.2l1.4-1.6a6.6 6.6 0 0 0-8.8 0l1.4 1.6a4.4 4.4 0 0 1 3-1.2Z"/></svg>
+ <svg width="27" height="13" viewBox="0 0 27 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.6" stroke="currentColor" stroke-opacity=".45"/><rect x="2" y="2" width="16" height="9" rx="2.2" fill="currentColor"/><path d="M24.5 4.6a2.4 2.4 0 0 1 0 3.8V4.6Z" fill="currentColor" fill-opacity=".45"/></svg>
+</span>`;
+const TABS=[['day','Day','i-sun'],['feed','To-dos','i-cards'],['later','Later','i-clock'],
+            ['activity','Activity','i-pulse'],['you','You','i-user']];
+
+document.querySelectorAll('.ph[data-feed]').forEach(ph=>{
+ const sheet=ph.hasAttribute('data-sheet');
+ ph.innerHTML=`<div class="bd">${feedHtml()}${sheet?sheetHtml():''}</div>`;
+});
+document.querySelectorAll('.ph').forEach(ph=>{
+ const cur=ph.dataset.tab;
+ ph.insertAdjacentHTML('afterbegin',
+  `<div class="grain"></div><div class="sb"><span class="isl"></span>
+   <span class="clock">9:41</span>${SBGLYPH}</div>`);
+ ph.insertAdjacentHTML('beforeend','<div class="tabbar">'+TABS.map(([id,label,icon])=>{
+  const on=id===cur;
+  return `<div class="tabitem${on?' on':''}">
+   <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="${on?'var(--high)':'var(--low)'}"
+    stroke-width="${on?2.2:1.6}" stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"/></svg>
+   <span class="tl">${label}</span></div>`;}).join('')+'</div>');
+});
+document.querySelectorAll('[data-mark]').forEach(el=>{
+ const box=el.classList.contains('s40')?22:el.classList.contains('s32')?18:14;
+ el.innerHTML=markSvg(el.dataset.mark,box);});
+</script>
