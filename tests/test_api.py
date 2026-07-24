@@ -28,7 +28,9 @@ def dev_app(**kwargs):
 def test_feed_endpoint_returns_ranked_items():
     app = dev_app()
     svc = app.state.feed_service
-    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="subscribed"), prefs)
+    # "subscribed" is discarded at ingest now, so the low end of the ranking is
+    # a comment: the lowest tier that still reaches the feed.
+    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="comment"), prefs)
     svc.ingest(
         "me", make_event(source_ref="octo/repo#2", reason="approval_requested"), prefs
     )
@@ -38,9 +40,9 @@ def test_feed_endpoint_returns_ranked_items():
 
     assert response.status_code == 200
     body = response.json()
-    assert [row["type_tag"] for row in body] == ["approve", "fyi"]
+    assert [row["type_tag"] for row in body] == ["approve", "comment"]
     # The tier and the score exist only on the wire, never in a stored column.
-    assert [row["tier"] for row in body] == ["urgent", "noise"]
+    assert [row["tier"] for row in body] == ["urgent", "can_wait"]
     assert body[0]["priority_score"] > body[1]["priority_score"]
 
 

@@ -103,8 +103,10 @@ class SourceSync:
             count = 0
             for event in events:
                 try:
-                    self._feed.ingest(user_id, event, prefs, identity)
-                    count += 1
+                    # None means the item was noise and was discarded rather
+                    # than stored, so it is not something this refresh brought in.
+                    if self._feed.ingest(user_id, event, prefs, identity) is not None:
+                        count += 1
                 except Exception:
                     # One malformed row must not abandon the rest of the batch.
                     log.warning(

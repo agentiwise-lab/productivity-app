@@ -249,3 +249,53 @@ def test_a_normal_spread_raises_no_alarm():
     for n in range(5):
         repo.upsert(make_item(f"i{n}"))
     assert svc.classify_pending("me").alarm is False
+
+
+# --- the model demoting something to noise ---------------------------------
+
+
+def test_an_item_the_model_calls_noise_is_deleted_not_stored():
+    """The rules can only discard what they are certain about. Everything else
+    is stored first and judged after, so the model's verdict is the second
+    place noise can appear, and it has to be discarded there too or the store
+    fills with exactly what the rules were told to keep out."""
+    from backend.models.feed import FeedItem, UserPreferences
+    from backend.models.tiers import Tier, TypeTag
+    from backend.repositories.feed_repository import InMemoryFeedRepository
+    from backend.services.classifier import (
+        DefaultClassificationService,
+        InMemoryClassificationCache,
+    )
+
+    repo = InMemoryFeedRepository()
+    repo.upsert(
+        FeedItem(
+            id="junk", user_id="u", source="gmail", source_ref="gmail:1",
+            rule_tier=Tier.TODAY, type_tag=TypeTag.REPLY, needs_llm=True,
+            title="Your weekly digest", url="", content_hash="h1",
+        )
+    )
+    repo.upsert(
+        FeedItem(
+            id="real", user_id="u", source="gmail", source_ref="gmail:2",
+            rule_tier=Tier.TODAY, type_tag=TypeTag.REPLY, needs_llm=True,
+            title="Can you review the contract today?", url="", content_hash="h2",
+        )
+    )
+
+    class _Model:
+        def judge(self, items):
+            return [
+                {"id": i["id"],
+                 "tier": "noise" if i["id"] == "junk" else "urgent",
+                 "summary": "s", "reason": "r"}
+                for i in items
+            ]
+
+    service = DefaultClassificationService(
+        model=_Model(), repo=repo, cache=InMemoryClassificationCache()
+    )
+    service.classify_pending("u")
+
+    remaining = [item.id for item in repo.list_by_user("u")]
+    assert remaining == ["real"]

@@ -23,11 +23,33 @@ from backend.models.identity import Identity
 from backend.repositories.feed_repository import FeedRepository
 from backend.services.hashing import content_hash
 from backend.services.ranking import effective_tier, score
-from backend.services.rules import RuleClassifier
+from backend.models.tiers import Tier, TypeTag
+from backend.services.rules import RuleClassifier, RuleVerdict
 
 
 class ItemNotFound(Exception):
     """Raised when an action targets a feed item that does not exist for a user."""
+
+
+def _is_discardable(verdict: RuleVerdict) -> bool:
+    """Noise nobody will ever want to look up again.
+
+    Three conditions, all required. The tier must be noise; the rules must be
+    *sure*, because an item still waiting on the model has no settled tier and
+    discarding it would throw mail away before anything judged it; and it must
+    be purely informational. Work assigned to this user is never discarded even
+    when it is tiered noise, because a backlog issue with no date is filed away
+    rather than unimportant, and losing it loses real work.
+
+    What this drops is newsletters, promotions, bot chatter and conversation the
+    user was not addressed in. Keeping a month of those to prove the filter ran
+    is a database full of newsletters.
+    """
+    return (
+        verdict.tier is Tier.NOISE
+        and not verdict.needs_llm
+        and verdict.type_tag is TypeTag.FYI
+    )
 
 
 def _pr_ref_from_source_ref(source_ref: str) -> PRRef:
@@ -45,7 +67,8 @@ class FeedService(Protocol):
         event: RawEvent,
         prefs: UserPreferences,
         identity: Identity | None = None,
-    ) -> FeedItem:
+    ) -> FeedItem | None:
+        """Returns None when the item was classified as noise and discarded."""
         ...
 
     def list_feed(
@@ -78,8 +101,10 @@ class DefaultFeedService:
         event: RawEvent,
         prefs: UserPreferences,
         identity: Identity | None = None,
-    ) -> FeedItem:
+    ) -> FeedItem | None:
         verdict = self._rules.classify(event, identity=identity or Identity())
+        if _is_discardable(verdict):
+            return None
         now = self._now()
         item = FeedItem(
             id=self._new_id(),

@@ -43,14 +43,17 @@ def test_ingest_stores_no_tier_of_its_own():
 
 
 def test_list_feed_is_ranked_by_score():
+    """A "subscribed" notification used to be the low end of this comparison.
+    It is now discarded at ingest rather than stored, so the contrast is drawn
+    against a comment, which is the lowest tier that still reaches the feed."""
     svc = build()
-    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="subscribed"), prefs)
+    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="comment"), prefs)
     svc.ingest(
         "me", make_event(source_ref="octo/repo#2", reason="approval_requested"), prefs
     )
     feed = svc.list_feed("me", prefs)
-    assert [row.type_tag for row in feed] == [TypeTag.APPROVE, TypeTag.FYI]
-    assert [row.tier for row in feed] == [Tier.URGENT, Tier.NOISE]
+    assert [row.type_tag for row in feed] == [TypeTag.APPROVE, TypeTag.COMMENT]
+    assert [row.tier for row in feed] == [Tier.URGENT, Tier.CAN_WAIT]
 
 
 def test_ingest_dedupes_by_source_ref():
@@ -94,3 +97,57 @@ def test_comment_on_missing_item_raises():
     svc = build()
     with pytest.raises(ItemNotFound):
         svc.comment("me", "does-not-exist", "hi")
+
+
+# --- noise is not archived --------------------------------------------------
+
+
+def _noise_event(reason="gmail_bulk", **over):
+    from backend.models.events import RawEvent
+
+    payload = dict(
+        source="gmail",
+        source_ref="gmail:promo-1",
+        reason=reason,
+        subject_type="Message",
+        title="50% off everything",
+        url="",
+        repo="",
+    )
+    payload.update(over)
+    return RawEvent(**payload)
+
+
+def test_a_newsletter_is_classified_and_thrown_away():
+    """Storing a month of promos to prove they were filtered is a database full
+    of newsletters. The filter is judged by what reaches Home."""
+    svc = build()
+    assert svc.ingest("me", _noise_event(), prefs) is None
+    assert svc.list_feed("me", prefs) == []
+
+
+def test_work_assigned_to_you_is_kept_even_when_it_is_not_urgent():
+    """A no-date backlog issue is tiered noise so it stays off Home. It is
+    still the user's own task, and discarding it would lose real work."""
+    svc = build()
+    stored = svc.ingest(
+        "me",
+        _noise_event(
+            source="linear",
+            source_ref="linear:AGE-21",
+            reason="linear_backlog",
+            title="AGE-21 Summary card visibility",
+        ),
+        prefs,
+    )
+    assert stored is not None
+    assert [row.source_ref for row in svc.list_feed("me", prefs)] == ["linear:AGE-21"]
+
+
+def test_something_the_rules_defer_is_stored_because_the_tier_is_not_settled():
+    """A plain email floors at today and needs the model. Discarding it on the
+    rule tier would throw mail away before anything had judged it."""
+    svc = build()
+    stored = svc.ingest("me", _noise_event(reason="gmail_message"), prefs)
+    assert stored is not None
+    assert len(svc.list_feed("me", prefs)) == 1

@@ -49,6 +49,15 @@ class FeedRepository(Protocol):
     def get(self, user_id: str, item_id: str) -> FeedItem | None:
         ...
 
+    def delete(self, user_id: str, item_id: str) -> None:
+        """Remove an item outright.
+
+        Used when the model demotes something to noise. Marking it handled
+        would file it under Later as though the user had dealt with it, which
+        is a different claim.
+        """
+        ...
+
     def list_by_user(
         self, user_id: str, now: datetime | None = None
     ) -> list[FeedItem]:
@@ -135,6 +144,12 @@ class InMemoryFeedRepository:
             if item.user_id == user_id and item.id == item_id:
                 return item
         return None
+
+    def delete(self, user_id: str, item_id: str) -> None:
+        for key, item in list(self._by_key.items()):
+            if item.user_id == user_id and item.id == item_id:
+                del self._by_key[key]
+                return
 
     def list_by_user(
         self, user_id: str, now: datetime | None = None
