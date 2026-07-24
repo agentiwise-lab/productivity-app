@@ -22,7 +22,7 @@
   --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
   --hairline:#2E2A26; --border:#3B352F;
   --faint:#57504A; --low:#7A736C; --mid:#A79F97; --high:#F5F1EC;
-  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --later:#C9B79A; --onSolid:#0C0B0A;
+  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --later:#F2B366; --none:#7FA6D9; --stat:#C9B79A; --onSolid:#0C0B0A;
   --github:#AB7FF8; --linear:#5E6AD2; --slack:#36C5F0;
   --gdocs:#4285F4; --calendar:#34A853; --gmail:#EA4335;
   --tabbg:rgba(12,11,10,.74);
@@ -36,7 +36,7 @@
   --canvas:#F4F1EC; --surface:#FFFDF9; --raised:#FFFDF9; --overlay:#EAE5DD;
   --hairline:#E2DCD2; --border:#D2CABE;
   --faint:#A9A096; --low:#8A8178; --mid:#5E564E; --high:#1A1714;
-  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#8A7355; --onSolid:#FFFDF9;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#B87A2E; --none:#3E6EA8; --stat:#8A7355; --onSolid:#FFFDF9;
   --tabbg:rgba(244,241,236,.80); --phedge:#DCD5C9;
 }
 .pg *{box-sizing:border-box;}
@@ -142,7 +142,10 @@
 .lrow .lmeta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none;}
 .mono11{font-size:11px;line-height:16px;}
 .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px;}
-.statcard{background:var(--surface);border-radius:12px;padding:12px;}
+.statcard{background:var(--surface);border-radius:12px;padding:12px;position:relative;overflow:hidden;}
+.statcard::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(135deg,rgba(201,183,154,.16),rgba(201,183,154,0) 70%);}
+.statcard>*{position:relative;}
 .sectlab.tight{margin-top:24px;}
 
 /* ═══ MARKS ══════════════════════════════════════════════════════ */
@@ -169,6 +172,7 @@
 .chip.solid.acc{background:var(--accent);}
 .chip.solid.wait{background:var(--wait);color:#0C0B0A;}
 .chip.solid.later{background:var(--later);color:#0C0B0A;}
+.chip.solid.none{background:var(--none);color:#0C0B0A;}
 .chip.outline{border:1px solid var(--border);color:var(--mid);}
 .chip.outline.acc{border-color:var(--border);color:var(--high);}
 .chip.outline.alm{border-color:var(--alarm);color:var(--alarm);}
@@ -213,8 +217,8 @@
   radial-gradient(150% 74% at 50% 110%,rgba(99,228,194,.42) 0%,rgba(99,228,194,.13) 42%,rgba(99,228,194,0) 74%),
   linear-gradient(0deg,rgba(99,228,194,.12) 0%,rgba(99,228,194,0) 58%);}
 .beneath.l{background:
-  radial-gradient(150% 74% at 50% 110%,rgba(201,183,154,.40) 0%,rgba(201,183,154,.13) 42%,rgba(201,183,154,0) 74%),
-  linear-gradient(0deg,rgba(201,183,154,.13) 0%,rgba(201,183,154,0) 58%);}
+  radial-gradient(150% 74% at 50% 110%,rgba(242,179,102,.40) 0%,rgba(242,179,102,.13) 42%,rgba(242,179,102,0) 74%),
+  linear-gradient(0deg,rgba(242,179,102,.13) 0%,rgba(242,179,102,0) 58%);}
 .beneath.c{background:
   radial-gradient(150% 74% at 50% 110%,rgba(171,127,248,.34) 0%,rgba(171,127,248,.11) 42%,rgba(171,127,248,0) 74%),
   linear-gradient(0deg,rgba(171,127,248,.12) 0%,rgba(171,127,248,0) 58%);}
@@ -283,9 +287,9 @@
 .strip{display:flex;gap:8px;padding:16px 16px 0;}
 .spill{height:44px;border-radius:12px;border:1px solid var(--hairline);background:var(--surface);
   display:flex;align-items:center;gap:8px;padding:0 12px;}
-.spill.on{border-color:var(--accent);background:var(--overlay);}
+.spill.on{border-color:var(--later);background:var(--overlay);}
 .spill .lb{font-family:"Archivo";font-stretch:88%;font-size:11px;letter-spacing:.8px;
-  text-transform:uppercase;font-weight:600;color:var(--high);}
+  text-transform:uppercase;font-weight:600;color:var(--later);}
 
 /* ═══ CONTROLS ═══════════════════════════════════════════════════ */
 .sw{width:51px;height:31px;border-radius:999px;background:var(--overlay);padding:2px;display:flex;flex:none;
@@ -346,10 +350,16 @@
   <div class="sw-item"><div class="sw-chip" style="background:#3B352F"></div><div class="sw-nm">border 3B352F</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#A79F97"></div><div class="sw-nm">mid A79F97</div></div>
   <div class="sw-item"><div class="sw-chip" style="background:#F5F1EC"></div><div class="sw-nm">high F5F1EC</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#63E4C2"></div><div class="sw-nm">By EOD 6FE6C6</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#FF6B5F"></div><div class="sw-nm">Urgent FF9E90</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#AB7FF8"></div><div class="sw-nm">Can wait C3A8FA</div></div>
-  <div class="sw-item"><div class="sw-chip" style="background:#F4F1EC"></div><div class="sw-nm">light canvas</div></div>
+</div>
+
+<p class="note" style="margin-top:24px"><b>Six hues, and every one of them names a category.</b> Four are the tiers. The last two cover the things that have no tier at all, and they never share a screen with a tier colour, so they cannot be mistaken for one. <b>Colour is never the source</b>: a source is already named by its own brand mark sitting beside the text.</p>
+<div class="specrow">
+  <div class="sw-item"><div class="sw-chip" style="background:#FF6B5F"></div><div class="sw-nm">Urgent FF6B5F</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#63E4C2"></div><div class="sw-nm">By EOD 63E4C2</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#AB7FF8"></div><div class="sw-nm">Can wait AB7FF8</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#F2B366"></div><div class="sw-nm">Later F2B366</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#7FA6D9"></div><div class="sw-nm">No category 7FA6D9</div></div>
+  <div class="sw-item"><div class="sw-chip" style="background:#C9B79A"></div><div class="sw-nm">Summary card C9B79A</div></div>
 </div>
 
 <!-- ══════════ 1 · THE DAY OBJECT ══════════ -->
@@ -468,7 +478,7 @@
       <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">2h ago</span>
       <span class="t-label c-mid">&middot;</span><span class="mono t-secondary c-mid">3 files</span></div>
   </div></div>
-</div><p class="cap"><b>A &middot; Vertical rail <span class="rec">recommended</span></b>Instagram's shape: 48pt circles stacked bottom right, 16 apart, each with an 11pt caption so the action is never a mystery glyph. The primary is filled accent, the rest are <span class="mono">overlay</span> on a border. Thumb-anchored, and it leaves the full width to the content instead of splitting it.</p></div>
+</div><p class="cap"><b>A &middot; Vertical rail <span class="rec">recommended</span></b>Instagram's shape: 48pt circles stacked bottom right, 16 apart, each with an 11pt caption so the action is never a mystery glyph. The primary glyph is larger and full white, the rest sit at <span class="mono">mid</span>. No ring, no border, no fill: the glyph is the button. Thumb-anchored, and it leaves the full width to the content instead of splitting it.</p></div>
 
 <div class="cell"><div class="ph" data-tab="feed">
   <div class="bd"><div class="fcard">
@@ -677,7 +687,7 @@
 
 <div class="cell"><div class="ph" data-tab="later">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">137 did not need you</div></div>
     <div class="strip" data-strip="gmail"></div>
     <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
     <div data-later></div>
@@ -686,7 +696,7 @@
 
 <div class="cell"><div class="ph" data-tab="later">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">137 did not need you</div></div>
     <div class="strip" data-strip="slack"></div>
     <div class="sectlab t-label tight">Slack <span class="grow"></span><span class="mono t-secondary c-low">counting&hellip;</span></div>
     <div data-later="slack"></div>
@@ -699,7 +709,7 @@
 
 <div class="cell"><div class="ph" data-tab="later">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">137 did not need you</div></div>
     <div class="strip" data-strip="linear"></div>
     <div style="padding:48px 16px 0">
       <div class="t-title">Nothing waiting here</div>
@@ -758,12 +768,14 @@
     </div>
     <div class="statgrid"><div class="statcard"><div class="t-label c-low">Meetings</div><div class="t-title num" style="margin-top:4px">62</div><div class="t-secondary c-mid trunc">2.8 a day</div></div><div class="statcard"><div class="t-label c-low">Longest day</div><div class="t-title num" style="margin-top:4px">6h</div><div class="t-secondary c-mid trunc">Tue 15 Jul</div></div><div class="statcard"><div class="t-label c-low">Organised by you</div><div class="t-title num" style="margin-top:4px">14</div><div class="t-secondary c-mid trunc">of 62</div></div><div class="statcard"><div class="t-label c-low">Declined</div><div class="t-title num" style="margin-top:4px">7</div><div class="t-secondary c-mid trunc">of 62</div></div></div>
     <div class="sectlab t-label tight">Most frequent</div>
-    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+    <div class="lrow"><span class="lwash" data-lwash="n"></span>
+      <span class="ltier" style="background:var(--none)"></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">Weekly product sync</span>
         <span class="t-secondary c-mid trunc">every Monday, 60m</span></span>
       <span class="mono t-heading">4</span></div>
-    <div class="lrow"><span class="lwash" data-lwash="calendar"></span>
+    <div class="lrow"><span class="lwash" data-lwash="n"></span>
+      <span class="ltier" style="background:var(--none)"></span>
       <span class="mark s32" data-mark="calendar"></span>
       <span class="grow stack" style="gap:2px"><span class="t-body trunc">1:1 with Sam</span>
         <span class="t-secondary c-mid trunc">every Thursday, 30m</span></span>
@@ -871,7 +883,7 @@
 
 <div class="cell"><div class="ph" data-tab="later">
   <div class="bd"><div class="scroll">
-    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">Later</div></div>
+    <div class="hdr"><div class="t-label eb">Last 30 days</div><div class="t-display" style="margin-top:4px">137 did not need you</div></div>
     <div class="strip" data-strip="gmail"></div>
     <div class="sectlab t-label tight">Gmail <span class="grow"></span><span class="mono t-secondary c-low">64 items</span></div>
     <div data-later></div>
@@ -893,12 +905,17 @@ const MARKS={
  calendar:{c:'#4285F4',p:'M6.6 2v2H4.8C3.8 4 3 4.8 3 5.8v13.4C3 20.2 3.8 21 4.8 21h14.4c1 0 1.8-.8 1.8-1.8V5.8c0-1-.8-1.8-1.8-1.8h-1.8V2h-1.8v2H8.4V2H6.6zM4.8 8.6h14.4v10.6H4.8V8.6zm2.6 2.4v2.2h2.2V11H7.4zm4.4 0v2.2H14V11h-2.2zm4.4 0v2.2h2.2V11h-2.2zM7.4 15.2v2.2h2.2v-2.2H7.4zm4.4 0v2.2H14v-2.2h-2.2z'},
 };
 /* Three hues in the whole app, and they mean tier. Nothing else is coloured. */
-const TIERRGB={u:'255,107,95',b:'99,228,194',c:'171,127,248',l:'201,183,154'};
-/* Where a row has no tier there is still something worth telling apart, and
-   that is which tool it came from. Tier wins when there is one; source
-   identifies the row when there is not. Colour is never decoration. */
-const SRCRGB={github:'167,159,151',slack:'54,197,240',gmail:'234,67,53',
-              linear:'94,106,210',calendar:'66,133,244',gdocs:'66,133,244'};
+/* Colour means category and nothing else. Four categories, plus two roles
+   for the things that have no category at all. Never the source: a source is
+   already named by its own brand mark sitting next to the text. */
+const HUE={
+  u:'255,107,95',    // Urgent
+  b:'99,228,194',    // By EOD
+  c:'171,127,248',   // Can wait
+  l:'242,179,102',   // Later
+  n:'127,166,217',   // no category: meetings, Activity listings, connections
+  s:'201,183,154',   // summary cards
+};
 /* Brand marks keep their own colour. They are identity, not priority, and
    they never occupy a position where a tier signal lives, so they cannot be
    misread as one. This is the one exemption from "hue means tier". */
@@ -911,13 +928,12 @@ function paint(root=document){
             el.classList.contains('s24')?14:el.classList.contains('s20')?12:11;
   el.innerHTML=markSvg(el.dataset.mark,box);});
  root.querySelectorAll('[data-lwash]').forEach(el=>{
-  const k=el.dataset.lwash, c=TIERRGB[k]||SRCRGB[k];
-  if(!c){el.style.display='none';return;}
-  el.style.background=`linear-gradient(90deg,rgba(${c},${TIERRGB[k]?.14:.16}),rgba(${c},0) 100%)`;});
+  const c=HUE[el.dataset.lwash]; if(!c){el.style.display='none';return;}
+  el.style.background=`linear-gradient(90deg,rgba(${c},.16),rgba(${c},0) 100%)`;});
  root.querySelectorAll('[data-swash]').forEach(el=>{
-  el.style.background=`linear-gradient(180deg,rgba(${TIERRGB[el.dataset.swash]},.20),rgba(${TIERRGB[el.dataset.swash]},0) 100%)`;});
+  el.style.background=`linear-gradient(180deg,rgba(${HUE[el.dataset.swash]},.20),rgba(${HUE[el.dataset.swash]},0) 100%)`;});
  root.querySelectorAll('[data-tint]').forEach(el=>{
-  const k=el.dataset.tint, c=TIERRGB[k]||SRCRGB[k]; if(!c){el.style.display='none';return;}
+  const c=HUE[el.dataset.tint]; if(!c){el.style.display='none';return;}
   el.style.background=`radial-gradient(120% 80% at 12% 0%,rgba(${c},.14),rgba(${c},0) 60%)`;});
 }
 
@@ -1011,7 +1027,8 @@ document.querySelectorAll('[data-next]').forEach(el=>{
  const M=[['10:30','Design review','3 others · Google Meet','45m',1],
           ['14:00','1:1 with Sam','recurring · every Thursday','30m',0]];
  el.outerHTML=M.map(([time,title,sub,dur,next])=>`<div class="lrow">
-  <span class="lwash" data-lwash="calendar"></span>
+  <span class="lwash" data-lwash="n"></span>
+  <span class="ltier" style="background:var(--none)"></span>
   <span class="mono t-heading ${next?'c-high':'c-mid'}" style="width:52px;flex:none">${time}</span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${title}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>
@@ -1022,33 +1039,28 @@ document.querySelectorAll('[data-next]').forEach(el=>{
 /* ═══ Later, preserving the current shape ═════════════════════════ */
 const LATER={
  gmail:[
-  {g:'Today',a:'Stripe',t:'Your invoice for July is ready',sub:'Receipt for INV-4821, no action needed',age:'2h',f:.17},
-  {g:'Today',a:'GitHub',t:'[acme/api] 14 new commits to main',sub:'Digest of everything merged since Tuesday',age:'5h',f:.13},
-  {g:'Yesterday',a:'Pangram Pangram',t:'Your licence is confirmed',sub:'Cirka and Gilroy, desktop and app embedding',age:'1d',f:.10},
-  {g:'Yesterday',a:'Linear',t:'Weekly project digest',sub:'Design System moved 6 issues to Done',age:'1d',f:.08},
-  {g:'Earlier',a:'Every',t:'The knowledge economy is eating itself',sub:'Newsletter, no reply expected',age:'2d',f:.05}],
+  {a:'Stripe',t:'Your invoice for July is ready',sub:'Receipt for INV-4821, no action needed',age:'2h'},
+  {a:'GitHub',t:'[acme/api] 14 new commits to main',sub:'Digest of everything merged since Tuesday',age:'5h'},
+  {a:'Pangram Pangram',t:'Your licence is confirmed',sub:'Cirka and Gilroy, desktop and app embedding',age:'1d'},
+  {a:'Linear',t:'Weekly project digest',sub:'Design System moved 6 issues to Done',age:'1d'},
+  {a:'Every',t:'The knowledge economy is eating itself',sub:'Newsletter, no reply expected',age:'2d'}],
  slack:[
-  {g:'Today',a:'#design-system',t:'Thread on the icon family decision',sub:'Phosphor won on the fill variant argument',age:'4h',f:.17},
-  {g:'Today',a:'#general',t:'Lunch order for Thursday',sub:'You were not mentioned',age:'6h',f:.13},
-  {g:'Yesterday',a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d',f:.08}],
+  {a:'#design-system',t:'Thread on the icon family decision',sub:'Phosphor won on the fill variant argument',age:'4h'},
+  {a:'#general',t:'Lunch order for Thursday',sub:'You were not mentioned',age:'6h'},
+  {a:'#eng',t:'Deploy notes for 2.14',sub:'Automated post from the release bot',age:'1d'}],
 };
 document.querySelectorAll('[data-later]').forEach(el=>{
  const src=el.dataset.later||'gmail', rows=LATER[src];
- // Later filters to one source, so a source wash paints every row the same
- // colour and differentiates nothing. Rows grade by age instead, and day
- // groups give the list a rhythm that tone alone cannot.
- let group=null, out='';
- rows.forEach(r=>{
-  if(r.g!==group){group=r.g; out+=`<div class="sectlab t-label tight">${group}</div>`;}
-  out+=`<div class="lrow">
-  <span class="lwash" style="background:linear-gradient(90deg,rgba(201,183,154,${r.f}),rgba(201,183,154,0) 100%)"></span>
+ el.outerHTML=rows.map(r=>`<div class="lrow">
+  <span class="lwash" data-lwash="l"></span>
+  <span class="ltier" style="background:var(--later)"></span>
   <span class="mark s32" data-mark="${src}"></span>
   <span class="grow stack" style="gap:2px">
    <span class="t-body trunc"><span class="w500">${r.a}</span> &middot; ${r.t}</span>
    <span class="t-secondary c-mid trunc">${r.sub}</span></span>
   <span class="lmeta"><span class="mono t-secondary c-mid">${r.age}</span>
-   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>`;});
- el.outerHTML=out+`<div style="padding:16px"><span class="t-secondary c-low">${rows.length} from ${src==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
+   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ext"/></svg></span></div>`).join('')+
+  `<div style="padding:16px"><span class="t-secondary c-low">${rows.length} from ${src==='slack'?'Slack':'Gmail'}. Read live, never stored.</span></div>`;
 });
 const STRIP=[['gmail','Gmail'],['slack','Slack'],['linear','Linear'],['github','GitHub']];
 document.querySelectorAll('[data-strip]').forEach(el=>{
@@ -1069,7 +1081,7 @@ const SRC=[
 document.querySelectorAll('[data-activity]').forEach(el=>{
  el.innerHTML=SRC.map(s=>{
   return `<div class="scard">
-   <div class="tint" data-tint="${s.id}" style="height:130px"></div>
+   <div class="tint" data-tint="s" style="height:130px"></div>
    <div class="spread"><span style="display:flex;gap:12px;align-items:center">
     <span class="mark s32" data-mark="${s.id}"></span><span class="t-heading">${s.n}</span></span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--low)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chev"/></svg></div>
@@ -1084,7 +1096,8 @@ document.querySelectorAll('[data-break]').forEach(el=>{
  const rows=[['acme/api','18 commits · 6 PRs','24'],['acme/mobile','12 commits · 3 PRs','15'],
              ['acme/infra','7 commits · 2 PRs','9']];
  el.outerHTML=rows.map(([a,b,c])=>`<div class="lrow">
-  <span class="lwash" data-lwash="github"></span>
+  <span class="lwash" data-lwash="n"></span>
+  <span class="ltier" style="background:var(--none)"></span>
   <span class="mark s32" data-mark="github"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body trunc">${a}</span>
    <span class="t-secondary c-mid trunc">${b}</span></span>
@@ -1099,7 +1112,8 @@ document.querySelectorAll('[data-conn]').forEach(el=>{
              ['gmail','Gmail','live','64 in Later · synced 4m ago'],
              ['linear','Linear','off','Never connected']];
  el.outerHTML=rows.map(([id,n,st,sub])=>`<div class="lrow">
-  <span class="lwash" data-lwash="${id}"></span>
+  <span class="lwash" data-lwash="n"></span>
+  <span class="ltier" style="background:var(--none)"></span>
   <span class="mark s32" data-mark="${id}"></span>
   <span class="grow stack" style="gap:2px"><span class="t-body">${n}</span>
    <span class="t-secondary c-mid trunc">${sub}</span></span>

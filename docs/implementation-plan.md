@@ -47,47 +47,45 @@ This is a one-line client fix plus a contract tightening, it is independent of t
 
 ## 1. Colour, amended
 
-[`design-system-v2.md` §1](design-system-v2.md) specified one accent and one alarm. **That is now three hues, and they mean tier and nothing else.**
+[`design-system-v2.md` §1](design-system-v2.md) specified one accent and one alarm. **That is now six hues, and every one of them names a category.**
 
 | Token | Dark | Light | Means |
 |---|---|---|---|
 | `urgent` | `#FF6B5F` | `#CC4432` | Someone is blocked on you |
 | `byEod` | `#63E4C2` | `#0D8167` | Due before tonight |
 | `canWait` | `#AB7FF8` | `#7144CC` | Neither |
-| `later` | `#C9B79A` | `#8A7355` | Arrived, did not need you |
+| `later` | `#F2B366` | `#B87A2E` | Arrived, did not need you |
+| `none` | `#7FA6D9` | `#3E6EA8` | A row with no category at all |
+| `summary` | `#C9B79A` | `#8A7355` | A card that totals something |
 
-Later is a warm sand rather than a fourth vivid hue. It is the one state that asks nothing of you, so it should read as quiet without reading as broken, and a warm neutral sits with the canvas where a cool blue did not.
+**Colour is the category and never the source.** A source is already named by its own brand mark sitting beside the text, so spending a hue on it says nothing new and costs the one thing hue is good for.
 
-All three sit in one band so they read as a family rather than as three unrelated signals. They were tuned twice: first lightened, because the violet arrived deep and saturated beside a light mint and looked like a different class of signal; then **brought 75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless. This is the midpoint that keeps the family and keeps the punch.
+The four tiers are the categories proper. The last two exist because plenty of rows have no category: a meeting, a repository in a breakdown, a connected account. Those need to be told apart from each other and from a tiered row, so they take `none`. Cards that total something rather than listing it take `summary`. **Neither ever shares a screen with a tier colour**, so neither can be mistaken for one.
 
-Contrast of the near-black chip text: **7.0:1, 12.6:1 and 6.7:1** in dark, **4.7:1, 4.7:1 and 6.1:1** in light. All clear AA. The two light values sit close to the floor, so **re-measure before changing any light-mode fill.**
+The four tiers were tuned twice: lightened, because the violet had arrived deep and saturated beside a light mint and read as a different class of signal; then brought **75% of the way back toward the original saturation**, because the pastel that resulted was harmonious and lifeless.
 
-**The rule that makes this work: everything that is not a tier is neutral.** Buttons, toggles, status dots, selection bars, tab chrome and brand marks all use the grey ladder. The old design had mint doing double duty as "By EOD" *and* as the primary button, which is what made the palette feel arbitrary.
+Contrast of the near-black chip text on the tiers: **7.0:1, 12.6:1, 6.7:1** in dark and **4.7:1, 4.7:1, 6.1:1** in light. All clear AA, and the two light values sit close enough to the floor that any change there must be re-measured.
 
 ### What colours a row
 
-A grey list where every row is the same object is the reason the old listings read as primitive, and colour is the cheapest fix. **A row is coloured by the most meaningful thing it has:**
-
-| List | Coloured by |
+| List | Colour |
 |---|---|
-| Feed, and a selected tier on Your day | **Tier** |
-| Meetings on Your day | **Source**, which is always Calendar |
-| Activity root and its breakdowns | **Source** |
-| Connections in You | **Source** |
-| Later | **Age**, plus day groups |
+| Feed, and a selected tier on Your day | its tier |
+| Later, every row, and its source selector | `later` |
+| Meetings on Your day | `none` |
+| Activity breakdowns, connections in You | `none` |
+| Activity stat cards and source cards | `summary` |
 
-Later is the exception that proves the rule. It **filters to one source at a time**, so a source wash paints every row identically and differentiates nothing. Rows there carry the sand at a strength that steps down with age, and the list is grouped **Today / Yesterday / Earlier**, so the rhythm comes from structure as well as tone.
+Each row carries the hue twice: a **3pt bar on the leading edge** and a **wash running in from the left at 16%**. The screen behind stays matt black; nothing is tinted except the card itself.
 
-**Two exemptions, and only two: brand marks, above, and data visualisation.** The Activity sparklines are neutral by the letter of the rule and looked dead for it. A sparkline encodes a quantity over time, not a priority, so it cannot be misread as a tier. Nothing else gets this exemption.
+**Rejected along the way, and worth recording so it is not retried.** Colouring untiered rows by their source: Later filters to one source at a time, so every row came out the same colour and nothing was differentiated. Grouping Later by day to compensate: structure papering over a colour problem, and it put a header between every two rows.
 
-Consequences, all applied in v4:
+### Two exemptions, and only two
 
-- **Brand marks keep their own colours.** This was tried monochrome and rejected. A mark is identity, not priority, and it never occupies a position where a tier signal lives, so it cannot be misread as one. **Do not desaturate the source icons during implementation**, in the Feed, in Later, in Activity, in You, or in an action sheet. Use the official marks: GitHub is monochrome by its own brand, Slack is four-colour, Gmail red, Linear indigo, Google blue.
-- **Source tints are gone.** Card washes, sheet washes and row washes are tier-coloured now, so the colour at the top of a sheet answers "how urgent" rather than "which tool".
-- **All three tier chips are solid** with near-black text. Previously only Urgent was solid and the other two were outline and ghost, which read as three different components.
-- The tab bar's selected indicator, the "live" status dot and the toggle "on" state moved to neutral.
+- **Brand marks keep their own colours.** Tried monochrome and rejected. A mark is identity, not category, and it never occupies a position where a category signal lives. **Do not desaturate the source icons during implementation**, anywhere.
+- **Data visualisation may use `byEod`.** The Activity sparklines were neutral by the letter of the rule and looked dead. A sparkline encodes a quantity over time and cannot be read as a priority.
 
-A verification pass over all 30 phones reports zero colours outside the neutral ladder, these three hues, and the two exemptions.
+A verification pass over all 31 phones reports zero colours outside the neutral ladder, these six hues, and the two exemptions.
 
 ---
 
@@ -130,9 +128,9 @@ New screen. Full-screen cards, horizontal swipe, grouped Urgent, By EOD, Can wai
 | Your day | the date | **`Good morning, Vicky`**, varying by hour |
 | Activity | `Last 30 days` | `3 sources connected` |
 | You | the email | the user's name |
-| Later | `Last 30 days` | `Later` |
+| Later | `Last 30 days` | `137 did not need you` |
 
-Later keeps its name because "Later" states what the list *means* rather than which tab it is: everything that arrived and did not need you. If that reads as inconsistent in use, it should go the same way as the others.
+**No exceptions, including Later.** It kept its name for one round on the argument that "Later" states what the list means, and that was wrong: the tab bar says Later, so the title said it twice. It now leads with the count, which is the one fact the screen has that the tab bar does not.
 
 The line collapses to 17pt in a 44pt blurred bar on scroll, and a source board keeps its collapsed bar permanently because it needs a back affordance.
 
@@ -220,7 +218,7 @@ v4 ships with an automated check, and the same assertions should become a lint o
 - Type on the seven roles only
 - **No colour outside the neutral ladder and the three tier hues**, excepting brand marks and data visualisation
 - Chip text at or above 4.5:1 on every tier fill, in both modes
-- Every row list differentiated by something: tier, source, or age. Never one flat colour repeated down the screen
+- Every row carries its category hue as a leading bar and a left wash. No list is one flat colour, and no colour comes from the source
 - No non-inset shadow anywhere
 - No content past the fold, and none hidden under a fixed footer
 - No control under 28pt, and a 44pt touch target via `hitSlop`
