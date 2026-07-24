@@ -287,20 +287,25 @@ export function CircularAction({
   glyph,
   onPress,
   label,
+  compact = false,
 }: {
   glyph: GlyphName;
   onPress?: () => void;
   label: string;
+  /** A smaller circle for a secondary control that must not dominate a row. */
+  compact?: boolean;
 }) {
   const c = useTheme();
+  const dim = compact ? 34 : size.control;
   return (
     <Pressable
       accessibilityLabel={label}
       onPress={onPress}
+      hitSlop={compact ? 10 : 0}
       style={({ pressed }) => [
         {
-          width: size.control,
-          height: size.control,
+          width: dim,
+          height: dim,
           borderRadius: radius.pill,
           backgroundColor: c.overlay,
           borderWidth: 1,
@@ -311,7 +316,7 @@ export function CircularAction({
         pressed ? { opacity: 0.7 } : null,
       ]}
     >
-      <Icon name={glyph} size={20} color={c.high} />
+      <Icon name={glyph} size={compact ? 16 : 20} color={c.high} />
     </Pressable>
   );
 }

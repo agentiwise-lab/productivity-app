@@ -56,6 +56,13 @@ export function SourceDetailScreen({
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const [hero, ...rest] = dashboard?.headline ?? [];
+  // A breakdown line with a zero count is a channel nobody posted in or a repo
+  // with no commits: it is the absence of activity, and a list of absences is
+  // not what "where the traffic is" is asking. A line with a `value_label`
+  // (a duration, a percentage) is kept, because zero is not its whole story.
+  const breakdown = (dashboard?.breakdown ?? []).filter(
+    (line) => line.value > 0 || !!line.value_label,
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: topInset(insets.top) }}>
@@ -75,26 +82,31 @@ export function SourceDetailScreen({
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: space.xl }}>
+          {/* The hero, on one compact line: the number as a title beside its
+              own label, not a 34pt figure stacked over 24pt of padding. It was
+              spending a third of the screen to say one number. */}
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
               gap: space.sm,
               paddingHorizontal: space.md,
-              paddingVertical: space.lg,
+              paddingVertical: space.md,
               overflow: 'hidden',
             }}
           >
-            <TopTint category="summary" width={393} height={140} />
-            <View style={{ flex: 1 }}>
-              <T role="display" numeric>
+            <TopTint category="summary" width={393} height={96} />
+            <View
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: space.xs }}
+            >
+              <T role="title" numeric>
                 {hero ? (hero.value_label ?? String(hero.value)) : '0'}
               </T>
-              <T role="label" tone="low" style={{ marginTop: space.xxs }}>
+              <T role="label" tone="low">
                 {hero?.label ?? 'Nothing recorded'}
               </T>
             </View>
-            <CircularAction glyph="refresh" label="Refresh" onPress={onRefresh} />
+            <CircularAction glyph="refresh" label="Refresh" compact onPress={onRefresh} />
           </View>
 
           {rest.length > 0 ? (
@@ -112,10 +124,10 @@ export function SourceDetailScreen({
             </View>
           ) : null}
 
-          {dashboard.breakdown.length > 0 ? (
+          {breakdown.length > 0 ? (
             <>
               <SectionLabel label={dashboard.breakdown_title} tight />
-              {dashboard.breakdown.map((line, index) => (
+              {breakdown.map((line, index) => (
                 <Row
                   key={`${line.label}-${index}`}
                   // A repository, a sender or a project is not a category, and
