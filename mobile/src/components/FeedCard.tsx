@@ -67,14 +67,6 @@ export function FeedCard({
     !!row.reason &&
     row.source !== 'gmail' &&
     row.source !== 'slack';
-  // "Blocking" means a person is waiting on you, a signal separate from the
-  // tier. It only earns a place when it varies: on GitHub (review/approval/
-  // assign) and Calendar (invites) it distinguishes some items from others. On
-  // Gmail (every non-bulk mail) and Slack (every DM/mention/reply) it is true
-  // for everything that reaches the feed, so it says nothing the chip does not
-  // and the meta is just the time.
-  const showBlocking =
-    row.is_blocking && row.source !== 'gmail' && row.source !== 'slack';
 
   return (
     <View
@@ -154,7 +146,8 @@ export function FeedCard({
           </View>
         ) : null}
 
-        {/* Meta. */}
+        {/* Meta: just the time. The tier chip already carries the priority, so
+            there is no "Blocking" word here. */}
         <View
           style={{
             flexDirection: 'row',
@@ -166,14 +159,6 @@ export function FeedCard({
             paddingBottom: space.md,
           }}
         >
-          {showBlocking ? (
-            <>
-              <T role="label">Blocking</T>
-              <T role="label" tone="mid">
-                ·
-              </T>
-            </>
-          ) : null}
           <T role="secondary" tone="mid" numeric>
             {when}
           </T>

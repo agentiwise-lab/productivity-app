@@ -189,10 +189,9 @@ Bounded card, no bleed, no safe-area math, no bloom.
     <Header> BrandMark 40 · stack{ sourceName, headerSubline } · Chip(category, solid) </Header>
     <Body>   primaryLine (heading, 2 lines) · cardSubtitle (body, mid, 2 lines) </Body>
     {urgent && row.reason ? <Why> "Why this is urgent" · reason </Why> : null}
-    <Meta>   showBlocking? "Blocking" · when · repo? </Meta>
-             // showBlocking = is_blocking AND source is not gmail/slack: on those
-             // two it is true for every item, so it says nothing the chip does
-             // not. It survives only on GitHub/Calendar where it is selective.
+    <Meta>   when · repo?  </Meta>   // just the time (+ repo on GitHub); no
+                                     // "Blocking" word, the tier chip is the
+                                     // priority signal.
   </Pressable>
   <ActionBar>                            // borderTop hairline, flexDirection row
     rail.map(action => <ActionButton />) // flex:1, height 48, hairline divider between,
