@@ -417,3 +417,19 @@ Net result: the AWS account and GitHub repo return to their exact pre-test state
 ### 12.8 Cost of the test
 
 t3.medium ~$38/mo prorated (t3.small ~$19), Elastic IP ~$3.6/mo, 30 GiB disk ~$3/mo. A few days of testing is a few dollars. If promoted to prod, it becomes the section 9 figure.
+
+### 12.9 Test results (2026-07-25) — hypothesis CONFIRMED
+
+Provisioned resources (all new, isolated): instance `i-0890354b08bca1c00` (t3.medium, AL2023), Elastic IP **`52.64.67.235`** (`eipalloc-056cb2601879bbaaf`), SG `productivity_app_test_sg` (`sg-0d374ba0556b75951`), key `productivity_app_test`.
+
+- **Gate 1 (HTTPS on the raw IP): PASS — but only via lego, not certbot.**
+  - **certbot 4.2.0 REFUSES bare IPs client-side**: "The Let's Encrypt certificate authority will not issue certificates for a bare IP address." certbot has the `--preferred-profile` flag but has not implemented IP identifiers. So the plan's "certbot for the IP cert" assumption is wrong.
+  - **lego v5.3.1 with `run --profile shortlived` SUCCEEDED**: Let's Encrypt issued a cert for `52.64.67.235` (HTTP-01 on port 80). Issuer `Let's Encrypt`, `X509v3 SAN: critical, IP Address:52.64.67.235`, validity ~6 days (Jul 25 → Aug 1, the shortlived profile).
+  - Served via nginx on 443; **externally validated from a normal client** (`curl` from the Mac, `ssl_verify_result=0`, HTTP 200). Trusted HTTPS on the raw Elastic IP is real.
+- **Gate 2 (Composio accepts an IP webhook URL): PASS.** `composio.triggers.set_webhook_subscription(webhook_url="https://52.64.67.235/webhooks/composio")` was **accepted** (subscription `ws_Kzyij_17gwHi`, V3, `composio.trigger.message`). The prior value was the dead 2026-07-23 ngrok URL, so nothing production was overwritten. The webhook signing secret in `.env` matches the subscription (deliveries will verify). 7 connected accounts (Slack/Gmail/Linear/Calendar/GitHub, several ACTIVE) and 4 active triggers exist — the old "wrong project → 0 accounts" issue is resolved.
+- **Gate 3 (real delivery + processing):** backend deployed (systemd `productivity-backend`, `AUTH_MODE=own`, app builds and serves — `/feed` → 401, webhook route → 405 to GET, all over the trusted HTTPS-on-IP path). Signature verification is wired and the secret matches. Awaiting a natural event from an active Slack/GitHub trigger to observe an end-to-end delivery.
+
+**Consequences for the runtime (correct the earlier assumptions):**
+1. **Use lego, not certbot**, to issue and renew the IP certificate. certbot cannot do it.
+2. **Renewal is NOT handled by `certbot-renew.timer`** (there is no certbot cert). The ~6-day lego cert needs its own **systemd timer / cron running `lego renew` every few days**, or switch the front to **Caddy** (which auto-renews IP certs natively). This is the one real operational cost of the raw-IP path.
+3. Everything else (raw IP + trusted HTTPS + Composio acceptance + backend) is validated. The raw-IP, no-domain path works.
