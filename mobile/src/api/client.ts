@@ -54,6 +54,13 @@ export class ApiError extends Error {
 }
 
 export class ApiClient {
+  /**
+   * How a request tries to recover from a 401. AuthContext wires this to a
+   * single-flight token refresh; it returns true when a new access token is in
+   * place and the request is worth retrying, false when the session is gone.
+   */
+  private onAuthError: (() => Promise<boolean>) | null = null;
+
   constructor(
     private baseUrl: string,
     private auth: () => Record<string, string>,
@@ -63,10 +70,20 @@ export class ApiClient {
     this.baseUrl = url.replace(/\/$/, '');
   }
 
+  /** Replace the header source (dev X-User-Id vs. own-mode Bearer). */
+  setAuth(auth: () => Record<string, string>) {
+    this.auth = auth;
+  }
+
+  setOnAuthError(handler: () => Promise<boolean>) {
+    this.onAuthError = handler;
+  }
+
   private async request<T>(
     path: string,
     init: RequestInit = {},
     timeoutMs: number = TIMEOUT_MS,
+    retried = false,
   ): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -81,11 +98,18 @@ export class ApiClient {
         },
       });
       if (response.status === 401) {
+        // One refresh, then one retry. The refresh is single-flight in the
+        // handler, so a burst of expired requests triggers a single rotation
+        // and each retries with the token it produced.
+        if (!retried && this.onAuthError && (await this.onAuthError())) {
+          return this.request<T>(path, init, timeoutMs, true);
+        }
         throw new ApiError('Your session expired. Sign in again.', 401, 'auth');
       }
       if (!response.ok) {
         throw new ApiError(`Request failed (${response.status})`, response.status, 'server');
       }
+      if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -154,6 +178,16 @@ export class ApiClient {
     return this.request<{ url: string }>(`/connections/${provider}/link`, {
       method: 'POST',
     });
+  }
+
+  /** Reconciles one source against Composio. Polled after the user returns from
+   *  the consent screen until it reads connected. */
+  connectionStatus(provider: string): Promise<SourceInfo> {
+    return this.request<SourceInfo>(`/connections/${provider}/status`);
+  }
+
+  disconnect(provider: string): Promise<void> {
+    return this.request<void>(`/connections/${provider}`, { method: 'DELETE' });
   }
 
   /** The Later stream is read with XHR, so the caller needs the URL and the

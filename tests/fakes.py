@@ -90,13 +90,43 @@ class FakeConnectionRepository:
         return self.identities.get((user_id, provider), Identity())
 
 
+class FakeIntegrations:
+    """The Integrations factory, backed by fixed fakes. Returns the same fake
+    for every user_id, which is all a single-user test needs; the point under
+    test elsewhere is that production hands each user their own."""
+
+    def __init__(self, github=None, slack=None, linear=None, gmail=None, calendar=None):
+        self._m = {
+            "github": github,
+            "slack": slack,
+            "linear": linear,
+            "gmail": gmail,
+            "calendar": calendar,
+        }
+
+    def github(self, user_id):
+        return self._m["github"]
+
+    def slack(self, user_id):
+        return self._m["slack"]
+
+    def linear(self, user_id):
+        return self._m["linear"]
+
+    def gmail(self, user_id):
+        return self._m["gmail"]
+
+    def calendar(self, user_id):
+        return self._m["calendar"]
+
+
 def build_feed_service(repo=None, github=None) -> DefaultFeedService:
     """The real feed service with fake edges. Used wherever a test needs a
     working spine but is not testing the spine itself."""
     return DefaultFeedService(
         repo=repo or InMemoryFeedRepository(),
         rules=DefaultRuleClassifier(),
-        github=github or FakeGitHubService(),
+        integrations=FakeIntegrations(github=github or FakeGitHubService()),
     )
 
 

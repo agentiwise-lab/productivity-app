@@ -74,17 +74,11 @@ def _to_row(event: RawEvent) -> LaterRow:
 class LaterService:
     def __init__(
         self,
-        gmail: Any | None = None,
-        slack: Any | None = None,
-        linear: Any | None = None,
-        github: Any | None = None,
+        integrations: Any | None = None,
         identity_for: Callable[[str, str], Any] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
-        self._gmail = gmail
-        self._slack = slack
-        self._linear = linear
-        self._github = github
+        self._integrations = integrations
         self._identity_for = identity_for
         self._now = clock or (lambda: datetime.now(timezone.utc))
 
@@ -184,16 +178,26 @@ class LaterService:
         self, user_id: str, source: Source, limit: int
     ) -> Iterator[list[RawEvent]] | None:
         """One generator of pages per source, or None when not connected."""
-        if source is Source.GMAIL and self._gmail is not None:
-            return self._gmail.unread_pages(limit=limit)
-        if source is Source.SLACK and self._slack is not None:
-            return self._one_page(
-                lambda: self._slack.unread(self._identity("slack", user_id))
-            )
-        if source is Source.LINEAR and self._linear is not None:
-            return self._one_page(self._linear.assigned_to_me)
-        if source is Source.GITHUB and self._github is not None:
-            return self._one_page(self._github.list_notifications)
+        if self._integrations is None:
+            return None
+        if source is Source.GMAIL:
+            gmail = self._integrations.gmail(user_id)
+            if gmail is not None:
+                return gmail.unread_pages(limit=limit)
+        if source is Source.SLACK:
+            slack = self._integrations.slack(user_id)
+            if slack is not None:
+                return self._one_page(
+                    lambda: slack.unread(self._identity("slack", user_id))
+                )
+        if source is Source.LINEAR:
+            linear = self._integrations.linear(user_id)
+            if linear is not None:
+                return self._one_page(linear.assigned_to_me)
+        if source is Source.GITHUB:
+            github = self._integrations.github(user_id)
+            if github is not None:
+                return self._one_page(github.list_notifications)
         return None
 
     @staticmethod

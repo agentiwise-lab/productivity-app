@@ -22,7 +22,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.auth import AuthMode, build_current_user
+from backend.api.auth_router import build_auth_router
 from backend.integrations.github import Comment, GitHubService, PRRef, PullRequest
+from backend.tokens import TokenCodec
 from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.models.sources import CATALOGUE, Source, SourceInfo
@@ -34,6 +36,7 @@ from backend.services.actions import (
     UnknownAction,
 )
 from backend.services.classifier import DefaultClassificationService
+from backend.services.connections import MissingAuthConfig
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.ingest import IngestResult, WebhookIngestService
 from backend.services.rules import DefaultRuleClassifier
@@ -78,6 +81,37 @@ class _UnconfiguredSlackService:
         from backend.models.identity import Identity
 
         return Identity()
+
+
+class _StaticIntegrations:
+    """Adapts a fixed set of services to the per-user factory interface, by
+    returning the same one for every user. This is the test and single-service
+    path; production passes a real ``ComposioIntegrations`` that mints each
+    user's own."""
+
+    def __init__(self, github=None, slack=None, linear=None, gmail=None, calendar=None):
+        self._m = {
+            "github": github,
+            "slack": slack,
+            "linear": linear,
+            "gmail": gmail,
+            "calendar": calendar,
+        }
+
+    def github(self, user_id: str):
+        return self._m["github"]
+
+    def slack(self, user_id: str):
+        return self._m["slack"]
+
+    def linear(self, user_id: str):
+        return self._m["linear"]
+
+    def gmail(self, user_id: str):
+        return self._m["gmail"]
+
+    def calendar(self, user_id: str):
+        return self._m["calendar"]
 
 
 class _NullConnectionRepository:
@@ -126,8 +160,10 @@ def create_app(
     repo: FeedRepository | None = None,
     *,
     slack: Any | None = None,
+    integrations: Any | None = None,
     auth_mode: AuthMode = "dev",
-    jwt_secret: str | None = None,
+    token_codec: TokenCodec | None = None,
+    auth_service: Any | None = None,
     connections: Any | None = None,
     classifier: DefaultClassificationService | None = None,
     connection_service: Any | None = None,
@@ -144,25 +180,35 @@ def create_app(
     repo = repo or InMemoryFeedRepository()
     connections = connections or _NullConnectionRepository()
 
-    feed_service = DefaultFeedService(
-        repo=repo, rules=DefaultRuleClassifier(), github=github
-    )
-    action_service = DefaultActionService(
-        repo=repo,
+    # Production passes the per-user factory; tests inject individual fakes,
+    # which are wrapped so the services see one interface either way. Absent
+    # providers stay absent, so an action with no client is refused rather than
+    # quietly skipped.
+    resolved_integrations = integrations or _StaticIntegrations(
         github=github,
         slack=slack or _UnconfiguredSlackService(),
-        # Absent means the action is refused rather than quietly skipped. A
-        # build with no Linear client must not report a comment nobody saw.
         linear=linear,
         calendar=calendar,
         gmail=gmail,
     )
+    feed_service = DefaultFeedService(
+        repo=repo, rules=DefaultRuleClassifier(), integrations=resolved_integrations
+    )
+    action_service = DefaultActionService(
+        repo=repo, integrations=resolved_integrations
+    )
     ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
-    current_user = build_current_user(auth_mode, jwt_secret)
+    current_user = build_current_user(auth_mode, token_codec)
 
     app = FastAPI(title="Work feed")
     app.state.feed_service = feed_service
     app.state.ingest_service = ingest_service
+
+    # Unauthenticated by design: these routes are how a user gets a token in the
+    # first place. Present only when an auth service is wired (dev/test builds
+    # can omit it and drive the app with the X-User-Id header).
+    if auth_service is not None:
+        app.include_router(build_auth_router(auth_service))
 
     # Only the web build needs this: a native app issues no preflight. Origins
     # are listed explicitly and never "*", because this API is authenticated
@@ -229,7 +275,31 @@ def create_app(
     def post_link(provider: Source, user_id: str = Depends(current_user)) -> dict:
         if connection_service is None:
             raise HTTPException(status_code=503, detail="connections not configured")
-        return {"url": connection_service.link_url(user_id, provider)}
+        try:
+            return {"url": connection_service.link_url(user_id, provider)}
+        except MissingAuthConfig:
+            # A deployment gap, not a user error: this toolkit has no auth config.
+            raise HTTPException(
+                status_code=503, detail=f"{provider.value} is not available to connect"
+            )
+
+    @app.get("/connections/{provider}/status", response_model=SourceInfo)
+    def get_connection_status(
+        provider: Source, user_id: str = Depends(current_user)
+    ) -> SourceInfo:
+        """Reconcile one source against Composio after the user returns from
+        consent. The mobile app polls this until it reads connected."""
+        if connection_service is None:
+            raise HTTPException(status_code=503, detail="connections not configured")
+        return connection_service.status(user_id, provider)
+
+    @app.delete("/connections/{provider}", status_code=204)
+    def delete_connection(
+        provider: Source, user_id: str = Depends(current_user)
+    ) -> None:
+        if connection_service is None:
+            raise HTTPException(status_code=503, detail="connections not configured")
+        connection_service.disconnect(user_id, provider)
 
     @app.get("/sources/{provider}", response_model=SourceDashboard)
     def get_source_dashboard(
@@ -242,7 +312,7 @@ def create_app(
         """
         if stats is None:
             raise HTTPException(status_code=503, detail="stats not configured")
-        return stats.dashboard(provider, repo.list_by_user(user_id))
+        return stats.dashboard(user_id, provider, repo.list_by_user(user_id))
 
     @app.get("/later")
     def stream_later_all(

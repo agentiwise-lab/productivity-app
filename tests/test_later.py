@@ -53,7 +53,14 @@ def _mail(ref, title):
 
 
 def _service(**kw):
-    return LaterService(clock=lambda: NOW, **kw)
+    from tests.fakes import FakeIntegrations
+
+    identity_for = kw.pop("identity_for", None)
+    return LaterService(
+        integrations=FakeIntegrations(**kw),
+        identity_for=identity_for,
+        clock=lambda: NOW,
+    )
 
 
 def test_rows_arrive_in_batches_rather_than_one_final_list():

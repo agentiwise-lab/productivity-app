@@ -13,7 +13,7 @@ It depends only on the other services' contracts, never their implementations.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from backend.integrations.github import GitHubService, PRRef
@@ -79,13 +79,13 @@ class DefaultFeedService:
         self,
         repo: FeedRepository,
         rules: RuleClassifier,
-        github: GitHubService,
+        integrations: Any | None = None,
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._repo = repo
         self._rules = rules
-        self._github = github
+        self._integrations = integrations
         self._new_id = id_factory or (lambda: uuid4().hex)
         self._now = clock or (lambda: datetime.now(timezone.utc))
 
@@ -147,7 +147,7 @@ class DefaultFeedService:
         item = self._repo.get(user_id, item_id)
         if item is None:
             raise ItemNotFound(item_id)
-        self._github.comment_on_pull_request(
+        self._integrations.github(user_id).comment_on_pull_request(
             _pr_ref_from_source_ref(item.source_ref), body
         )
         return self._repo.mark_handled(

@@ -22,6 +22,7 @@ from tests.fakes import (
     FakeGmailService,
     FakeCalendarService,
     FakeGitHubService,
+    FakeIntegrations,
     FakeLinearService,
     FakeSlackService,
     make_event,
@@ -35,11 +36,12 @@ def build():
     repo = InMemoryFeedRepository()
     github = FakeGitHubService()
     slack = FakeSlackService()
+    integrations = FakeIntegrations(github=github, slack=slack)
     feed = DefaultFeedService(
-        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+        repo=repo, rules=DefaultRuleClassifier(), integrations=integrations, clock=lambda: NOW
     )
     actions = DefaultActionService(
-        repo=repo, github=github, slack=slack, clock=lambda: NOW
+        repo=repo, integrations=integrations, clock=lambda: NOW
     )
     return actions, feed, repo, github, slack
 
@@ -215,16 +217,14 @@ def build_with_edges():
     slack = FakeSlackService()
     linear = FakeLinearService()
     calendar = FakeCalendarService()
+    integrations = FakeIntegrations(
+        github=github, slack=slack, linear=linear, calendar=calendar
+    )
     feed = DefaultFeedService(
-        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+        repo=repo, rules=DefaultRuleClassifier(), integrations=integrations, clock=lambda: NOW
     )
     actions = DefaultActionService(
-        repo=repo,
-        github=github,
-        slack=slack,
-        linear=linear,
-        calendar=calendar,
-        clock=lambda: NOW,
+        repo=repo, integrations=integrations, clock=lambda: NOW
     )
     return actions, feed, github, linear, calendar
 
@@ -353,15 +353,14 @@ def build_with_gmail(with_gmail: bool = True):
     repo = InMemoryFeedRepository()
     github = FakeGitHubService()
     gmail = FakeGmailService()
+    integrations = FakeIntegrations(
+        github=github, slack=FakeSlackService(), gmail=gmail if with_gmail else None
+    )
     feed = DefaultFeedService(
-        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+        repo=repo, rules=DefaultRuleClassifier(), integrations=integrations, clock=lambda: NOW
     )
     actions = DefaultActionService(
-        repo=repo,
-        github=github,
-        slack=FakeSlackService(),
-        gmail=gmail if with_gmail else None,
-        clock=lambda: NOW,
+        repo=repo, integrations=integrations, clock=lambda: NOW
     )
     return actions, feed, gmail
 
@@ -405,11 +404,12 @@ def test_an_action_with_no_upstream_configured_is_refused_not_silently_dropped()
     silent no-op would tell the user they had commented when nobody saw it."""
     repo = InMemoryFeedRepository()
     github = FakeGitHubService()
+    integrations = FakeIntegrations(github=github, slack=FakeSlackService())
     feed = DefaultFeedService(
-        repo=repo, rules=DefaultRuleClassifier(), github=github, clock=lambda: NOW
+        repo=repo, rules=DefaultRuleClassifier(), integrations=integrations, clock=lambda: NOW
     )
     actions = DefaultActionService(
-        repo=repo, github=github, slack=FakeSlackService(), clock=lambda: NOW
+        repo=repo, integrations=integrations, clock=lambda: NOW
     )
     item = feed.ingest("me", linear_event(), PREFS)
 

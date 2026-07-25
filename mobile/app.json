@@ -3,6 +3,7 @@
     "name": "mobile",
     "slug": "mobile",
     "version": "1.0.0",
+    "scheme": "productivityapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +23,9 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser"
     ]
   }
 }

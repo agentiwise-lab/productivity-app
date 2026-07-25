@@ -14,29 +14,66 @@ import pytest
 from backend.models.feed import FeedItem
 from backend.models.sources import CATALOGUE, ConnectionStatus, Source
 from backend.models.tiers import Tier, TypeTag
-from backend.services.connections import DefaultConnectionService
+from backend.repositories.connections import InMemoryConnectionRepository
+from backend.services.connections import DefaultConnectionService, MissingAuthConfig
+
+AUTH_CONFIGS = {source: f"ac_{source.value}" for source, _, _ in CATALOGUE}
 
 
-class FakeComposioAccounts:
+class FakeConnectedAccounts:
     def __init__(self, rows=None, error: Exception | None = None):
         self._rows = rows or []
         self._error = error
+        self.linked: list = []
+        self.deleted: list = []
 
     def list(self, **kwargs):
         if self._error:
             raise self._error
         return type("R", (), {"items": self._rows})()
 
+    def link(self, user_id, auth_config_id, callback_url=None):
+        self.linked.append((user_id, auth_config_id, callback_url))
+        return type(
+            "Req",
+            (),
+            {"redirect_url": f"https://composio/oauth/{auth_config_id}", "id": "req_1"},
+        )()
+
+    def delete(self, account_id):
+        self.deleted.append(account_id)
+
+
+class FakeTools:
+    def __init__(self, identity=None):
+        self._identity = identity or {}
+
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        return {"data": self._identity.get(slug, {})}
+
+
+class FakeComposio:
+    def __init__(self, rows=None, error=None, identity=None):
+        self.connected_accounts = FakeConnectedAccounts(rows, error)
+        self.tools = FakeTools(identity)
+
 
 def account(toolkit: str, status: str = "ACTIVE", ident: str = "ca_1"):
     return {"toolkit": {"slug": toolkit}, "status": status, "id": ident}
 
 
+def make(rows=None, error=None, identity=None, repo=None):
+    """Returns (service, composio, repo) so tests can inspect side effects."""
+    composio = FakeComposio(rows, error, identity)
+    repo = repo or InMemoryConnectionRepository()
+    service = DefaultConnectionService(
+        composio, auth_config_ids=AUTH_CONFIGS, repo=repo, callback_url="https://cb"
+    )
+    return service, composio, repo
+
+
 def build(rows=None, error=None):
-    composio = type(
-        "C", (), {"connected_accounts": FakeComposioAccounts(rows, error)}
-    )()
-    return DefaultConnectionService(composio=composio, composio_user_id="u1")
+    return make(rows, error)[0]
 
 
 def item(source: str, tier: Tier = Tier.TODAY) -> FeedItem:
@@ -138,3 +175,50 @@ def test_composio_being_down_still_returns_the_full_catalogue():
     sources = build(error=RuntimeError("composio down")).list_sources("u1", items=[])
     assert len(sources) == len(CATALOGUE)
     assert all(s.status is ConnectionStatus.ERROR for s in sources)
+
+
+# --- link / status / disconnect ---------------------------------------------
+
+
+def test_link_url_uses_the_right_auth_config_and_app_user():
+    service, composio, _ = make()
+    url = service.link_url("u1", Source.GITHUB)
+    assert composio.connected_accounts.linked == [("u1", "ac_github", "https://cb")]
+    assert url == "https://composio/oauth/ac_github"
+
+
+def test_link_url_without_an_auth_config_is_refused():
+    service = DefaultConnectionService(
+        FakeComposio(), auth_config_ids={}, repo=InMemoryConnectionRepository()
+    )
+    with pytest.raises(MissingAuthConfig):
+        service.link_url("u1", Source.GITHUB)
+
+
+def test_status_on_active_persists_the_row_with_identity():
+    service, _, repo = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    info = service.status("u1", Source.GITHUB)
+    assert info.status is ConnectionStatus.CONNECTED
+    row = repo.get("u1", "github")
+    assert row.composio_connected_account_id == "ca_live"
+    assert row.provider_login == "octocat"
+    assert repo.identity_for("u1", "github").github_login == "octocat"
+
+
+def test_status_while_still_pending_writes_nothing():
+    service, _, repo = make(rows=[account("github", "INITIATED")])
+    info = service.status("u1", Source.GITHUB)
+    assert info.status is ConnectionStatus.DISCONNECTED
+    assert repo.get("u1", "github") is None
+
+
+def test_disconnect_deletes_the_account_and_clears_the_row():
+    repo = InMemoryConnectionRepository()
+    repo.mark_active("u1", "github", composio_connected_account_id="ca_live")
+    service, composio, _ = make(repo=repo)
+    service.disconnect("u1", Source.GITHUB)
+    assert composio.connected_accounts.deleted == ["ca_live"]
+    assert repo.get("u1", "github") is None

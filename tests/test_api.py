@@ -88,16 +88,27 @@ def test_feed_is_isolated_per_user():
 # --- auth ------------------------------------------------------------------
 
 
+def _codec(secret="topsecret-topsecret-topsecret-topsecret"):
+    from datetime import timedelta
+
+    from backend.tokens import TokenCodec
+
+    return TokenCodec(
+        secret=secret, issuer="productivity-app", audience="app",
+        access_ttl=timedelta(minutes=15),
+    )
+
+
 def test_the_dev_header_is_refused_outside_dev_mode():
     """A trusted user-id header is the exact thing plan 6.5 forbids. It exists
     for local development, so it must be impossible to leave on by accident."""
-    app = create_app(github=FakeGitHubService(), auth_mode="supabase", jwt_secret="s")
+    app = create_app(github=FakeGitHubService(), auth_mode="own", token_codec=_codec())
     client = TestClient(app)
     assert client.get("/feed", headers={"X-User-Id": "me"}).status_code == 401
 
 
-def test_supabase_mode_requires_a_valid_token():
-    app = create_app(github=FakeGitHubService(), auth_mode="supabase", jwt_secret="s")
+def test_own_mode_requires_a_valid_token():
+    app = create_app(github=FakeGitHubService(), auth_mode="own", token_codec=_codec())
     client = TestClient(app)
     assert client.get("/feed").status_code == 401
     assert (
@@ -106,13 +117,12 @@ def test_supabase_mode_requires_a_valid_token():
     )
 
 
-def test_supabase_mode_reads_the_user_from_the_verified_token():
-    import jwt
+def test_own_mode_reads_the_user_from_the_verified_token():
+    from datetime import datetime, timezone
 
-    app = create_app(
-        github=FakeGitHubService(), auth_mode="supabase", jwt_secret="topsecret"
-    )
-    token = jwt.encode({"sub": USER, "aud": "authenticated"}, "topsecret", "HS256")
+    codec = _codec()
+    app = create_app(github=FakeGitHubService(), auth_mode="own", token_codec=codec)
+    token = codec.sign_access(USER, datetime.now(timezone.utc))
     client = TestClient(app)
     response = client.get("/feed", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
@@ -120,12 +130,12 @@ def test_supabase_mode_reads_the_user_from_the_verified_token():
 
 
 def test_a_token_signed_with_the_wrong_key_is_refused():
-    import jwt
+    from datetime import datetime, timezone
 
-    app = create_app(
-        github=FakeGitHubService(), auth_mode="supabase", jwt_secret="topsecret"
+    forged = _codec(secret="guess-guess-guess-guess-guess-guess-guess").sign_access(
+        USER, datetime.now(timezone.utc)
     )
-    forged = jwt.encode({"sub": USER, "aud": "authenticated"}, "guess", "HS256")
+    app = create_app(github=FakeGitHubService(), auth_mode="own", token_codec=_codec())
     client = TestClient(app)
     assert (
         client.get("/feed", headers={"Authorization": f"Bearer {forged}"}).status_code

@@ -14,10 +14,11 @@ export const API_URL =
 
 /**
  * Dev mode sends X-User-Id and the backend must be running with AUTH_MODE=dev.
- * Supabase mode sends the session JWT. There is no silent fallback between
- * them: a trusted header reaching production is exactly what plan 6.5 forbids.
+ * Own mode sends the session's access token as a Bearer and shows the login
+ * flow. There is no silent fallback between them: a trusted header reaching
+ * production is exactly what plan 6.5 forbids.
  */
-export const AUTH_MODE: 'dev' | 'supabase' =
-  (process.env.EXPO_PUBLIC_AUTH_MODE as 'dev' | 'supabase') ?? 'dev';
+export const AUTH_MODE: 'dev' | 'own' =
+  (process.env.EXPO_PUBLIC_AUTH_MODE as 'dev' | 'own') ?? 'dev';
 
 export const DEV_USER_ID = process.env.EXPO_PUBLIC_DEV_USER_ID ?? 'me';

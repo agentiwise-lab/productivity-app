@@ -8,7 +8,7 @@ from backend.models.tiers import Tier, TypeTag
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.rules import DefaultRuleClassifier
-from tests.fakes import FakeGitHubService, make_event
+from tests.fakes import FakeGitHubService, FakeIntegrations, make_event
 
 prefs = UserPreferences(user_id="me")
 NOW = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
@@ -19,7 +19,7 @@ def build(github: FakeGitHubService | None = None) -> DefaultFeedService:
     return DefaultFeedService(
         repo=InMemoryFeedRepository(),
         rules=DefaultRuleClassifier(),
-        github=github or FakeGitHubService(),
+        integrations=FakeIntegrations(github=github or FakeGitHubService()),
         id_factory=lambda: f"id{next(counter)}",
         clock=lambda: NOW,
     )

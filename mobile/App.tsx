@@ -12,6 +12,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,6 +29,8 @@ import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { AppearanceProvider, haptics, useTheme } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
+import { AuthProvider, useAuth } from './src/auth/AuthContext';
+import { AuthGate } from './src/screens/auth/AuthGate';
 import type {
   FeedRow,
   MeetingOut,
@@ -115,15 +118,32 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppearanceProvider>
         <SafeAreaProvider>
-          <Shell />
+          <AuthProvider api={api}>
+            <Gate />
+          </AuthProvider>
         </SafeAreaProvider>
       </AppearanceProvider>
     </GestureHandlerRootView>
   );
 }
 
+/**
+ * The one decision above the whole app: are we in, out, or still finding out.
+ * Signed in gets the five tabs; signed out gets the auth flow; loading gets a
+ * bare canvas rather than a spinner, because restoring a token from the keychain
+ * is a few milliseconds and a flash of spinner reads as slower than nothing.
+ */
+function Gate() {
+  const { status } = useAuth();
+  const c = useTheme();
+  if (status === 'loading') return <View style={{ flex: 1, backgroundColor: c.canvas }} />;
+  if (status === 'signedOut') return <AuthGate />;
+  return <Shell />;
+}
+
 function Shell() {
   const c = useTheme();
+  const { email: authEmail, signOut } = useAuth();
   const [rows, setRows] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
@@ -324,26 +344,62 @@ function Shell() {
     }
   }, []);
 
-  const connectSource = useCallback(async (provider: Source) => {
-    const label = SOURCE_LABELS[provider];
-    try {
-      const { url } = await api.connectUrl(provider);
-      if (url) {
-        void Linking.openURL(url);
-        return;
-      }
-    } catch {
-      // fall through to the explanation below
-    }
-    Alert.alert(
-      `Connect ${label}`,
-      'Managed sign-in is not wired up in this build. The accounts in this demo were connected in Composio directly.',
-    );
-  }, []);
+  const connectSource = useCallback(
+    async (provider: Source) => {
+      const label = SOURCE_LABELS[provider];
+      try {
+        const { url } = await api.connectUrl(provider);
+        if (!url) throw new Error('no url');
 
-  const notImplemented = useCallback(() => {
-    Alert.alert('Not yet', 'Signing out lands with managed accounts.');
-  }, []);
+        // The in-app browser returns to us when the OAuth flow reaches our
+        // scheme, or when the user closes it. Either way we then ask the backend
+        // whether the account went active, because Composio does the token
+        // exchange server-side and the redirect alone does not prove success.
+        // Matches the "scheme" in app.json. When the OAuth flow lands here the
+        // in-app browser closes and returns control to us.
+        const returnUrl = 'productivityapp://composio-callback';
+        await WebBrowser.openAuthSessionAsync(url, returnUrl);
+
+        for (let attempt = 0; attempt < 15; attempt++) {
+          try {
+            const info = await api.connectionStatus(provider);
+            if (info.status === 'connected') {
+              await loadSources();
+              haptics.commit();
+              return;
+            }
+          } catch {
+            // keep polling; a transient read is not a failed connection
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        await loadSources();
+        Alert.alert(
+          `Connect ${label}`,
+          "We couldn't confirm the connection yet. It may just need a moment; pull to refresh.",
+        );
+      } catch {
+        Alert.alert(`Connect ${label}`, 'Could not start the connection. Please try again.');
+      }
+    },
+    [loadSources],
+  );
+
+  const disconnectSource = useCallback(
+    async (provider: Source) => {
+      try {
+        await api.disconnect(provider);
+      } catch {
+        // Even a failed call clears our side; the next status read reconciles.
+      }
+      await loadSources();
+    },
+    [loadSources],
+  );
+
+  const onSignOut = useCallback(() => {
+    void signOut();
+  }, [signOut]);
 
   return (
     <>
@@ -402,12 +458,13 @@ function Shell() {
           <Tab.Screen name="You" options={{ title: 'You' }}>
             {() => (
               <YouScreen
-                email={DEV_USER_ID}
+                email={authEmail || DEV_USER_ID}
                 notifyLevel={notifyLevel}
                 connections={sources}
                 onSetNotifyLevel={setNotifyLevel}
                 onConnect={connectSource}
-                onSignOut={notImplemented}
+                onDisconnect={disconnectSource}
+                onSignOut={onSignOut}
               />
             )}
           </Tab.Screen>

@@ -45,9 +45,39 @@ class FakeClassifier:
         return type("R", (), {"classified": 3})()
 
 
-def build(**sources):
+class FakeIntegrations:
+    """Returns the FakeSource given for each provider, and None for the rest, so
+    a test that wires only GitHub polls only GitHub."""
+
+    def __init__(self, sources):
+        self._sources = sources
+
+    def github(self, user_id):
+        return self._sources.get("github")
+
+    def slack(self, user_id):
+        return self._sources.get("slack")
+
+    def linear(self, user_id):
+        return self._sources.get("linear")
+
+    def gmail(self, user_id):
+        return self._sources.get("gmail")
+
+    def calendar(self, user_id):
+        return self._sources.get("calendar")
+
+
+def build(**kwargs):
     repo = InMemoryFeedRepository()
-    sync = SourceSync(feed=build_feed_service(repo=repo, github=FakeGitHubService()), **sources)
+    classifier = kwargs.pop("classifier", None)
+    identity_for = kwargs.pop("identity_for", None)
+    sync = SourceSync(
+        feed=build_feed_service(repo=repo, github=FakeGitHubService()),
+        integrations=FakeIntegrations(kwargs),
+        classifier=classifier,
+        identity_for=identity_for,
+    )
     return sync, repo
 
 

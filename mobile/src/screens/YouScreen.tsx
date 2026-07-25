@@ -11,7 +11,7 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -55,6 +55,7 @@ interface Props {
   connections: SourceInfo[];
   onSetNotifyLevel: (level: NotifyLevel) => void;
   onConnect: (provider: Source) => void;
+  onDisconnect: (provider: Source) => void;
   onSignOut: () => void;
 }
 
@@ -65,6 +66,7 @@ export function YouScreen({
   connections,
   onSetNotifyLevel,
   onConnect,
+  onDisconnect,
   onSignOut,
 }: Props) {
   const c = useTheme();
@@ -193,7 +195,22 @@ export function YouScreen({
             subtitle={statusLine(info)}
             trailing={
               info.status === 'connected' ? (
-                <View
+                <Pressable
+                  onPress={() =>
+                    Alert.alert(
+                      `Disconnect ${info.label}?`,
+                      'This app will lose access until you connect it again.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Disconnect',
+                          style: 'destructive',
+                          onPress: () => onDisconnect(info.source),
+                        },
+                      ],
+                    )
+                  }
+                  hitSlop={8}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}
                 >
                   <View
@@ -207,7 +224,7 @@ export function YouScreen({
                   <T role="label" tone="low">
                     Live
                   </T>
-                </View>
+                </Pressable>
               ) : (
                 <Chip
                   label="Connect"

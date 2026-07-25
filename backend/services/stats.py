@@ -25,15 +25,13 @@ from typing import Any
 from pydantic import BaseModel
 
 from backend.models.feed import FeedItem
+from backend.models.identity import Identity
 from backend.models.sources import LABELS, Source
 from backend.models.tiers import Tier
 
 log = logging.getLogger(__name__)
 
 WINDOW = timedelta(days=30)
-
-# Commits are authored under either of the user's GitHub identities.
-_GITHUB_LOGINS = {"vicky81125", "vicky99105"}
 
 
 class StatLine(BaseModel):
@@ -110,51 +108,60 @@ CACHE_TTL = timedelta(seconds=60)
 class SourceStatsService:
     def __init__(
         self,
-        github: Any | None = None,
-        linear: Any | None = None,
-        calendar: Any | None = None,
-        gmail: Any | None = None,
-        slack: Any | None = None,
+        integrations: Any | None = None,
+        identity_for: Any | None = None,
         clock: Any | None = None,
     ) -> None:
-        self._github = github
-        self._linear = linear
-        self._calendar = calendar
-        self._gmail = gmail
-        self._slack = slack
+        self._integrations = integrations
+        self._identity_for = identity_for or (lambda user, provider: Identity())
         self._now_fn = clock or (lambda: datetime.now(timezone.utc))
-        self._cache: dict[Source, tuple[datetime, SourceDashboard]] = {}
+        # Keyed by (user_id, source), never source alone: a board cached for one
+        # user must never be served to another. That single-key cache was a
+        # cross-tenant leak waiting to happen.
+        self._cache: dict[tuple[str, Source], tuple[datetime, SourceDashboard]] = {}
 
     def dashboard(
-        self, source: Source, items: list[FeedItem], now: datetime | None = None
+        self,
+        user_id: str,
+        source: Source,
+        items: list[FeedItem],
+        now: datetime | None = None,
     ) -> SourceDashboard:
         now = now or self._now_fn()
 
-        cached = self._cache.get(source)
+        key = (user_id, source)
+        cached = self._cache.get(key)
         if cached is not None and now - cached[0] < CACHE_TTL:
             return cached[1]
 
-        board = self._build(source, items, now)
-        self._cache[source] = (now, board)
+        board = self._build(user_id, source, items, now)
+        self._cache[key] = (now, board)
         return board
 
     def _build(
-        self, source: Source, items: list[FeedItem], now: datetime
+        self, user_id: str, source: Source, items: list[FeedItem], now: datetime
     ) -> SourceDashboard:
         mine = _recent([i for i in items if i.source == source.value], now)
         board = SourceDashboard(source=source, label=LABELS[source])
+        resolve = (
+            (lambda attr: getattr(self._integrations, attr)(user_id))
+            if self._integrations is not None
+            else (lambda attr: None)
+        )
 
         try:
             if source is Source.GITHUB:
-                self._github_board(board, mine)
+                login = self._identity_for(user_id, "github").github_login
+                logins = {login} if login else set()
+                self._github_board(board, mine, resolve("github"), logins)
             elif source is Source.LINEAR:
-                self._linear_board(board, mine)
+                self._linear_board(board, mine, resolve("linear"))
             elif source is Source.CALENDAR:
-                self._calendar_board(board, now)
+                self._calendar_board(board, now, resolve("calendar"))
             elif source is Source.GMAIL:
-                self._gmail_board(board, mine)
+                self._gmail_board(board, mine, resolve("gmail"))
             elif source is Source.SLACK:
-                self._slack_board(board, mine, now)
+                self._slack_board(board, mine, now, resolve("slack"))
         except Exception:
             log.warning("dashboard build failed for %s", source.value, exc_info=True)
             board.unavailable.append("live activity")
@@ -171,9 +178,15 @@ class SourceStatsService:
 
     # --------------------------------------------------------------- GitHub
 
-    def _github_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
+    def _github_board(
+        self,
+        board: SourceDashboard,
+        items: list[FeedItem],
+        github: Any | None,
+        logins: set[str],
+    ) -> None:
         board.breakdown_title = "Repositories"
-        if self._github is None:
+        if github is None:
             repos = Counter(i.repo for i in items if i.repo)
             board.breakdown = [
                 StatLine(label=r.split("/")[-1], value=c, detail="notifications")
@@ -184,8 +197,8 @@ class SourceStatsService:
         # The two halves are independent, so they run together. In series the
         # board paid for both round trips, and the second is itself two deep.
         with ThreadPoolExecutor(max_workers=2) as pool:
-            summary_f = pool.submit(self._github.activity_summary)
-            repos_f = pool.submit(self._github.repo_activity, _GITHUB_LOGINS)
+            summary_f = pool.submit(github.activity_summary)
+            repos_f = pool.submit(github.repo_activity, logins)
 
         try:
             activity = summary_f.result()
@@ -229,14 +242,16 @@ class SourceStatsService:
 
     # --------------------------------------------------------------- Linear
 
-    def _linear_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
+    def _linear_board(
+        self, board: SourceDashboard, items: list[FeedItem], linear: Any | None
+    ) -> None:
         board.breakdown_title = "Projects"
-        if self._linear is None:
+        if linear is None:
             board.unavailable.append("linear")
             return
 
         try:
-            stats = self._linear.issue_stats()
+            stats = linear.issue_stats()
         except Exception:
             log.warning("linear issue stats failed", exc_info=True)
             board.unavailable.append("issue counts")
@@ -294,13 +309,15 @@ class SourceStatsService:
 
     # ------------------------------------------------------------- Calendar
 
-    def _calendar_board(self, board: SourceDashboard, now: datetime) -> None:
+    def _calendar_board(
+        self, board: SourceDashboard, now: datetime, calendar: Any | None
+    ) -> None:
         board.breakdown_title = "Most frequent, last 30 days"
-        if self._calendar is None:
+        if calendar is None:
             board.unavailable.append("calendar")
             return
 
-        meetings_today = self._calendar.today(now=now)
+        meetings_today = calendar.today(now=now)
         booked_today = sum((m.end - m.start).total_seconds() / 3600 for m in meetings_today)
         board.headline += [
             StatLine(label="Today", value=len(meetings_today), detail="meetings"),
@@ -308,7 +325,7 @@ class SourceStatsService:
         ]
 
         try:
-            window = self._calendar.window_meetings(now=now)
+            window = calendar.window_meetings(now=now)
         except Exception:
             log.warning("calendar window failed", exc_info=True)
             board.unavailable.append("30-day meetings")
@@ -338,14 +355,16 @@ class SourceStatsService:
 
     # --------------------------------------------------------------- Gmail
 
-    def _gmail_board(self, board: SourceDashboard, items: list[FeedItem]) -> None:
+    def _gmail_board(
+        self, board: SourceDashboard, items: list[FeedItem], gmail: Any | None
+    ) -> None:
         board.breakdown_title = "Senders"
-        if self._gmail is None:
+        if gmail is None:
             board.unavailable.append("gmail")
             return
 
         try:
-            summary = self._gmail.inbox_summary()
+            summary = gmail.inbox_summary()
         except Exception:
             log.warning("gmail inbox summary failed", exc_info=True)
             board.unavailable.append("unread mail")
@@ -388,14 +407,18 @@ class SourceStatsService:
     # --------------------------------------------------------------- Slack
 
     def _slack_board(
-        self, board: SourceDashboard, items: list[FeedItem], now: datetime
+        self,
+        board: SourceDashboard,
+        items: list[FeedItem],
+        now: datetime,
+        slack: Any | None,
     ) -> None:
         board.breakdown_title = "Where the traffic is"
-        if self._slack is None:
+        if slack is None:
             board.unavailable.append("slack")
             return
         try:
-            summary = self._slack.channel_summary(now=now)
+            summary = slack.channel_summary(now=now)
         except Exception:
             log.warning("slack summary failed", exc_info=True)
             board.unavailable.append("message volume")
