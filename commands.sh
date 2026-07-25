@@ -191,38 +191,95 @@ curl -s -X POST $BASE/connections/github/link -H "Authorization: Bearer $TOKEN" 
 
 
 # =============================================================================
-# 8. ENVIRONMENT VARIABLES — REFERENCE (★ = changes per host / deployment)
+# 8. ENVIRONMENT VARIABLES — THE COMPLETE STORY
 # =============================================================================
-# --- backend/.env -----------------------------------------------------------
-#   AUTH_MODE=own                         # own (prod) | dev (local only)
-#   AUTH_JWT_SECRET=<32+ random chars>    # our JWT signing secret. KEEP SECRET.
-#   AUTH_JWT_ISSUER=productivity-app      # optional (defaults shown)
-#   AUTH_JWT_AUDIENCE=app                 # optional
-#   AUTH_ACCESS_TTL_MIN=15                # optional
-#   AUTH_REFRESH_TTL_DAYS=30              # optional
-#   OTP_TTL_MIN=10 / OTP_RESEND_COOLDOWN_SEC=60 / OTP_MAX_ATTEMPTS=5   # optional
-#   LOOPS_API_KEY=...                     # optional (unset -> OTP logged)
-#   LOOPS_OTP_TRANSACTIONAL_ID=...        # optional
-#   SUPABASE_URL=... / SUPABASE_SERVICE_ROLE_KEY=... / SUPABASE_ANON_KEY=...
-#   COMPOSIO_API_KEY=...
-#   COMPOSIO_WEBHOOK_SECRET=...
-#   COMPOSIO_AUTH_CONFIG_GITHUB / _SLACK / _GOOGLECALENDAR / _LINEAR / _GMAIL / _GOOGLEDOCS
-#   COMPOSIO_CALLBACK_URL=productivityapp://composio-callback   # mobile scheme
-# ★ CORS_ORIGINS=...                      # comma-separated allowed web origins.
-#                                         # Native app needs none; the Expo WEB
-#                                         # preview and any hosted web client do.
-#   COMPOSIO_USER_ID=<uuid>               # legacy/dev fallback only; unused in own+Supabase
+# Read this once; it is the whole mental model for deploying and running the app.
+# There are THREE kinds of configuration, and only the first is set in .env:
 #
-# --- mobile/.env ------------------------------------------------------------
-# ★ EXPO_PUBLIC_API_URL=http://192.168.0.104:8000   # LOCAL: Mac LAN IP
-#                                                    # PROD:  https://<ec2>.sslip.io
-#   EXPO_PUBLIC_AUTH_MODE=own
-#   EXPO_PUBLIC_DEV_USER_ID=<uuid>        # only when AUTH_MODE=dev
+#   (A) APP-LEVEL — the OPERATOR sets these ONCE on the server. One set of
+#       values serves EVERY user of the deployment. This is almost everything
+#       below. These are what let people sign up and connect their accounts.
 #
-# --- Set in the Composio DASHBOARD, not env (★ per host) --------------------
-# ★ Webhook target URL:  https://<BACKEND_PUBLIC_HOST>/webhooks/composio
+#   (B) PER-USER — set by NOBODY in env. Each end user signs up (email + OTP +
+#       password) and then connects THEIR OWN GitHub/Gmail/Slack/etc. through
+#       Composio's OAuth screens, in the app. Their access tokens live inside
+#       Composio; our DB stores only a pointer + status. So onboarding a new
+#       user requires ZERO env changes — that is the point of the per-user
+#       design. The app's Composio API key + auth configs (app-level) are the
+#       "container" under which each user's own connections are created.
 #
-# .env files are gitignored and NEVER committed. Set them per machine/host.
+#   (C) HOST-DEPENDENT — a small subset of (A) whose VALUE changes when you move
+#       the backend to a new address (local LAN IP -> EC2 HTTPS URL). Marked ★.
+#
+# .env files are gitignored and NEVER committed. Create them per machine/host.
+# Generate the JWT secret with:  python3 -c "import secrets;print(secrets.token_urlsafe(48))"
+#
+# -----------------------------------------------------------------------------
+# 8a. BACKEND .env — PRODUCTION TEMPLATE (copy to /home/ec2-user/productivity-app/.env)
+# -----------------------------------------------------------------------------
+#   # --- Auth (lets users sign up & log in). APP-LEVEL. ---
+#   AUTH_MODE=own                              # MUST be own in production
+#   AUTH_JWT_SECRET=<64 random chars>          # SECRET. Unique per deployment.
+#                                              # Changing it logs everyone out.
+#   AUTH_JWT_ISSUER=productivity-app           # optional (default shown)
+#   AUTH_JWT_AUDIENCE=app                      # optional
+#   AUTH_ACCESS_TTL_MIN=15                     # optional
+#   AUTH_REFRESH_TTL_DAYS=30                   # optional
+#   OTP_TTL_MIN=10                             # optional
+#   OTP_RESEND_COOLDOWN_SEC=60                 # optional
+#   OTP_MAX_ATTEMPTS=5                         # optional
+#
+#   # --- Email delivery of the OTP (required in prod, else code only logs). APP-LEVEL. ---
+#   LOOPS_API_KEY=<loops key>                  # SECRET. From the Loops account you bill under.
+#   LOOPS_OTP_TRANSACTIONAL_ID=<transactional id>   # the published OTP template's id
+#
+#   # --- Storage (Supabase = database only, no Supabase Auth). APP-LEVEL. ---
+#   SUPABASE_URL=https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY=<service role key>    # SECRET. Backend uses this (bypasses RLS).
+#   SUPABASE_ANON_KEY=<anon key>
+#
+#   # --- Composio (the container for every user's integrations). APP-LEVEL. ---
+#   COMPOSIO_API_KEY=<composio key>            # SECRET. The app's Composio account.
+#   COMPOSIO_WEBHOOK_SECRET=<webhook secret>   # SECRET. Verifies inbound webhooks.
+#   COMPOSIO_AUTH_CONFIG_GITHUB=ac_...         # one managed-OAuth auth config id per toolkit.
+#   COMPOSIO_AUTH_CONFIG_SLACK=ac_...          # created once in the Composio dashboard/SDK (§6).
+#   COMPOSIO_AUTH_CONFIG_GOOGLECALENDAR=ac_... # These are what a user's "Connect GitHub" etc.
+#   COMPOSIO_AUTH_CONFIG_LINEAR=ac_...         # button uses; without an id for a toolkit its
+#   COMPOSIO_AUTH_CONFIG_GMAIL=ac_...          # connect route returns 503.
+#   COMPOSIO_AUTH_CONFIG_GOOGLEDOCS=ac_...
+#   COMPOSIO_CALLBACK_URL=productivityapp://composio-callback   # APP-CONSTANT (mobile deep-link
+#                                              # scheme). Does NOT change per host.
+#
+#   # --- Web CORS. ★ HOST-DEPENDENT. ---
+#   CORS_ORIGINS=https://<your-web-origin>     # comma-separated. Empty is fine for a
+#                                              # native-only app; needed for the Expo web
+#                                              # preview or any browser client.
+#
+#   # NOTE: COMPOSIO_USER_ID is NOT needed in production (own + Supabase). It is
+#   # only an optional local dev fallback for the in-memory connection store.
+#
+# -----------------------------------------------------------------------------
+# 8b. MOBILE mobile/.env — PRODUCTION TEMPLATE (set before the EAS build, §10)
+# -----------------------------------------------------------------------------
+#   EXPO_PUBLIC_API_URL=https://<ec2-ip-dashes>.sslip.io   # ★ HOST-DEPENDENT: the backend URL.
+#                                                          # LOCAL dev: http://<Mac-LAN-IP>:8000
+#   EXPO_PUBLIC_AUTH_MODE=own                              # own in prod
+#   EXPO_PUBLIC_DEV_USER_ID=<uuid>                         # ignored unless AUTH_MODE=dev
+#
+# -----------------------------------------------------------------------------
+# 8c. NOT in env — set in the Composio DASHBOARD (★ host-dependent)
+# -----------------------------------------------------------------------------
+#   Webhook target URL:  https://<BACKEND_PUBLIC_HOST>/webhooks/composio
+#   (only needed for real-time push ingestion; polling works without it).
+#
+# -----------------------------------------------------------------------------
+# 8d. THE ★ HOST-DEPENDENT SHORTLIST — the ONLY things that change on a new host
+# -----------------------------------------------------------------------------
+#   1. mobile/.env  EXPO_PUBLIC_API_URL      -> the backend's new public URL
+#   2. Composio dashboard webhook target     -> https://<new host>/webhooks/composio
+#   3. backend .env CORS_ORIGINS             -> only if you serve a web client
+#   Everything else (secrets, Composio auth configs, Loops, Supabase, the
+#   callback scheme) is the SAME on every host.
 
 
 # =============================================================================
@@ -235,15 +292,28 @@ curl -s -X POST $BASE/connections/github/link -H "Authorization: Bearer $TOKEN" 
 # The public backend host will look like:  https://<IP-WITH-DASHES>.sslip.io
 #   e.g. instance 13.54.201.9  ->  https://13-54-201-9.sslip.io
 #
+# HOW USERS WORK ON THE DEPLOYED APP (why this is enough for "anybody"):
+#   The operator sets ONE backend .env (§8a). After that, any number of people
+#   install the app, SIGN UP with email + OTP + password, and CONNECT their own
+#   GitHub/Gmail/Slack/etc. through Composio's OAuth — all self-service, with NO
+#   further env changes. Each user's tokens live in Composio under the app's
+#   auth configs; our DB stores only pointers scoped to that user. Onboarding a
+#   new user = zero ops work.
+#
 # --- 9a. First-time server prep --------------------------------------------
 #   ssh -i <key>.pem ec2-user@<EC2_IP>
 #   sudo yum install -y git             # (Amazon Linux) or apt on Ubuntu
 #   curl -LsSf https://astral.sh/uv/install.sh | sh      # install uv
 #   git clone git@github-vicky81125:agentiwise-lab/productivity-app.git
 #   cd productivity-app && uv sync
-#   # Create backend .env on the server with the PROD values (see §8). Critically:
-#   #   AUTH_MODE=own, a strong AUTH_JWT_SECRET, real Supabase + Composio keys,
-#   #   CORS_ORIGINS set to your web origin(s) if any.
+#   # Create backend .env on the server: copy the §8a PRODUCTION TEMPLATE and
+#   # fill every value. Non-negotiable for a working deployment:
+#   #   - AUTH_MODE=own  and a strong unique AUTH_JWT_SECRET  (sign-in)
+#   #   - LOOPS_API_KEY + LOOPS_OTP_TRANSACTIONAL_ID          (OTP email)
+#   #   - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (+ ANON)   (storage)
+#   #   - COMPOSIO_API_KEY + all 6 COMPOSIO_AUTH_CONFIG_* + COMPOSIO_WEBHOOK_SECRET
+#   #     + COMPOSIO_CALLBACK_URL                              (integrations)
+#   # Also run any un-applied DB migration on Supabase first (§5).
 #   # If the box has <2GB RAM, add swap (see §12).
 #
 # --- 9b. Run the backend as a service (systemd) ----------------------------
