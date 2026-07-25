@@ -114,3 +114,9 @@ export interface LaterRow {
   url: string;
   occurred_at: string | null;
 }
+
+/** The user's editable profile: email is fixed, name is optional. */
+export interface Profile {
+  email: string;
+  name: string | null;
+}

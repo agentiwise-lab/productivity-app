@@ -50,12 +50,13 @@ const APPEARANCES: { value: Appearance; label: string }[] = [
 
 interface Props {
   email: string;
-  name?: string;
+  name?: string | null;
   notifyLevel: NotifyLevel;
   connections: SourceInfo[];
   onSetNotifyLevel: (level: NotifyLevel) => void;
   onConnect: (provider: Source) => void;
   onDisconnect: (provider: Source) => void;
+  onEditName: () => void;
   onSignOut: () => void;
 }
 
@@ -67,6 +68,7 @@ export function YouScreen({
   onSetNotifyLevel,
   onConnect,
   onDisconnect,
+  onEditName,
   onSignOut,
 }: Props) {
   const c = useTheme();
@@ -103,6 +105,34 @@ export function YouScreen({
         {/* The name alone. The address was an eyebrow reading "Signed in" over
             it, which labelled the obvious; the name is enough. */}
         <ScreenHeader title={title} />
+
+        {/* Editable display name: what the greeting uses. Tapping opens the same
+            prompt shown once after signup. */}
+        <Pressable
+          onPress={onEditName}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm,
+            paddingHorizontal: space.md,
+            minHeight: 72,
+            marginTop: space.sm,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <T role="heading">Name</T>
+            <T role="secondary" tone="mid">
+              {name || 'Add your name'}
+            </T>
+          </View>
+          <Chip
+            label={name ? 'Edit' : 'Add'}
+            variant="outline"
+            onPress={onEditName}
+          />
+        </Pressable>
+
+        <Separator inset={0} />
 
         {/* No "Notifications" label over a row that opens "Notify me": the
             heading and the control were saying the same word twice. */}

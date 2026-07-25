@@ -30,6 +30,7 @@ from backend.services.auth_service import DefaultAuthService
 from backend.services.connections import DefaultConnectionService
 from backend.services.later import LaterService
 from backend.services.passwords import Argon2PasswordHasher
+from backend.services.profile import DefaultProfileService
 from backend.services.stats import SourceStatsService
 from backend.services.sync import SourceSync
 from backend.services.triggers import DefaultTriggerProvisioner
@@ -140,8 +141,11 @@ def build_app() -> FastAPI:
         api_key=os.environ.get("LOOPS_API_KEY"),
         otp_transactional_id=os.environ.get("LOOPS_OTP_TRANSACTIONAL_ID"),
     )
+    # One credentials store, shared: auth reads and writes credentials through
+    # it, profile reads and sets the name on the same users row.
+    credentials = _build_credentials_repository()
     auth_service = DefaultAuthService(
-        repo=_build_credentials_repository(),
+        repo=credentials,
         passwords=Argon2PasswordHasher(),
         codec=codec,
         send_email=email_service.send_otp,
@@ -152,6 +156,7 @@ def build_app() -> FastAPI:
         ),
         max_attempts=int(os.environ.get("OTP_MAX_ATTEMPTS", "5")),
     )
+    profile_service = DefaultProfileService(repo=credentials)
 
     return create_app(
         repo=repo,
@@ -162,6 +167,7 @@ def build_app() -> FastAPI:
         auth_service=auth_service,
         classifier=classifier,
         connection_service=connection_service,
+        profile_service=profile_service,
         stats=stats,
         later=later,
         sync=sync,

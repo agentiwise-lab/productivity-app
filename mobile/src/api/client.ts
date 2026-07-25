@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   FeedRow,
   MeetingOut,
+  Profile,
   RefreshResult,
   SourceDashboard,
   SourceInfo,
@@ -225,5 +226,18 @@ export class ApiClient {
 
   dismiss(itemId: string) {
     return this.request<FeedRow>(`/feed/${itemId}/dismiss`, { method: 'POST' });
+  }
+
+  /** The signed-in user's profile: email plus the optional display name. */
+  me(): Promise<Profile> {
+    return this.request<Profile>('/me');
+  }
+
+  /** Set (or, with an empty string, clear) the display name. */
+  setName(name: string): Promise<Profile> {
+    return this.request<Profile>('/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
   }
 }

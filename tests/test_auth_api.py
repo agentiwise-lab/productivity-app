@@ -19,6 +19,7 @@ from backend.main import create_app
 from backend.repositories.credentials_repository import InMemoryCredentialsRepository
 from backend.services.auth_service import DefaultAuthService
 from backend.services.passwords import FakePasswordHasher
+from backend.services.profile import DefaultProfileService
 from backend.tokens import TokenCodec
 from tests.fakes import FakeGitHubService
 
@@ -31,8 +32,9 @@ def build():
         access_ttl=timedelta(minutes=15),
     )
     mail = FakeEmailService()
+    repo = InMemoryCredentialsRepository()
     auth = DefaultAuthService(
-        repo=InMemoryCredentialsRepository(),
+        repo=repo,
         passwords=FakePasswordHasher(),
         codec=codec,
         send_email=mail.send_otp,
@@ -46,6 +48,7 @@ def build():
         auth_mode="own",
         token_codec=codec,
         auth_service=auth,
+        profile_service=DefaultProfileService(repo=repo),
     )
     return TestClient(app), mail
 
@@ -137,3 +140,44 @@ def test_dev_mode_header_still_works():
     app = create_app(github=FakeGitHubService(), auth_mode="dev")
     client = TestClient(app)
     assert client.get("/feed", headers={"X-User-Id": "me"}).status_code == 200
+
+
+def _register(client, mail, email="p@example.com"):
+    client.post("/auth/otp/send", json={"email": email})
+    code = mail.last_code(email)
+    resp = client.post(
+        "/auth/register",
+        json={"email": email, "code": code, "password": "hunter2-hunter2"},
+    )
+    return resp.json()["access_token"]
+
+
+def test_me_starts_with_no_name_then_patch_sets_it():
+    client, mail = build()
+    access = _register(client, mail)
+    auth = {"Authorization": f"Bearer {access}"}
+
+    me = client.get("/me", headers=auth)
+    assert me.status_code == 200
+    assert me.json() == {"email": "p@example.com", "name": None}
+
+    patched = client.patch("/me", json={"name": "  Vicky  "}, headers=auth)
+    assert patched.status_code == 200
+    assert patched.json()["name"] == "Vicky"
+
+    # Durable: a fresh GET reflects it.
+    assert client.get("/me", headers=auth).json()["name"] == "Vicky"
+
+
+def test_me_requires_auth():
+    client, _ = build()
+    assert client.get("/me").status_code == 401
+
+
+def test_patch_me_with_blank_clears_the_name():
+    client, mail = build()
+    access = _register(client, mail, "q@example.com")
+    auth = {"Authorization": f"Bearer {access}"}
+    client.patch("/me", json={"name": "Vicky"}, headers=auth)
+    cleared = client.patch("/me", json={"name": "  "}, headers=auth)
+    assert cleared.json()["name"] is None

@@ -23,6 +23,8 @@ class UserRecord(BaseModel):
     email: str
     # Null between provisioning and the moment a password is set.
     password_hash: str | None = None
+    # Optional display name, set after signup. Null until the user provides one.
+    name: str | None = None
     created_at: datetime | None = None
 
 

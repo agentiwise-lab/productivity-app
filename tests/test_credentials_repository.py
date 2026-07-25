@@ -42,6 +42,25 @@ def test_set_password_updates_the_user(repo):
     assert repo.get_user_by_email("a@example.com").password_hash == "new"
 
 
+def test_get_user_by_id(repo):
+    created = repo.create_user("a@example.com", "hash")
+    found = repo.get_user_by_id(created.id)
+    assert found is not None and found.email == "a@example.com"
+    assert found.name is None
+
+
+def test_get_user_by_id_unknown_is_none(repo):
+    assert repo.get_user_by_id("00000000-0000-0000-0000-000000000000") is None
+
+
+def test_set_name_updates_the_user(repo):
+    user = repo.create_user("a@example.com", "hash")
+    repo.set_name(user.id, "Vicky")
+    assert repo.get_user_by_id(user.id).name == "Vicky"
+    repo.set_name(user.id, None)
+    assert repo.get_user_by_id(user.id).name is None
+
+
 # --- otp ---------------------------------------------------------------
 def test_upsert_then_get_active_otp(repo):
     repo.upsert_otp("a@example.com", OtpPurpose.SIGNUP, "codehash", NOW + timedelta(minutes=10), NOW)

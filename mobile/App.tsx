@@ -10,7 +10,7 @@
  * app failing at its one job. If the call fails the row comes back and says so.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Linking, Platform, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
@@ -38,6 +38,7 @@ import type {
   SourceDashboard,
   SourceInfo,
 } from './src/api/types';
+import { NamePrompt } from './src/components/NamePrompt';
 import { YourDayScreen } from './src/screens/YourDayScreen';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
@@ -167,6 +168,11 @@ function Shell() {
   const [dayLoading, setDayLoading] = useState(true);
   const [dashboard, setDashboard] = useState<SourceDashboard | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [name, setName] = useState<string | null>(null);
+  const [nameModalOpen, setNameModalOpen] = useState(false);
+  // The post-signup prompt fires once per session: cancelling it must not make
+  // it pop again on the next data refresh.
+  const autoPrompted = useRef(false);
 
   useEffect(() => {
     haptics.prepare();
@@ -218,6 +224,30 @@ function Shell() {
     }
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    try {
+      const profile = await api.me();
+      setName(profile.name);
+      // No name yet means a fresh account: ask once, right after signup.
+      if (!profile.name && !autoPrompted.current) {
+        autoPrompted.current = true;
+        setNameModalOpen(true);
+      }
+    } catch {
+      // Non-fatal: the greeting stays generic until /me answers.
+    }
+  }, []);
+
+  const saveName = useCallback(async (value: string) => {
+    setNameModalOpen(false);
+    try {
+      const profile = await api.setName(value.trim());
+      setName(profile.name);
+    } catch {
+      Alert.alert('Could not save', 'Your name did not save. Try again.');
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const result = await api.getFeed();
@@ -239,7 +269,7 @@ function Shell() {
    * difference between an app that feels instant and one that feels broken.
    */
   const refresh = useCallback(async () => {
-    await Promise.all([load(), loadSources(), loadDay()]);
+    await Promise.all([load(), loadSources(), loadDay(), loadProfile()]);
     try {
       await api.refresh();
     } catch {
@@ -247,7 +277,7 @@ function Shell() {
       return;
     }
     await Promise.all([load(), loadSources()]);
-  }, [load, loadSources, loadDay]);
+  }, [load, loadSources, loadDay, loadProfile]);
 
   useEffect(() => {
     void refresh();
@@ -454,6 +484,7 @@ function Shell() {
                 // The empty-state button reads "Open You": it sends the user to
                 // the You tab to pick a source, not straight into a GitHub OAuth.
                 onConnect={() => navigation.navigate('You')}
+                name={name}
               />
             )}
           </Tab.Screen>
@@ -489,11 +520,13 @@ function Shell() {
             {() => (
               <YouScreen
                 email={authEmail || DEV_USER_ID}
+                name={name}
                 notifyLevel={notifyLevel}
                 connections={sources}
                 onSetNotifyLevel={setNotifyLevel}
                 onConnect={connectSource}
                 onDisconnect={disconnectSource}
+                onEditName={() => setNameModalOpen(true)}
                 onSignOut={onSignOut}
               />
             )}
@@ -537,6 +570,13 @@ function Shell() {
           visible={snoozing !== null}
           onPick={applySnooze}
           onClose={() => setSnoozing(null)}
+        />
+        <NamePrompt
+          visible={nameModalOpen}
+          initialValue={name ?? ''}
+          onSave={saveName}
+          onCancel={() => setNameModalOpen(false)}
+          subtitle="This is how the app greets you. You can change it anytime in You."
         />
         <Grain />
       </NavigationContainer>

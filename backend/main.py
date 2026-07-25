@@ -27,6 +27,7 @@ from backend.integrations.github import Comment, GitHubService, PRRef, PullReque
 from backend.tokens import TokenCodec
 from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
+from backend.models.profile import Profile
 from backend.models.sources import CATALOGUE, Source, SourceInfo
 from backend.services.stats import SourceDashboard
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
@@ -39,6 +40,7 @@ from backend.services.classifier import DefaultClassificationService
 from backend.services.connections import MissingAuthConfig
 from backend.services.feed import DefaultFeedService, ItemNotFound
 from backend.services.ingest import IngestResult, WebhookIngestService
+from backend.services.profile import UserNotFound
 from backend.services.rules import DefaultRuleClassifier
 
 log = logging.getLogger(__name__)
@@ -141,6 +143,11 @@ class SnoozeBody(BaseModel):
     until: datetime
 
 
+class NameBody(BaseModel):
+    # Optional so PATCH /me with null clears the name; the service trims and caps.
+    name: str | None = None
+
+
 class RefreshResult(BaseModel):
     ingested: int
     classified: int
@@ -167,6 +174,7 @@ def create_app(
     connections: Any | None = None,
     classifier: DefaultClassificationService | None = None,
     connection_service: Any | None = None,
+    profile_service: Any | None = None,
     stats: Any | None = None,
     later: Any | None = None,
     calendar: Any | None = None,
@@ -300,6 +308,26 @@ def create_app(
         if connection_service is None:
             raise HTTPException(status_code=503, detail="connections not configured")
         connection_service.disconnect(user_id, provider)
+
+    @app.get("/me", response_model=Profile)
+    def get_me(user_id: str = Depends(current_user)) -> Profile:
+        if profile_service is None:
+            raise HTTPException(status_code=503, detail="profile not configured")
+        try:
+            return profile_service.get(user_id)
+        except UserNotFound:
+            raise HTTPException(status_code=404, detail="user not found")
+
+    @app.patch("/me", response_model=Profile)
+    def patch_me(
+        body: NameBody, user_id: str = Depends(current_user)
+    ) -> Profile:
+        if profile_service is None:
+            raise HTTPException(status_code=503, detail="profile not configured")
+        try:
+            return profile_service.set_name(user_id, body.name)
+        except UserNotFound:
+            raise HTTPException(status_code=404, detail="user not found")
 
     @app.get("/sources/{provider}", response_model=SourceDashboard)
     def get_source_dashboard(

@@ -30,6 +30,11 @@ class CredentialsRepository(Protocol):
     def get_user_by_email(self, email: str) -> UserRecord | None:
         ...
 
+    def get_user_by_id(self, user_id: str) -> UserRecord | None:
+        """The profile read for an authenticated request, keyed on the token's
+        subject rather than the email the client typed."""
+        ...
+
     def create_user(self, email: str, password_hash: str) -> UserRecord:
         """Insert the ``public.users`` row (and its uuid). This is the row every
         other table's ``user_id`` FK points at, so it must exist before any feed
@@ -37,6 +42,10 @@ class CredentialsRepository(Protocol):
         ...
 
     def set_password(self, user_id: str, password_hash: str) -> None:
+        ...
+
+    def set_name(self, user_id: str, name: str | None) -> None:
+        """The one profile write. ``None`` clears the name back to no-name."""
         ...
 
     # --- otp -----------------------------------------------------------
@@ -101,6 +110,10 @@ class InMemoryCredentialsRepository:
                 return user.model_copy()
         return None
 
+    def get_user_by_id(self, user_id: str) -> UserRecord | None:
+        user = self._users.get(user_id)
+        return user.model_copy() if user is not None else None
+
     def create_user(self, email: str, password_hash: str) -> UserRecord:
         user = UserRecord(
             id=str(uuid.uuid4()),
@@ -115,6 +128,11 @@ class InMemoryCredentialsRepository:
         user = self._users.get(user_id)
         if user is not None:
             self._users[user_id] = user.model_copy(update={"password_hash": password_hash})
+
+    def set_name(self, user_id: str, name: str | None) -> None:
+        user = self._users.get(user_id)
+        if user is not None:
+            self._users[user_id] = user.model_copy(update={"name": name})
 
     # --- otp -----------------------------------------------------------
     def upsert_otp(

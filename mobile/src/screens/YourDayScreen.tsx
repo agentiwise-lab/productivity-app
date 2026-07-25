@@ -49,6 +49,9 @@ interface Props {
   onRefresh: () => Promise<void>;
   onOpen: (row: FeedRow) => void;
   onConnect: () => void;
+  /** The display name, when set. Personalises the greeting; null falls back to
+   *  the plain "Good evening". */
+  name: string | null;
 }
 
 export function YourDayScreen({
@@ -64,6 +67,7 @@ export function YourDayScreen({
   onRefresh,
   onOpen,
   onConnect,
+  name,
 }: Props) {
   const c = useTheme();
   const insets = useSafeAreaInsets();
@@ -138,7 +142,7 @@ export function YourDayScreen({
           />
         }
       >
-        <ScreenHeader eyebrow={dateLine()} title={greeting()} />
+        <ScreenHeader eyebrow={dateLine()} title={greeting(name)} />
         {stale ? <StaleBanner fetchedAt={fetchedAt} /> : null}
 
         {sourcesLoading ? (
@@ -243,7 +247,7 @@ export function YourDayScreen({
           </>
         )}
       </AnimatedScrollView>
-      <CollapsedTitle title={greeting()} scrollY={scrollY} />
+      <CollapsedTitle title={greeting(name)} scrollY={scrollY} />
     </View>
   );
 }
@@ -254,11 +258,11 @@ const LABEL: Record<SelectableTier, string> = {
   canWait: 'Can wait',
 };
 
-function greeting(now = new Date()): string {
+function greeting(name: string | null, now = new Date()): string {
   const hour = now.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  const part =
+    hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return name ? `${part}, ${name}` : part;
 }
 
 function dateLine(now = new Date()): string {
