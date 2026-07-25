@@ -250,6 +250,15 @@ curl -s -X POST $BASE/connections/github/link -H "Authorization: Bearer $TOKEN" 
 #   COMPOSIO_CALLBACK_URL=productivityapp://composio-callback   # APP-CONSTANT (mobile deep-link
 #                                              # scheme). Does NOT change per host.
 #
+#   # --- LLM triage classifier (OpenRouter). APP-LEVEL. REQUIRED TO BOOT. ---
+#   OPENROUTER_API_KEY=<openrouter key>        # SECRET. composition.py builds the classifier
+#                                              # unconditionally at startup (openrouter.py reads
+#                                              # os.environ["OPENROUTER_API_KEY"]); without it the
+#                                              # app raises KeyError and every request 500s.
+#   OPENROUTER_MODEL=google/gemini-2.5-flash   # optional (default shown)
+#   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1   # optional (default shown)
+#   LLM_DAILY_BUDGET=200                       # optional (daily classify-call cap)
+#
 #   # --- Web CORS. ★ HOST-DEPENDENT. ---
 #   CORS_ORIGINS=https://<your-web-origin>     # comma-separated. Empty is fine for a
 #                                              # native-only app; needed for the Expo web
@@ -313,6 +322,7 @@ curl -s -X POST $BASE/connections/github/link -H "Authorization: Bearer $TOKEN" 
 #   #   - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (+ ANON)   (storage)
 #   #   - COMPOSIO_API_KEY + all 6 COMPOSIO_AUTH_CONFIG_* + COMPOSIO_WEBHOOK_SECRET
 #   #     + COMPOSIO_CALLBACK_URL                              (integrations)
+#   #   - OPENROUTER_API_KEY                                   (triage classifier; app won't boot without it)
 #   # Also run any un-applied DB migration on Supabase first (§5).
 #   # If the box has <2GB RAM, add swap (see §12).
 #
@@ -375,6 +385,7 @@ cd ..
 # =============================================================================
 #  [ ] backend .env: AUTH_MODE=own, strong unique AUTH_JWT_SECRET (NOT the dev one)
 #  [ ] backend .env: real LOOPS_API_KEY + LOOPS_OTP_TRANSACTIONAL_ID (real email)
+#  [ ] backend .env: OPENROUTER_API_KEY set (app won't boot without it)
 #  [ ] backend .env: CORS_ORIGINS = your real web origin(s)
 #  [ ] backend running via systemd behind Caddy on HTTPS (§9)
 #  [ ] Composio dashboard webhook -> https://<host>/webhooks/composio

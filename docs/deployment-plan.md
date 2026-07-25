@@ -12,7 +12,7 @@ This plan is grounded in the current codebase, the existing `architecture.md` / 
 - One **t3.medium** EC2 box (x86_64, Amazon Linux 2023), matching your existing `ad_analytics` box and your Intel Mac, so Docker images build locally with no cross-arch emulation.
 - A **new dedicated Elastic IP** so the address never changes across stop/start. (Note: the `52.62.108.102` I earlier called "spare" is actually your `bounty_board` box's IP, so we allocate a fresh one.)
 - **Docker Compose** with two containers: the FastAPI backend and **Caddy** as the TLS-terminating reverse proxy. Caddy issues and auto-renews the Let's Encrypt cert as part of the running process, with zero cron and zero manual renewal. This replaces the certbot workflow you never trusted.
-- **HTTPS with a publicly trusted cert is required** (plain HTTP fails the mobile app stores; self-signed fails trust). It does **not** require buying a domain: a free `sslip.io` hostname derived from the Elastic IP gets a normal trusted Let's Encrypt cert via Caddy. A dedicated ~$12/yr domain is the optional upgrade for a paid product. Full evidence and options in section 3.
+- **HTTPS with a publicly trusted cert is required** (plain HTTP fails the mobile app stores; self-signed fails trust). **Decided: test the raw Elastic IP + Let's Encrypt IP certificate (certbot) first** (section 12), no domain and no sslip.io. certbot's `certbot-renew.timer` auto-handles the ~6-day IP cert. sslip.io / a domain are fallbacks only if a test gate fails. Full evidence in section 3.
 - The `.pem` access problem is solved for good with three layers: key in `~/.ssh/` + a `~/.ssh/config` Host entry Cursor reads + **SSM Session Manager** as a break-glass path that works even if the key is lost.
 - CI/CD (GitHub Actions) is **Phase 2**, after the box is proven serving traffic by hand.
 
@@ -30,33 +30,41 @@ Rough cost: **~$45/month** (t3.medium + 30 GiB disk + public IPv4). Detail in se
 | Correct ASGI target | `backend.composition:app` with `APP_EAGER_START=1` set | `backend/composition.py:170` |
 | Documented target is WRONG | `backend.main:app` has no module-level `app`; will not import | `backend/main.py:163`, `docs/mvp-plan.md:404` |
 | Port convention | 8000 (chosen at the uvicorn CLI, not bound in code) | docs |
-| Durable state | All in Supabase (managed Postgres). No local DB, no disk writes | `composition.py` audit |
-| In-memory state | Connection identity + classification cache held in-process | `composition.py` |
+| Durable state | Supabase (managed Postgres) used as **storage only, no Supabase Auth**. No local DB, no disk writes | `commands.sh` §0 |
+| Auth model | **Self-owned**: the app signs its own JWTs. `AUTH_MODE=own` (prod) or `dev` (trusts `X-User-Id`). OTP emailed via Loops | `commands.sh` §3, commit `f4d2329` |
+| Per-user integrations | Each user connects their own Composio accounts; DB stores only a pointer + status + provider identity in `public.connections` | `commands.sh` §6 |
+| In-memory state | Classification cache only (per-user connections are DB-backed now) | `composition.py` |
 | Background jobs | None. Prefect dir is empty. Composio polls on its own infra | `architecture.md` §3, empty `prefect/` |
-| Inbound endpoint | `POST /webhooks/composio`, signature-verified with `COMPOSIO_WEBHOOK_SECRET` | `backend/main.py:373-390` |
+| Inbound endpoint | `POST /webhooks/composio`, signature-verified. **Optional** (polling works without it; needed only for real-time push). Webhook target is set in the Composio dashboard | `commands.sh` §6 |
 | SSE routes | `GET /later`, `GET /later/{provider}` stream for ~1 min | `backend/main.py` |
-| LLM | Remote via OpenRouter (default `google/gemini-2.5-flash`). No local model, no Anthropic | `backend/integrations/openrouter.py` |
+| Tests | 384+ backend tests passing (`uv run pytest`) | `commands.sh` §4 |
+| LLM | OpenRouter triage classifier (`google/gemini-2.5-flash`), built unconditionally at startup, so `OPENROUTER_API_KEY` is **required to boot**. `commands.sh` §8a had omitted it — now corrected | `openrouter.py:36`, `composition.py:71` |
 | Undeclared dep | `openai` imported but not in `pyproject.toml` (only transitive in lock) | `backend/integrations/openrouter.py:14` |
 
 ### Environment variables the backend reads
 
-Names only. Values live in the gitignored root `.env` and must be provisioned onto the box, never committed.
+Names only. Values live in the gitignored root `.env` and must be provisioned onto the box, never committed. Authoritative source: `commands.sh` §8a. Three categories: **app-level** (operator sets once, serves every user), **per-user** (nobody sets in env; each user signs up and connects their own accounts), **★ host-dependent** (value changes when the backend moves address).
 
-| Var | Purpose | Required |
+| Var | Purpose | Required in prod |
 |---|---|---|
-| `COMPOSIO_API_KEY` | Composio hub auth (all provider connections) | Yes |
-| `COMPOSIO_USER_ID` | Composio identity for tool calls | Yes |
-| `COMPOSIO_WEBHOOK_SECRET` | Verifies inbound webhook signatures | Yes (for webhooks) |
-| `SUPABASE_URL` | Supabase project URL | Optional (falls back to in-memory) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Feed repository (bypasses RLS) | Optional (same fallback) |
-| `SUPABASE_JWT_SECRET` | Verifies Supabase JWTs when `AUTH_MODE=supabase` | Yes in prod |
-| `SUPABASE_ANON_KEY` | Not read by backend (mobile client uses it) | No |
-| `AUTH_MODE` | `supabase` (prod) or `dev` (trusts `X-User-Id`, local only) | Must be `supabase` in prod |
-| `OPENROUTER_API_KEY` | LLM classification | Yes if classifier runs |
-| `OPENROUTER_BASE_URL` / `OPENROUTER_MODEL` | OpenRouter endpoint / model | Optional (defaults) |
-| `LLM_DAILY_BUDGET` | Daily classification call cap | Optional (default 200) |
-| `CORS_ORIGINS` | Allowed web origins | Optional |
-| `APP_EAGER_START` | Builds the module-level `app` at import | **Set to 1 in prod** |
+| `AUTH_MODE` | `own` = self-signed JWT (prod); `dev` trusts `X-User-Id` (local only) | **Yes = `own`** |
+| `AUTH_JWT_SECRET` | Secret the app signs its JWTs with. Unique per deployment; changing it logs everyone out | **Yes (secret)** |
+| `AUTH_JWT_ISSUER` / `AUTH_JWT_AUDIENCE` / `AUTH_ACCESS_TTL_MIN` / `AUTH_REFRESH_TTL_DAYS` | JWT claims + token lifetimes | Optional (defaults) |
+| `OTP_TTL_MIN` / `OTP_RESEND_COOLDOWN_SEC` / `OTP_MAX_ATTEMPTS` | OTP policy | Optional (defaults) |
+| `LOOPS_API_KEY` | Sends the OTP email via Loops. Unset → OTP printed to the backend log | **Yes in prod (secret)** |
+| `LOOPS_OTP_TRANSACTIONAL_ID` | Loops transactional template id (must expose an `otp` variable) | **Yes in prod** |
+| `SUPABASE_URL` | Supabase project URL (storage) | **Yes** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend DB access, bypasses RLS; every query scoped by `user_id` in code | **Yes (secret)** |
+| `SUPABASE_ANON_KEY` | Present in `.env` | Yes |
+| `COMPOSIO_API_KEY` | The app's Composio account (container for all users' integrations) | **Yes (secret)** |
+| `COMPOSIO_WEBHOOK_SECRET` | Verifies inbound webhooks | Yes (if webhook used) |
+| `COMPOSIO_AUTH_CONFIG_{GITHUB,SLACK,GOOGLECALENDAR,LINEAR,GMAIL,GOOGLEDOCS}` | One managed-OAuth auth-config id (`ac_...`) per toolkit; the connect route 503s for any toolkit without one | **Yes, per toolkit shipped** |
+| `COMPOSIO_CALLBACK_URL` | OAuth return deep-link `productivityapp://composio-callback` (host-independent) | **Yes** |
+| `COMPOSIO_USER_ID` | Local-dev fallback only (in-memory connection store) | No (not in prod) |
+| `OPENROUTER_API_KEY` | LLM triage classifier. **Required to boot** (`openrouter.py:36` reads it unconditionally at startup) | **Yes (secret)** |
+| `OPENROUTER_BASE_URL` / `OPENROUTER_MODEL` / `LLM_DAILY_BUDGET` | Classifier endpoint / model / daily cap | Optional (defaults) |
+| `CORS_ORIGINS` | ★ host-dependent; comma-separated web origins; empty is fine for a native-only app | Optional |
+| `APP_EAGER_START` | Builds the module-level `app` at import (else every request 500s) | **Set to 1** |
 
 ---
 
@@ -143,7 +151,7 @@ flowchart LR
 
 Key points:
 - Only **80 and 443** are public. Port 8000 is internal to the Docker network, never exposed to the internet. Caddy is the only public listener. Port 80 stays open because Let's Encrypt HTTP-01 validation uses it.
-- **Single uvicorn worker.** The backend keeps connection identity and the classification cache in process memory, so multiple workers or replicas would fragment that state. One box, one worker, until that state moves to Supabase (section 11).
+- **Single uvicorn worker.** The backend keeps the classification cache in process memory (per-user connections are DB-backed in `public.connections`), so multiple workers would fragment that cache. One box, one worker is simplest; it is no longer a correctness concern.
 - SSE routes (`/later`) need buffering disabled and long read timeouts in Caddy (one-line config; Caddy streams by default, unlike nginx).
 
 ---
@@ -218,7 +226,7 @@ Backend changes follow Red-Green-Refactor (a failing test first where a function
 
 - [ ] Confirm and document the ASGI launch target `backend.composition:app` + `APP_EAGER_START=1`. Fix the stale `backend.main:app` reference in `docs/mvp-plan.md:404`.
 - [ ] Add `openai` as an explicit dependency in `pyproject.toml` (currently only transitive). Re-lock with `uv lock`.
-- [ ] Confirm the app boots with `AUTH_MODE=supabase` and a real `SUPABASE_JWT_SECRET` (prod must not run `dev`/`X-User-Id`).
+- [ ] Confirm the app boots with `AUTH_MODE=own` + a strong unique `AUTH_JWT_SECRET`, plus `LOOPS_API_KEY` + `LOOPS_OTP_TRANSACTIONAL_ID` for real OTP email (prod must not run `dev`/`X-User-Id`).
 - [ ] Resolve the two known items from `setup.md`: rotate the leaked Supabase service-role key, and fix the Composio wrong-project connection so the SDK sees the accounts.
 - [ ] Confirm the one open decision in section 10 (sslip.io vs a purchased domain).
 
@@ -230,7 +238,7 @@ Goal: a real Composio event reaches the deployed backend over trusted HTTPS and 
 - [ ] Save the key to `~/.ssh/productivity_app_prod.pem`, add the `~/.ssh/config` Host block, back the key up to your password manager, confirm Cursor "Connect to Host" works.
 - [ ] Install Docker + Docker Compose on the box (via user-data).
 - [ ] Add `Dockerfile` (python:3.12-slim + uv, `uv sync --frozen`, run `uvicorn backend.composition:app --host 0.0.0.0 --port 8000`), `docker-compose.yml` (backend + caddy), and `Caddyfile` (sslip.io host) to the repo.
-- [ ] Copy `.env` to the box (chmod 600, outside git), set `APP_EAGER_START=1`, `AUTH_MODE=supabase`.
+- [ ] Copy `.env` to the box (chmod 600, outside git), set `APP_EAGER_START=1`, `AUTH_MODE=own`, and all six `COMPOSIO_AUTH_CONFIG_*` ids.
 - [ ] `docker compose up -d`. Confirm `https://<ip-dashed>.sslip.io/` serves with a valid trusted cert.
 - [ ] Re-register the Composio webhook to `https://<ip-dashed>.sslip.io/webhooks/composio`. Trigger one real event (a Slack DM, as verified 2026-07-23) and confirm it flows in and stores to Supabase.
 - [ ] Point the mobile app's `EXPO_PUBLIC_API_URL` at the sslip.io URL and confirm `GET /feed` over HTTPS.
@@ -241,7 +249,7 @@ Exit criteria: box always-on, trusted HTTPS valid, one real webhook processed, C
 
 Only after Phase 1 is serving traffic. Follows the validate-then-deploy rule; mirrors `ad_analytics/.github/workflows/deploy.yml`.
 
-- [ ] `validate` job on the GitHub runner: `uv sync --frozen`, `pytest` (the 38-test suite), `docker compose config --quiet`, and a `docker build` to prove the image compiles. No production secrets on the runner.
+- [ ] `validate` job on the GitHub runner: `uv sync --frozen`, `pytest` (the 384+ test suite), and (if Dockerized) `docker compose config --quiet` + a `docker build`. No production secrets on the runner.
 - [ ] `deploy` job with `needs: validate` (runs only on green): reach the box (prefer SSM-based deploy, no new inbound port), pull new code/image, `docker compose up -d`, then poll a health endpoint.
 - [ ] Add a lightweight `GET /health` route if none exists, for the post-deploy check.
 - [ ] Do not widen the security group for the pipeline.
@@ -289,7 +297,7 @@ HTTPS approach (decided 2026-07-25): **test the raw-IP + LE IP-cert path first**
 
 ## 11. Open risks and pre-prod correctness items
 
-- **In-memory connection identity.** The connection repository and classification cache live in process memory even when Supabase is configured (Supabase currently backs only the feed repo). On every deploy or restart, connection identity is lost until rehydrated. The `connections` table already exists (`mvp-plan.md:273`). **Before real multi-tenant prod, back the connection repository with Supabase** so a restart does not drop users' connected accounts. App-layer fix, tracked here because it directly affects whether the box can be safely redeployed.
+- **In-memory classification cache** (was "connection identity"). Per-user connections are now persisted in `public.connections` (`commands.sh` §6), so a restart no longer drops connected accounts. The only remaining in-process state is the classification cache, which is a performance cache, not correctness: run a single uvicorn worker and a restart simply re-warms it. No longer a redeploy blocker.
 - **Single instance is a deliberate ceiling.** Horizontal scaling is blocked by the in-memory state above. Scale vertically until that state moves to Supabase. Fine for MVP and early tenants.
 - **Webhook secret is load-bearing.** `COMPOSIO_WEBHOOK_SECRET` must be set in prod. Composio's outbound IPs are dynamic, so you cannot firewall-allowlist them; the signature secret is the only authentication on the public endpoint.
 - **Service-role key rotation.** The leaked Supabase service-role key (bypasses RLS) must be rotated before this box is internet-facing (Phase 0).
@@ -310,6 +318,8 @@ HTTPS approach (decided 2026-07-25): **test the raw-IP + LE IP-cert path first**
 ## 12. Raw-IP HTTPS hypothesis test (run this first)
 
 Decided 2026-07-25: before committing to any hostname, test whether the backend can run on a fresh EC2 + Elastic IP served over trusted HTTPS via a **Let's Encrypt IP certificate** (certbot), with Composio delivering webhooks to that IP URL. No domain, no sslip.io. The certbot `certbot-renew.timer` handles the ~6-day IP-cert renewal automatically, the same mechanism already running on `ad_analytics`.
+
+> **Reconciliation note (2026-07-25).** `commands.sh` (committed in `ec451ac` / `943d033`) is now the authoritative runbook, and section 2 of this plan was updated to match it: self-owned `AUTH_MODE=own` JWT auth + Loops OTP (no Supabase Auth), six `COMPOSIO_AUTH_CONFIG_*` ids, connections persisted in `public.connections`, 384+ tests. **One open conflict remains:** `commands.sh` §9 still documents HTTPS as **Caddy + sslip.io**, while this section tests **raw IP + certbot**. They are alternatives, not both. Once this test resolves, `commands.sh` §9 and sections 3/7/8 here should be updated to the winner. Confirm the raw-IP direction still stands before we provision.
 
 ### 12.1 The three make-or-break gates
 
@@ -357,8 +367,8 @@ Blast radius of the entire test = the new resources listed in 12.3. Teardown (12
 - B1. SSH in; generate a deploy key on the box (`ssh-keygen -t ed25519`).
 - B2. **[YOUR STEP]** Paste the public key into `agentiwise-lab/productivity-app` → Settings → Deploy keys, read-only. I pause here for ~30 seconds.
 - B3. `git clone` the repo over SSH.
-- B4. `scp` the local `.env` to the box (chmod 600). Never via git.
-- B5. Install Python 3.12 + uv; `uv sync --frozen`.
+- B4. `scp` the `.env` to the box (chmod 600, never via git). For the test it must carry the prod-shape values from `commands.sh` §8a: `AUTH_MODE=own`, a strong `AUTH_JWT_SECRET`, the six `COMPOSIO_AUTH_CONFIG_*` (already created for this account, §6), `COMPOSIO_CALLBACK_URL`, the Supabase keys, `COMPOSIO_API_KEY`, and Loops vars (or leave Loops unset to read the OTP from the log).
+- B5. Install Python 3.11 + uv; `uv sync` (mirror `commands.sh` §9a).
 
 **Phase C: Gate 1, HTTPS on the IP**
 - C1. Install nginx + certbot.
@@ -367,13 +377,13 @@ Blast radius of the entire test = the new resources listed in 12.3. Teardown (12
 
 **Phase D: Backend behind nginx**
 - D1. nginx config: 443 → uvicorn on :8000, proxy buffering off, long read timeouts (for the SSE `/later` routes).
-- D2. Run `uvicorn backend.composition:app` (`APP_EAGER_START=1`, `AUTH_MODE=supabase`) as a systemd service.
+- D2. Run `uvicorn backend.composition:app` (`APP_EAGER_START=1`, `AUTH_MODE=own`) as a systemd service (mirror `commands.sh` §9b).
 - D3. Confirm `https://<IP>/` serves the API.
 
 **Phase E: Gates 2 & 3, Composio over the IP**
 - E1. Snapshot the current Composio webhook subscription.
-- E2. Set the webhook to `https://<IP>/webhooks/composio`. **Record Gate 2 result (accepted or rejected).**
-- E3. Fire one real event (e.g. a Slack DM, as verified 2026-07-23); confirm it is processed into Supabase (logs + DB). **Record Gate 3 result.**
+- E2. Set the webhook target to `https://<IP>/webhooks/composio` in the **Composio dashboard** (`commands.sh` §6; the webhook is optional and only powers real-time push, but the IP URL is exactly what we're testing). **Record Gate 2 result: does Composio accept an IP-literal HTTPS URL?**
+- E3. Sign in (email + OTP + password) and connect one account (the six auth configs already exist, `commands.sh` §6), then fire a real event (e.g. a Slack DM, as verified 2026-07-23); confirm it is processed into Supabase (logs + DB). **Record Gate 3 result.**
 - E4. Restore the original webhook subscription.
 
 **Phase F: Report + decide** (matrix in 12.6).
