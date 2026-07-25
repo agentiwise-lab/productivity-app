@@ -12,10 +12,14 @@ status and identity we resolved at connect time.
 
 from __future__ import annotations
 
+import logging
+
 from supabase import Client
 
 from backend.models.connections import ConnectionRow
 from backend.models.identity import Identity
+
+log = logging.getLogger(__name__)
 
 _TABLE = "connections"
 
@@ -74,7 +78,17 @@ class SupabaseConnectionRepository:
         ).execute()
 
     def identity_for(self, user_id: str, provider: str) -> Identity:
-        row = self.get(user_id, provider)
+        # Read from the ingest path, where the user_id came off a webhook. A
+        # malformed one (not a valid uuid) makes Postgres raise 22P02; degrade to
+        # an empty identity so the event still processes rather than 500-ing and
+        # being redelivered forever (BUG-3).
+        try:
+            row = self.get(user_id, provider)
+        except Exception:
+            log.warning(
+                "could not read identity for %s/%s", user_id, provider, exc_info=True
+            )
+            return Identity()
         return row.identity() if row is not None else Identity()
 
     def _raw(self, user_id: str, provider: str) -> dict | None:

@@ -37,6 +37,9 @@ log = logging.getLogger(__name__)
 #: Composio reports a row per authorisation attempt. Only these mean "usable".
 _LIVE = {"ACTIVE"}
 _BROKEN = {"EXPIRED", "REVOKED", "FAILED", "INACTIVE"}
+#: Half-finished sign-ins. Once a live account exists they are abandoned junk,
+#: and left alone they pile up one per retry (BUG-11), so finalize deletes them.
+_PENDING = {"INITIATED", "INITIALIZING"}
 
 _GITHUB_VERSION = "20260721_00"
 _SLACK_VERSION = "20260721_00"
@@ -65,7 +68,17 @@ class ConnectionRepositoryLike(Protocol):
     def get(self, user_id: str, provider: str) -> ConnectionRow | None:
         ...
 
+    def list(self, user_id: str) -> list[ConnectionRow]:
+        ...
+
     def delete(self, user_id: str, provider: str) -> None:
+        ...
+
+
+class TriggerProvisionerLike(Protocol):
+    def provision(
+        self, user_id: str, source: Source, connected_account_id: str
+    ) -> None:
         ...
 
 
@@ -74,6 +87,9 @@ class ConnectionService(Protocol):
         ...
 
     def link_url(self, user_id: str, source: Source) -> str:
+        ...
+
+    def finalize(self, user_id: str, source: Source) -> SourceInfo:
         ...
 
     def status(self, user_id: str, source: Source) -> SourceInfo:
@@ -89,15 +105,18 @@ class DefaultConnectionService:
         composio: Any,
         auth_config_ids: dict[Source, str],
         repo: ConnectionRepositoryLike,
+        provisioner: TriggerProvisionerLike,
         callback_url: str = "",
     ) -> None:
         self._composio = composio
         self._auth_config_ids = auth_config_ids
         self._repo = repo
+        self._provisioner = provisioner
         self._callback_url = callback_url
 
     def list_sources(self, user_id: str, items: list[FeedItem]) -> list[SourceInfo]:
         statuses = self._statuses(user_id)
+        self._heal(user_id, statuses)
         counts = self._counts(items)
 
         return [
@@ -123,36 +142,77 @@ class DefaultConnectionService:
         )
         return getattr(result, "redirect_url", "") or ""
 
-    def status(self, user_id: str, source: Source) -> SourceInfo:
-        """Reconcile one source against Composio and record the result.
+    def finalize(self, user_id: str, source: Source) -> SourceInfo:
+        """The one idempotent reconcile that makes a source usable.
 
-        Called by the poll after the user returns from consent. On the first
-        ACTIVE it resolves the provider identity and writes the connection row;
-        Composio stays the source of truth for status, the row is what ingest and
-        disconnect read.
+        Reads the live accounts for the source's toolkit and, when one is active,
+        records the connection row, provisions the source's triggers (the step
+        that was missing, and the reason the feed never filled), and clears away
+        any half-finished attempts. Safe to call on every poll and every source
+        list: repeated calls converge on the same row and the same trigger set.
+
+        The order matters. The row is written before triggers are provisioned so
+        that ingest can resolve identity the instant events start arriving; and
+        stale attempts are deleted only after a live account is confirmed, so we
+        never delete the sole attempt mid-connect.
         """
-        entry = self._statuses(user_id, toolkit=SOURCE_TO_TOOLKIT[source]).get(source)
-        status = entry[0] if entry else ConnectionStatus.DISCONNECTED
-        account_id = entry[1] if entry else None
+        toolkit = SOURCE_TO_TOOLKIT[source]
+        try:
+            accounts = self._raw_accounts(user_id, toolkit)
+        except Exception:
+            log.warning("could not reconcile %s", source.value, exc_info=True)
+            return SourceInfo(
+                source=source, label=LABELS[source], status=ConnectionStatus.ERROR
+            )
 
-        if status is ConnectionStatus.CONNECTED and account_id:
+        live_id: str | None = None
+        stale_ids: list[str] = []
+        expired = False
+        for data in accounts:
+            status = str(data.get("status") or "").upper()
+            account_id = data.get("id")
+            if status in _LIVE:
+                live_id = account_id
+            elif status in _PENDING:
+                if account_id:
+                    stale_ids.append(account_id)
+            elif status in _BROKEN:
+                expired = True
+
+        if live_id:
             identity = self._resolve_identity(user_id, source)
             self._repo.mark_active(
                 user_id,
                 source.value,
-                composio_connected_account_id=account_id,
+                composio_connected_account_id=live_id,
                 provider_login=identity.github_login,
                 provider_user_id=identity.slack_user_id,
             )
-        elif status is ConnectionStatus.EXPIRED:
+            self._provisioner.provision(user_id, source, live_id)
+            self._discard(stale_ids)
+            return SourceInfo(
+                source=source,
+                label=LABELS[source],
+                status=ConnectionStatus.CONNECTED,
+                connected_account_id=live_id,
+            )
+
+        if expired:
             self._repo.mark_status(user_id, source.value, "expired")
+            return SourceInfo(
+                source=source, label=LABELS[source], status=ConnectionStatus.EXPIRED
+            )
 
         return SourceInfo(
-            source=source,
-            label=LABELS[source],
-            status=status,
-            connected_account_id=account_id,
+            source=source, label=LABELS[source], status=ConnectionStatus.DISCONNECTED
         )
+
+    def status(self, user_id: str, source: Source) -> SourceInfo:
+        """The connect poll. It is exactly the reconcile: the app polls this
+        after the user returns from consent, and each poll converges the row and
+        the triggers, so a connection finishes even when web OAuth has no
+        deep-link return to tell us the moment it went active."""
+        return self.finalize(user_id, source)
 
     def disconnect(self, user_id: str, source: Source) -> None:
         row = self._repo.get(user_id, source.value)
@@ -167,6 +227,54 @@ class DefaultConnectionService:
         self._repo.delete(user_id, source.value)
 
     # ----------------------------------------------------------- internals
+
+    def _heal(
+        self,
+        user_id: str,
+        statuses: dict[Source, tuple[ConnectionStatus, str | None]],
+    ) -> None:
+        """Reconcile any source Composio reports connected but that has no active
+        row yet. This covers the case the connect poll missed entirely (RC-2):
+        without it, ``list_sources`` would show a source as connected off the live
+        status while ingest still had no row to resolve identity from. Once a row
+        exists it is skipped, so a steady state costs one row read, not a reconcile
+        per feed load.
+        """
+        connected = {
+            source
+            for source, (status, _) in statuses.items()
+            if status is ConnectionStatus.CONNECTED
+        }
+        if not connected:
+            return
+        try:
+            active = {
+                row.provider for row in self._repo.list(user_id) if row.status == "active"
+            }
+        except Exception:
+            log.warning("could not read connection rows to heal", exc_info=True)
+            return
+        for source in connected:
+            if source.value not in active:
+                self.finalize(user_id, source)
+
+    def _raw_accounts(self, user_id: str, toolkit: str) -> list[dict]:
+        response = self._composio.connected_accounts.list(
+            user_ids=[user_id], toolkit_slugs=[toolkit]
+        )
+        return [
+            row if isinstance(row, dict) else row.__dict__
+            for row in getattr(response, "items", response) or []
+        ]
+
+    def _discard(self, account_ids: list[str]) -> None:
+        for account_id in account_ids:
+            try:
+                self._composio.connected_accounts.delete(account_id)
+            except Exception:
+                log.warning(
+                    "could not delete stale account %s", account_id, exc_info=True
+                )
 
     def _statuses(
         self, user_id: str, toolkit: str | None = None

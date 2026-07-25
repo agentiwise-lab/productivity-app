@@ -88,3 +88,19 @@ def test_identity_for_slack_reads_the_stored_user_id(repo):
 def test_identity_for_absent_is_empty(repo):
     ident = repo.identity_for("u1", "github")
     assert ident.github_login is None
+
+
+def test_identity_for_degrades_to_empty_when_the_store_raises():
+    """A webhook can name a user_id that is not a valid uuid; the query then
+    raises 22P02. identity_for must return an empty Identity rather than let that
+    tear down ingest — the event still processes, just without provider identity
+    (BUG-3)."""
+
+    class RaisingClient:
+        def table(self, *args, **kwargs):
+            raise RuntimeError("invalid input syntax for type uuid: 'pg-test'")
+
+    repo = SupabaseConnectionRepository(RaisingClient())
+    ident = repo.identity_for("pg-test-not-a-uuid", "github")
+    assert ident.github_login is None
+    assert ident.slack_user_id is None

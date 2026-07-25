@@ -188,6 +188,30 @@ def test_an_unverified_webhook_is_refused_and_writes_nothing():
     assert app.state.feed_service.list_feed(USER) == []
 
 
+def test_a_webhook_that_raises_inside_ingest_still_returns_200():
+    """RC-3/BUG-3: a non-UUID user_id makes the DB raise (Postgres 22P02). If
+    that surfaced as a 500 Composio would redeliver the poison event forever, so
+    the route must turn any ingest failure into a 200 that is not retried."""
+
+    class ExplodingConnections:
+        def mark_status(self, *args, **kwargs):
+            ...
+
+        def identity_for(self, *args, **kwargs):
+            raise RuntimeError("invalid input syntax for type uuid")
+
+    app = create_app(
+        github=FakeGitHubService(),
+        auth_mode="dev",
+        connections=ExplodingConnections(),
+        verify_webhook=lambda body, headers: envelope(),
+    )
+    response = TestClient(app).post("/webhooks/composio", json=envelope())
+
+    assert response.status_code == 200
+    assert response.json()["handled"] is False
+
+
 def test_an_unmapped_trigger_returns_200_so_it_is_not_redelivered_forever():
     """Composio retries a failed webhook. Returning an error for something we
     have simply chosen not to handle would turn that into an endless loop."""

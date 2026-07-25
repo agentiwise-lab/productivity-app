@@ -32,6 +32,7 @@ from backend.services.later import LaterService
 from backend.services.passwords import Argon2PasswordHasher
 from backend.services.stats import SourceStatsService
 from backend.services.sync import SourceSync
+from backend.services.triggers import DefaultTriggerProvisioner
 from backend.services.feed import DefaultFeedService
 from backend.services.rules import DefaultRuleClassifier
 from backend.services.classifier import (
@@ -79,6 +80,7 @@ def build_app() -> FastAPI:
         composio,
         auth_config_ids=_auth_config_ids(),
         repo=connections,
+        provisioner=DefaultTriggerProvisioner(composio),
         callback_url=os.environ.get("COMPOSIO_CALLBACK_URL", ""),
     )
     # One factory mints each user's own bound integration services on demand, so

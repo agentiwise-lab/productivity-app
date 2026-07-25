@@ -16,6 +16,7 @@ from backend.models.sources import CATALOGUE, ConnectionStatus, Source
 from backend.models.tiers import Tier, TypeTag
 from backend.repositories.connections import InMemoryConnectionRepository
 from backend.services.connections import DefaultConnectionService, MissingAuthConfig
+from backend.services.triggers import DefaultTriggerProvisioner
 
 AUTH_CONFIGS = {source: f"ac_{source.value}" for source, _, _ in CATALOGUE}
 
@@ -30,7 +31,15 @@ class FakeConnectedAccounts:
     def list(self, **kwargs):
         if self._error:
             raise self._error
-        return type("R", (), {"items": self._rows})()
+        toolkits = kwargs.get("toolkit_slugs")
+        rows = self._rows
+        if toolkits:
+            rows = [
+                row
+                for row in rows
+                if (row.get("toolkit") or {}).get("slug") in toolkits
+            ]
+        return type("R", (), {"items": rows})()
 
     def link(self, user_id, auth_config_id, callback_url=None):
         self.linked.append((user_id, auth_config_id, callback_url))
@@ -52,10 +61,25 @@ class FakeTools:
         return {"data": self._identity.get(slug, {})}
 
 
+class FakeTriggers:
+    """Enough of the triggers API for the real provisioner to run against."""
+
+    def __init__(self):
+        self.created: list = []
+
+    def list_active(self, connected_account_ids=None, **kwargs):
+        return type("R", (), {"items": []})()
+
+    def create(self, slug, user_id=None, connected_account_id=None, trigger_config=None):
+        self.created.append((slug, user_id, connected_account_id))
+        return type("T", (), {"id": "ti_1"})()
+
+
 class FakeComposio:
     def __init__(self, rows=None, error=None, identity=None):
         self.connected_accounts = FakeConnectedAccounts(rows, error)
         self.tools = FakeTools(identity)
+        self.triggers = FakeTriggers()
 
 
 def account(toolkit: str, status: str = "ACTIVE", ident: str = "ca_1"):
@@ -67,7 +91,11 @@ def make(rows=None, error=None, identity=None, repo=None):
     composio = FakeComposio(rows, error, identity)
     repo = repo or InMemoryConnectionRepository()
     service = DefaultConnectionService(
-        composio, auth_config_ids=AUTH_CONFIGS, repo=repo, callback_url="https://cb"
+        composio,
+        auth_config_ids=AUTH_CONFIGS,
+        repo=repo,
+        provisioner=DefaultTriggerProvisioner(composio),
+        callback_url="https://cb",
     )
     return service, composio, repo
 
@@ -188,8 +216,12 @@ def test_link_url_uses_the_right_auth_config_and_app_user():
 
 
 def test_link_url_without_an_auth_config_is_refused():
+    composio = FakeComposio()
     service = DefaultConnectionService(
-        FakeComposio(), auth_config_ids={}, repo=InMemoryConnectionRepository()
+        composio,
+        auth_config_ids={},
+        repo=InMemoryConnectionRepository(),
+        provisioner=DefaultTriggerProvisioner(composio),
     )
     with pytest.raises(MissingAuthConfig):
         service.link_url("u1", Source.GITHUB)
@@ -222,3 +254,143 @@ def test_disconnect_deletes_the_account_and_clears_the_row():
     service.disconnect("u1", Source.GITHUB)
     assert composio.connected_accounts.deleted == ["ca_live"]
     assert repo.get("u1", "github") is None
+
+
+# --- finalize: the reconcile that closes the event loop ----------------------
+
+
+def test_finalize_on_active_provisions_the_source_triggers():
+    """The whole point of the fix: a source going active must create its
+    triggers, or the feed never fills. This is the step the app used to skip."""
+    service, composio, _ = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    info = service.finalize("u1", Source.GITHUB)
+
+    assert info.status is ConnectionStatus.CONNECTED
+    created = [(slug, account_id) for slug, _uid, account_id in composio.triggers.created]
+    assert created == [("GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER", "ca_live")]
+
+
+def test_finalize_writes_the_row_before_provisioning():
+    service, _, repo = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    service.finalize("u1", Source.GITHUB)
+    row = repo.get("u1", "github")
+    assert row is not None
+    assert row.composio_connected_account_id == "ca_live"
+    assert repo.identity_for("u1", "github").github_login == "octocat"
+
+
+def test_finalize_is_idempotent():
+    """Called on every poll, so a second run must not duplicate the row or the
+    trigger create."""
+    service, composio, repo = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    # After the first finalize, list_active reports the trigger as present.
+    created_slugs: list[str] = []
+    original = composio.triggers.create
+
+    def recording(slug, **kwargs):
+        created_slugs.append(slug)
+        return original(slug, **kwargs)
+
+    def list_active(connected_account_ids=None, **kwargs):
+        items = [{"trigger_name": s} for s in created_slugs]
+        return type("R", (), {"items": items})()
+
+    composio.triggers.create = recording
+    composio.triggers.list_active = list_active
+
+    service.finalize("u1", Source.GITHUB)
+    service.finalize("u1", Source.GITHUB)
+
+    assert created_slugs == ["GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER"]
+    assert len(repo.list("u1")) == 1
+
+
+def test_finalize_discards_stale_half_finished_attempts():
+    """Composio keeps a row per authorisation attempt. Once a live one exists,
+    the abandoned INITIATED/INITIALIZING attempts for the same toolkit are
+    deleted so they cannot accumulate (BUG-11)."""
+    service, composio, _ = make(
+        rows=[
+            account("github", "INITIATED", "ca_stale1"),
+            account("github", "ACTIVE", "ca_live"),
+            account("github", "INITIALIZING", "ca_stale2"),
+        ],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    service.finalize("u1", Source.GITHUB)
+    assert set(composio.connected_accounts.deleted) == {"ca_stale1", "ca_stale2"}
+
+
+def test_finalize_does_not_delete_a_broken_prior_connection():
+    """An EXPIRED account is meaningful history, not a half-finished attempt, so
+    dedupe leaves it alone even when a live one exists."""
+    service, composio, _ = make(
+        rows=[
+            account("github", "EXPIRED", "ca_old"),
+            account("github", "ACTIVE", "ca_live"),
+        ],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    service.finalize("u1", Source.GITHUB)
+    assert composio.connected_accounts.deleted == []
+
+
+def test_finalize_while_still_pending_writes_and_provisions_nothing():
+    service, composio, repo = make(rows=[account("github", "INITIATED")])
+    info = service.finalize("u1", Source.GITHUB)
+    assert info.status is ConnectionStatus.DISCONNECTED
+    assert repo.get("u1", "github") is None
+    assert composio.triggers.created == []
+
+
+def test_status_delegates_to_finalize():
+    """The status poll and list-sources heal share one reconcile, so a poll
+    provisions exactly like finalize does."""
+    service, composio, repo = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    service.status("u1", Source.GITHUB)
+    assert repo.get("u1", "github") is not None
+    assert composio.triggers.created
+
+
+def test_list_sources_heals_a_connected_source_missing_its_row():
+    """RC-2: if the poll missed the moment the account went active, the row and
+    triggers were never written. Listing sources reconciles it, so the feed is
+    not left broken just because of timing."""
+    service, composio, repo = make(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    assert repo.get("u1", "github") is None  # nothing persisted yet
+
+    sources = service.list_sources("u1", items=[])
+
+    github = next(s for s in sources if s.source is Source.GITHUB)
+    assert github.status is ConnectionStatus.CONNECTED
+    assert repo.get("u1", "github") is not None  # healed
+    assert composio.triggers.created  # and provisioned
+
+
+def test_list_sources_does_not_re_finalize_an_already_healed_source():
+    """Once the row exists, feed loads must not keep re-resolving identity and
+    re-provisioning on every call."""
+    repo = InMemoryConnectionRepository()
+    repo.mark_active(
+        "u1", "github", composio_connected_account_id="ca_live", provider_login="octocat"
+    )
+    service, composio, _ = make(
+        rows=[account("github", "ACTIVE", "ca_live")], repo=repo
+    )
+    service.list_sources("u1", items=[])
+    assert composio.triggers.created == []

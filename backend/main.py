@@ -457,6 +457,14 @@ def create_app(
             log.warning("rejected an unverified webhook", exc_info=True)
             raise HTTPException(status_code=401, detail="invalid signature")
 
-        return ingest_service.handle(envelope)
+        # An authentic but poison event (a non-UUID user_id that makes the DB
+        # raise, an unforeseen payload shape) must never become a 500: Composio
+        # redelivers a failed webhook, so a 500 turns one bad event into an
+        # endless redelivery loop. Anything past the signature check answers 200.
+        try:
+            return ingest_service.handle(envelope)
+        except Exception:
+            log.warning("ingest failed; acknowledging to stop redelivery", exc_info=True)
+            return IngestResult(handled=False, reason="ingest_error")
 
     return app

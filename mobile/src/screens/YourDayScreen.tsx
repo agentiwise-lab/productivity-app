@@ -141,7 +141,12 @@ export function YourDayScreen({
         <ScreenHeader eyebrow={dateLine()} title={greeting()} />
         {stale ? <StaleBanner fetchedAt={fetchedAt} /> : null}
 
-        {nothingConnected ? (
+        {sourcesLoading ? (
+          // Until we know what is connected, render nothing under the header
+          // rather than the day ring. A new user has no connections, so the ring
+          // would flash for a moment and then be replaced by the empty state.
+          null
+        ) : nothingConnected ? (
           <NothingConnected onConnect={onConnect} />
         ) : (
           <>

@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, View } from 'react-native';
+import { Alert, AppState, Linking, Platform, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -253,6 +253,34 @@ function Shell() {
     void refresh();
   }, [refresh]);
 
+  // Returning to the app re-reads connections. Web OAuth has no deep-link back:
+  // Composio lands the user on its own "taking you back" tab, and the connect
+  // poll can miss the moment the account goes active. When the user switches
+  // back to the app we re-fetch, and because the backend reconciles on this read
+  // a just-finished connect shows as connected without a manual pull-to-refresh.
+  useEffect(() => {
+    const reread = () => {
+      void loadSources();
+    };
+    if (Platform.OS === 'web') {
+      const onVisible = () => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          reread();
+        }
+      };
+      window.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', reread);
+      return () => {
+        window.removeEventListener('visibilitychange', onVisible);
+        window.removeEventListener('focus', reread);
+      };
+    }
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reread();
+    });
+    return () => sub.remove();
+  }, [loadSources]);
+
   // Open the sheet to read (compose=false) or straight into the composer.
   const openRow = useCallback((row: FeedRow, compose = false) => {
     setComposeOnOpen(compose);
@@ -410,7 +438,7 @@ function Shell() {
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.canvas } }}
         >
           <Tab.Screen name="Day" options={{ title: 'Day' }}>
-            {() => (
+            {({ navigation }) => (
               <YourDayScreen
                 rows={rows}
                 loading={loading}
@@ -423,7 +451,9 @@ function Shell() {
                 sourcesLoading={loadingSources}
                 onRefresh={refresh}
                 onOpen={openRow}
-                onConnect={() => connectSource('github')}
+                // The empty-state button reads "Open You": it sends the user to
+                // the You tab to pick a source, not straight into a GitHub OAuth.
+                onConnect={() => navigation.navigate('You')}
               />
             )}
           </Tab.Screen>
