@@ -60,11 +60,13 @@ export function OtpScreen({
         maxLength={6}
         onSubmitEditing={submit}
       />
+      <View style={{ height: space.lg }} />
       <BigButton
         label={loading ? 'Verifying…' : 'Verify'}
         variant="primary"
         onPress={submit}
         disabled={loading || code.trim().length !== 6}
+        style={{ height: 48 }}
       />
     </AuthShell>
   );

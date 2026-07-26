@@ -56,11 +56,13 @@ export function LoginScreen({
         secureTextEntry
         onSubmitEditing={submit}
       />
+      <View style={{ height: space.lg }} />
       <BigButton
         label={loading ? 'Signing in…' : 'Sign in'}
         variant="primary"
         onPress={submit}
         disabled={loading || !canSubmit}
+        style={{ height: 48 }}
       />
     </AuthShell>
   );

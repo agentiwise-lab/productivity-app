@@ -5,7 +5,9 @@
  */
 
 import React, { useState } from 'react';
+import { View } from 'react-native';
 
+import { space } from '../../theme';
 import { BigButton } from '../../components/ui';
 import { AuthShell, Field } from './AuthKit';
 
@@ -59,11 +61,13 @@ export function SetPasswordScreen({
         secureTextEntry
         onSubmitEditing={submit}
       />
+      <View style={{ height: space.lg }} />
       <BigButton
         label={loading ? 'Creating account…' : 'Create account'}
         variant="primary"
         onPress={submit}
         disabled={loading || !canSubmit}
+        style={{ height: 48 }}
       />
     </AuthShell>
   );

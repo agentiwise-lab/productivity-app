@@ -48,11 +48,13 @@ export function WelcomeEmailScreen({
         autoFocus
         onSubmitEditing={submit}
       />
+      <View style={{ height: space.lg }} />
       <BigButton
         label={loading ? 'Sending…' : 'Send code'}
         variant="primary"
         onPress={submit}
         disabled={loading || !email.trim()}
+        style={{ height: 48 }}
       />
     </AuthShell>
   );

@@ -18,48 +18,50 @@ import {
   View,
   type KeyboardTypeOptions,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, type as roles, space, radius, topInset, useTheme } from '../../theme';
 import { T } from '../../components/ui';
 
 /**
- * The app's signature: a ring of the four category hues on a quiet track. It is
- * the same shape the Day screen wears, so the sign-in surface already feels like
- * the product rather than a generic form. Colours come from the palette, so it
- * inverts cleanly between themes.
+ * Two offset rounded cards — the app's own To-dos glyph, enlarged as a quiet
+ * monochrome mark with a couple of content lines. Neutral, since this app keeps
+ * hues for tiers only; it reads as the product, not a generic form.
  */
 function AuthGraphic() {
   const c = useTheme();
-  const SIZE = 132;
-  const R = 52;
-  const STROKE = 13;
-  const CENTRE = SIZE / 2;
-  const circumference = 2 * Math.PI * R;
-  const segment = circumference / 4;
-  const gap = 7;
-  const hues = [c.hue.urgent, c.hue.byEod, c.hue.canWait, c.hue.later];
+  const S = 72;
   return (
-    <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={SIZE} height={SIZE}>
-        <Circle cx={CENTRE} cy={CENTRE} r={R} stroke={c.surface} strokeWidth={STROKE} fill="none" />
-        {hues.map((hue, i) => (
-          <Circle
-            key={i}
-            cx={CENTRE}
-            cy={CENTRE}
-            r={R}
-            stroke={hue}
-            strokeWidth={STROKE}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray={`${segment - gap} ${circumference - (segment - gap)}`}
-            strokeDashoffset={-segment * i}
-            transform={`rotate(-90 ${CENTRE} ${CENTRE})`}
-          />
-        ))}
-        <Circle cx={CENTRE} cy={CENTRE} r={5} fill={c.high} />
+    <View style={{ width: S, height: S, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={S} height={S} viewBox="0 0 72 72">
+        {/* Back card, dim. */}
+        <Rect
+          x={26}
+          y={13}
+          width={32}
+          height={44}
+          rx={8}
+          stroke={c.high}
+          strokeOpacity={0.25}
+          strokeWidth={2}
+          fill="none"
+        />
+        {/* Front card fills with the canvas so it occludes the back where they
+            overlap. */}
+        <Rect
+          x={14}
+          y={19}
+          width={32}
+          height={44}
+          rx={8}
+          stroke={c.high}
+          strokeWidth={2}
+          fill={c.canvas}
+        />
+        {/* Two content lines on the front card. */}
+        <Rect x={21} y={30} width={18} height={2.5} rx={1.25} fill={c.high} opacity={0.55} />
+        <Rect x={21} y={38} width={12} height={2.5} rx={1.25} fill={c.high} opacity={0.3} />
       </Svg>
     </View>
   );
@@ -91,29 +93,29 @@ export function AuthShell({
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'center',
-          paddingHorizontal: space.lg,
+          paddingHorizontal: 40,
           paddingVertical: topInset(insets.top) + space.xl,
         }}
       >
-        <View style={{ width: '100%', maxWidth: 420, alignSelf: 'center', alignItems: 'center' }}>
+        <View style={{ width: '100%', maxWidth: 300, alignSelf: 'center', alignItems: 'center' }}>
           <AuthGraphic />
 
-          <T role="hero" style={{ textAlign: 'center', marginTop: space.lg }}>
+          <T role="display" style={{ textAlign: 'center', marginTop: space.md }}>
             {title}
           </T>
           {subtitle ? (
             <T
               role="secondary"
               tone="mid"
-              style={{ textAlign: 'center', marginTop: space.xs, marginBottom: space.xl }}
+              style={{ textAlign: 'center', marginTop: space.xs, marginBottom: space.xxl }}
             >
               {subtitle}
             </T>
           ) : (
-            <View style={{ height: space.xl }} />
+            <View style={{ height: space.xxl }} />
           )}
 
-          <View style={{ width: '100%' }}>{children}</View>
+          <View style={{ width: '100%', maxWidth: 260, alignSelf: 'center' }}>{children}</View>
 
           {/* Fixed error slot, so the layout does not jump when it appears. */}
           <View style={{ minHeight: 22, marginTop: space.sm, alignItems: 'center' }}>
@@ -160,9 +162,9 @@ export function Field({
       style={{
         borderWidth: 1,
         borderColor: c.border,
-        borderRadius: radius.lg,
+        borderRadius: radius.md,
         paddingHorizontal: space.md,
-        height: 58,
+        height: 46,
         justifyContent: 'center',
         backgroundColor: c.surface,
         marginBottom: space.sm,
@@ -182,7 +184,7 @@ export function Field({
         onSubmitEditing={onSubmitEditing}
         returnKeyType="go"
         style={[
-          { ...roles.title, fontFamily: fonts.sans, color: c.high, textAlign: 'center' },
+          { ...roles.body, fontFamily: fonts.sans, color: c.high },
           { outline: 'none' } as object,
         ]}
       />
