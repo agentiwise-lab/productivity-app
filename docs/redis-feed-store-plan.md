@@ -80,6 +80,15 @@ The `/feed` 500s Vicky saw (`httpx.ReadError: [Errno 11]`) are the single shared
 2. **Redis store**: `RedisFeedRepository` + `feed_actions` ledger + migration 0010 + composition swap + Redis container on the box. RGR at the repo contract. Deploy, verify a full connect→refresh→webhook→dismiss cycle live.
 3. **UX**: syncing-over-cache + refresh button + Clusters A/B/D/E/F.
 
+## Review fixes folded in (data-integrity, 2026-07-26)
+
+1. **Actions key on `(user_id, source_ref)` end-to-end; the item id becomes deterministic.** Today every action route (`/feed/{item_id}/actions`, snooze, dismiss) and `FeedRepository.get/mark_handled/snooze` key on the uuid `id`, which is minted per row and only stable because the Postgres row survives. Under an ephemeral Redis that breaks (a card rendered before an eviction can never be actioned, and a re-ingest mints a new id). Fix: **`id = uuidv5(namespace, user_id + ":" + source_ref)`** so the id is stable across eviction and re-ingest, and the action layer resolves items by `source_ref` (derivable from the id or carried on the row). The ledger key `(user_id, source_ref)` then always matches.
+2. **Webhook append must consult the ledger.** `classify_item`'s `HSET` back of a `source_ref` that the user already dismissed would resurrect it. The append path reads `feed_actions` for that `source_ref` and writes it pre-suppressed (or skips) so a dismissed/snoozed item never re-surfaces.
+3. **Durable-ledger-first write ordering** for dismiss/snooze/handled: write `feed_actions` (Postgres) first, then update/evict the Redis row. A crash in between self-heals (the read-time overlay hides it); the reverse order would lose a dismiss/snooze.
+4. **Migration 0010 order:** backfill `feed_actions` from existing `feed_items` (`status<>'unread' OR snoozed_until NOT NULL OR handled_at NOT NULL`) → drop the `actions.feed_item_id` FK explicitly (not CASCADE) → drop `feed_items`. Gated on a row-count check (dev, near-zero).
+5. **Serializer completeness:** the Redis row is `FeedItem.model_dump(mode="json")` minus exactly `{status, snoozed_until, handled_at}` (ledger-owned). `is_blocking`, `occurred_at`, `created_at`, `content_hash` must round-trip (they drive ranking, the model's `sent_at`, and dedupe). Add a `model_validate(model_dump())` identity contract test so a dropped field fails a test, not production.
+6. **"Held" is best-effort under a TTL:** a held item evicted before classification is re-pulled + re-classified on the next refresh (self-heals); state it, do not rely on a durable pending queue.
+
 ## Open decisions
 
 1. **Cold-miss read** returns empty + syncing (client then refreshes), rather than a slow synchronous read-through (~40s Gmail). Confirm.
