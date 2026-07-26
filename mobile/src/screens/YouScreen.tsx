@@ -11,7 +11,7 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -53,6 +53,9 @@ interface Props {
   name?: string | null;
   notifyLevel: NotifyLevel;
   connections: SourceInfo[];
+  /** The source currently pulling its first data after a connect, if any. */
+  syncingSource?: Source | null;
+  syncingSecs?: number;
   onSetNotifyLevel: (level: NotifyLevel) => void;
   onConnect: (provider: Source) => void;
   onDisconnect: (provider: Source) => void;
@@ -65,6 +68,8 @@ export function YouScreen({
   name,
   notifyLevel,
   connections,
+  syncingSource = null,
+  syncingSecs = 0,
   onSetNotifyLevel,
   onConnect,
   onDisconnect,
@@ -224,7 +229,26 @@ export function YouScreen({
             title={info.label}
             subtitle={statusLine(info)}
             trailing={
-              info.status === 'connected' ? (
+              syncingSource === info.source ? (
+                // Reassurance that the just-connected source is pulling its
+                // data, with a short countdown, instead of a blocking loader.
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.xs,
+                    paddingHorizontal: space.sm,
+                    height: 28,
+                    borderRadius: radius.pill,
+                    backgroundColor: c.overlay,
+                  }}
+                >
+                  <ActivityIndicator size="small" color={c.hue.later} />
+                  <T role="label" tone="mid">
+                    {syncingSecs > 0 ? `Syncing… ${syncingSecs}s` : 'Syncing…'}
+                  </T>
+                </View>
+              ) : info.status === 'connected' ? (
                 <Pressable
                   onPress={() =>
                     Alert.alert(

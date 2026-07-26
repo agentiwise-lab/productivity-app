@@ -157,6 +157,12 @@ function Shell() {
   const [snoozing, setSnoozing] = useState<FeedRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
+  // After a connect, the just-connected source shows a "Syncing…" pill with a
+  // short countdown on its own row while the backfill runs, so the user knows
+  // data is being pulled without a blocking loader. It clears itself.
+  const [syncing, setSyncing] = useState<{ source: Source; secs: number } | null>(
+    null,
+  );
 
   const [sources, setSources] = useState<SourceInfo[]>(SOURCE_SKELETON);
   const [sourcesFailed, setSourcesFailed] = useState(false);
@@ -427,7 +433,9 @@ function Shell() {
               haptics.commit();
               // Pull the just-connected source's existing items into the feed
               // now, rather than leaving it empty until a manual pull-to-refresh:
-              // refresh() runs the sync backfill and then reloads /feed.
+              // refresh() runs the sync backfill and then reloads /feed. The
+              // syncing pill tells the user this is happening without a loader.
+              setSyncing({ source: provider, secs: 4 });
               void refresh();
               return;
             }
@@ -447,6 +455,22 @@ function Shell() {
     },
     [loadSources, refresh],
   );
+
+  // Drives the post-connect "Syncing…" countdown one second at a time, then
+  // clears the pill. The backfill (refresh) runs in parallel; the pill is a
+  // reassurance, not a gate, so it simply counts down and disappears.
+  useEffect(() => {
+    if (!syncing) return;
+    if (syncing.secs <= 0) {
+      setSyncing(null);
+      return;
+    }
+    const timer = setTimeout(
+      () => setSyncing((current) => (current ? { ...current, secs: current.secs - 1 } : null)),
+      1000,
+    );
+    return () => clearTimeout(timer);
+  }, [syncing]);
 
   const disconnectSource = useCallback(
     async (provider: Source) => {
@@ -528,6 +552,8 @@ function Shell() {
                 name={name}
                 notifyLevel={notifyLevel}
                 connections={sources}
+                syncingSource={syncing?.source ?? null}
+                syncingSecs={syncing?.secs ?? 0}
                 onSetNotifyLevel={setNotifyLevel}
                 onConnect={connectSource}
                 onDisconnect={disconnectSource}
