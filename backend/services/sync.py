@@ -92,6 +92,15 @@ class SourceSync:
         if calendar is not None:
             sources[Source.CALENDAR] = calendar.pending
 
+        # Google Docs has no event of its own; its comment-mentions and shares
+        # arrive as Gmail notifications, which this pulls and tags as Docs. The
+        # getattr keeps older/fake integrations that predate it working.
+        docs_factory = getattr(self._integrations, "google_docs", None)
+        if docs_factory is not None:
+            docs = docs_factory(user_id)
+            if docs is not None:
+                sources[Source.GOOGLE_DOCS] = docs.mentions
+
         slack = self._integrations.slack(user_id)
         if slack is not None:
             # Slack pushes in real time, but only while we are running. The

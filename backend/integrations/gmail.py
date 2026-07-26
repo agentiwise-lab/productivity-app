@@ -159,35 +159,15 @@ def _preview_text(message: dict[str, Any]) -> str:
     return ""
 
 
-# Google Docs has no comment/mention/share trigger of its own, but Google emails
-# every one of those events, so they arrive on the Gmail source. Sniffing the
-# sender is how a "someone mentioned you in a comment" notification becomes a
-# Google Docs card instead of a generic email that the category filter would
-# likely bury as bulk. Redundancy with a future dedicated Docs source is
-# acceptable for now.
-_GOOGLE_DOCS_SENDERS: dict[str, str] = {
-    "comments-noreply@docs.google.com": "docs_mention",
-    "drive-shares-noreply@google.com": "docs_share",
-}
-
-
-def _google_docs_reason(email: str) -> str | None:
-    return _GOOGLE_DOCS_SENDERS.get(email.strip().lower())
-
-
 def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     labels = set(message.get("labelIds") or message.get("label_ids") or [])
+    if "UNREAD" not in labels:
+        return None
 
     payload = message.get("payload") or {}
     subject = _header(payload, "Subject") or message.get("subject") or "(no subject)"
     from_header = _header(payload, "From") or message.get("sender") or ""
     name, email = _sender(from_header)
-
-    docs_reason = _google_docs_reason(email)
-    # A Docs notification is always worth surfacing, so it is exempt from the
-    # unread gate that filters ordinary mail.
-    if docs_reason is None and "UNREAD" not in labels:
-        return None
 
     noisy = bool(labels & _NOISE_LABELS)
     # A mailing list header is a stronger signal than the category tab, which
@@ -199,18 +179,10 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     # detail sheet shows the mail itself, and a snippet is not a mail.
     body = _plain_body(message) or _preview_text(message)
 
-    if docs_reason is not None:
-        source, reason, chip, blocking = "google_docs", docs_reason, "Google Docs", True
-    else:
-        source = "gmail"
-        reason = "gmail_bulk" if noisy else "gmail_message"
-        chip = "Inbox"
-        blocking = not noisy  # someone wrote by name and has had no answer
-
     return RawEvent(
-        source=source,
+        source="gmail",
         source_ref=f"gmail:{message.get('id') or message.get('messageId', '')}",
-        reason=reason,
+        reason="gmail_bulk" if noisy else "gmail_message",
         subject_type="Email",
         title=subject,
         body=body,
@@ -219,10 +191,11 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
             f"{message.get('threadId') or message.get('thread_id') or message.get('id', '')}"
         ),
         repo="",
-        context_chip=chip,
+        context_chip="Inbox",
         actor=Actor(login=email, display_name=name or None),
         occurred_at=_sent_at(message),
-        is_blocking=blocking,
+        # Someone wrote to this person by name and has had no answer.
+        is_blocking=not noisy,
         raw=message,
     )
 

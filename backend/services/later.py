@@ -140,7 +140,13 @@ class LaterService:
         """
         sources = [
             source
-            for source in (Source.GMAIL, Source.SLACK, Source.LINEAR, Source.GITHUB)
+            for source in (
+                Source.GMAIL,
+                Source.SLACK,
+                Source.LINEAR,
+                Source.GITHUB,
+                Source.GOOGLE_DOCS,
+            )
             if self._pages(user_id, source, limit) is not None
         ]
         if not sources:
@@ -198,6 +204,12 @@ class LaterService:
             github = self._integrations.github(user_id)
             if github is not None:
                 return self._one_page(github.list_notifications)
+        if source is Source.GOOGLE_DOCS:
+            docs_factory = getattr(self._integrations, "google_docs", None)
+            if docs_factory is not None:
+                docs = docs_factory(user_id)
+                if docs is not None:
+                    return self._one_page(docs.mentions)
         return None
 
     @staticmethod

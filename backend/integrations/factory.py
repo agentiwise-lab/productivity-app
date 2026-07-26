@@ -21,6 +21,7 @@ from typing import Any, Protocol
 from backend.integrations.calendar import ComposioCalendarService
 from backend.integrations.composio_github import ComposioGitHubService
 from backend.integrations.gmail import ComposioGmailService
+from backend.integrations.google_docs import ComposioGoogleDocsService
 from backend.integrations.linear import ComposioLinearService
 from backend.integrations.slack_service import ComposioSlackService
 
@@ -43,6 +44,9 @@ class Integrations(Protocol):
     def calendar(self, user_id: str) -> Any:
         ...
 
+    def google_docs(self, user_id: str) -> Any:
+        ...
+
 
 class ComposioIntegrations:
     def __init__(self, composio: Any) -> None:
@@ -63,6 +67,9 @@ class ComposioIntegrations:
 
     def calendar(self, user_id: str) -> Any:
         return self._get("calendar", user_id, ComposioCalendarService)
+
+    def google_docs(self, user_id: str) -> Any:
+        return self._get("google_docs", user_id, ComposioGoogleDocsService)
 
     def _get(self, toolkit: str, user_id: str, cls: Any) -> Any:
         key = (toolkit, user_id)
