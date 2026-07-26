@@ -46,7 +46,7 @@ Recognition (`rules._canonical_reason` + `composio_github.notification_to_raw_ev
 |---|---|---|
 | `security_alert` | **Urgent** | A stated security alert on your repo. |
 | `ci_failure_mine` (your PR's check failed) | **Urgent** | Your build is red. |
-| `ci_failure_other` (someone else's) | **Later** | Not your emergency. |
+| `ci_failure_other` (a failed check on a repo you watch) | **Urgent** | A broken build is worth surfacing (Vicky's call 2026-07-26). |
 | `ci_ok` (check succeeded) | **Later** | Informational. |
 | `review_request_removed` | **Later** | Nothing to do. |
 | `subscribed`, `author`, `state_change` | **Later** | Watched-repo noise, activity on your own thread, open/close/merge. |
@@ -66,22 +66,23 @@ Recognition (`rules._canonical_reason` + `composio_github.notification_to_raw_ev
 
 ### 3.2 Gmail
 
-Recognition (`gmail.message_to_raw_event`): only `UNREAD` mail in the last 30 days is a candidate (read mail returns nothing). "Noisy" = filed by Gmail under Promotions/Social/Forums/Updates/Spam/Trash, **or** carrying a `List-Unsubscribe` header (a mailing-list signal, stronger than Gmail's inconsistent tabs).
+Recognition (`gmail.message_to_raw_event`): only `UNREAD` mail in the last 30 days is a candidate (read mail returns nothing). Two model buckets + one deterministic-Later bucket (Vicky's call 2026-07-26: a "subscription expiring" / payment email must not be deterministically buried, so `List-Unsubscribe` and Updates/Forums no longer force Later — they go to the model instead).
 
-**Deterministic (no model):**
+**Deterministic (no model) — the only mail that skips the model:**
 | Signal | Category | Why |
 |---|---|---|
-| `gmail_bulk` (noisy) | **Later** | Newsletters, promotions, list mail. Never addressed to you by a person. |
+| `gmail_bulk` — filed under **Promotions / Social / Spam / Trash** | **Later** | Unambiguous noise. Never addressed to you. |
 
-**LLM within a band:**
-| Signal | Band (floor → ceiling) | Tag |
-|---|---|---|
-| `gmail_message` (personal unread) | **Later → Urgent** (floor is noise) | reply |
+**LLM within a band — two buckets, each the top 100 newest in the last 30 days:**
+| Signal | Source query | Band (floor → ceiling) | Tag |
+|---|---|---|---|
+| `gmail_message` (personal INBOX) | `is:unread newer_than:30d -category:promotions -social -forums -updates` | **Later → Urgent** | reply |
+| `gmail_transactional` (Updates / Forums / `List-Unsubscribe`) | the same window, the transactional slice | **Later → Urgent** | reply |
 
-Gmail is the only source whose floor is Later: a personal email the model judges to be no-action sinks to Later rather than being propped up on Home. This is why Gmail carries the widest band.
+Both buckets floor at Later, so anything the model judges no-action still sinks to Later, but a payment/subscription/renewal email is now *seen* by the model instead of buried. Gmail is the only source whose floor is Later.
 
-**Gmail Home ingestion (the LLM set)** — the narrow query `is:unread newer_than:30d -category:promotions -social -forums -updates`, **max 100** per refresh (`gmail.actionable`, `PAGE_SIZE=100`). Those go to the model.
-**Gmail Later (live, no model)** — `is:unread newer_than:30d`, up to **400** (`MAX_UNREAD`), streamed 200 at a time, minus whatever is on Home. This is where the bulk of unread lives.
+**Caps:** each model bucket is capped at **100** newest (`PAGE_SIZE`); the card surface shows a "latest 100 in the last 30 days" heading so the user knows the window.
+**Gmail Later (live, no model)** — `is:unread newer_than:30d`, up to **400** (`MAX_UNREAD`), streamed 200 at a time, minus whatever is on Home.
 
 ### 3.3 Slack
 
@@ -100,7 +101,7 @@ Recognition (`slack.direct_message_to_raw_event` / `channel_message_to_raw_event
 | `slack_thread_reply` (reply in your thread) | Can wait → Urgent | reply |
 | `slack_bot_failure` (a bot posting a failure report) | Can wait → Urgent | alert |
 
-**Slack Later** = `unread()` backfills **direct messages only** (`is:dm after:30d`, `slack_service.py:161-204`); channel mentions arrive via the live webhook, not the backfill (backfilling every channel's history hits Slack's hardest rate limit). Because every DM that matters is elevated to Home, **Slack Later is legitimately empty when you have no un-elevated DMs.** "Nothing waiting here" for Slack is correct behaviour, not a bug.
+**Slack Later** (Vicky's call 2026-07-26: must not read empty) = the **top 100 recent Slack messages** you are involved in over the last 30 days, minus what's on Home, with a "latest 100" heading. **Your own messages are excluded** (self-DM reminders do not surface). Today the backfill is `is:dm` only (`slack_service.py:161-204`), which is why it read empty — the only inbound DM was elevated to Home and the rest were self-DMs. The fix broadens the backfill query (a single `search.messages`, to stay within Slack's hardest rate limit) so recent DMs and channel activity you are part of populate Later. Channel *mentions* still also arrive on the live webhook and go to Home.
 
 ### 3.4 Linear — fully deterministic, no model, ever
 
@@ -109,14 +110,17 @@ Recognition (`linear.issue_to_raw_event`): one signal, `linear`, for every open 
 **Deterministic tier by due date** (`tier_bands._linear_tier`, in the user's timezone):
 | Condition | Category |
 |---|---|
-| Completed / cancelled | dropped (not shown) |
+| Completed / cancelled / done | dropped (not shown) |
 | No due date | **Can wait** |
-| Due date is today or in the past (still open) | **Urgent** |
-| Due date in the future | **Can wait** (flips to Urgent on the day) |
+| Due date **is today** | **By EOD** |
+| Due date **in the past**, any status except completed/done | **Urgent** |
+| Due date in the future | **Can wait** (becomes By EOD on the day, Urgent once overdue) |
 
-The one deterministic reason shown: "Overdue since 24 Jul" / "Due today".
+Priority and workflow state (backlog/in-progress/todo) do **not** change the tier — only the due date does. The one deterministic reason shown: "Overdue since 24 Jul" (overdue) / "Due today" (today).
 
-**Linear Later** = `assigned_to_me` minus Home. Since every open assigned issue is elevated to Home (Can wait or Urgent, never dropped), **Linear Later is empty by design.** "Nothing waiting here" for Linear is correct.
+**Linear Later** = `assigned_to_me` minus Home. Since every open assigned issue is elevated to Home (Can wait or Urgent, never dropped), Linear Later is empty for issues — that part is correct.
+
+**Linear comments/mentions (to add, Vicky's call 2026-07-26).** Today Linear surfaces only assigned *issues*; a comment or @-mention on your issue is not fetched. These carry prose (someone is asking you something), so they are **LLM-in-a-band** (`Can wait → Urgent`, tag reply), like a Slack mention. They need either polling (a Linear comments query on your issues per refresh) or a real-time trigger (below).
 
 ### 3.5 Google Calendar — fully deterministic, no model, ever
 
@@ -181,7 +185,22 @@ Classification pass (`services/classifier.py`): batches of **20**, a per-pass ce
 
 ---
 
-## 6. Known gaps against this model (to fix)
+## 6. Real-time delivery (webhook triggers) per source
+
+Triggers are provisioned on connect (`services/triggers.py`). What arrives in real-time vs poll-only:
+
+| Source | Trigger created on connect | Delivery |
+|---|---|---|
+| GitHub | `GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER` | Assigned issues push in real-time; review/mention/comment come on the next refresh poll. |
+| Slack | `SLACK_DIRECT_MESSAGE_RECEIVED`, `SLACK_CHANNEL_MESSAGE_RECEIVED` | DMs + channel mentions push in real-time. |
+| Gmail | `GMAIL_NEW_GMAIL_MESSAGE` | New mail pushes (also carries Google Docs mention/comment/share). |
+| Calendar | `GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER` | Starting-soon pushes. |
+| **Linear** | **none today** — Composio's Linear triggers require a `team_id` not known at connect, so Linear is poll-only. **To fix (Vicky's call 2026-07-26):** resolve the user's team(s) at connect and provision a per-team Linear trigger (issue + comment events). | poll-only → real-time after the fix |
+| Google Docs | none (no Composio trigger) | arrives via the Gmail trigger (Docs notifications are emails). |
+
+So the connections that create **no** trigger of their own are **Linear** (to be fixed with per-team provisioning) and **Google Docs** (by design, rides Gmail). Everything else is real-time.
+
+## 7. Known gaps against this model (to fix)
 
 1. **Model-rated-noise stays on Home.** A `gmail_message` the model rates noise is stored on Home at noise tier rather than falling to Later, because it was ingested (`needs_llm`) and is therefore excluded from Later's live view. To keep the four categories clean, an item the model settles as noise should route to Later, not linger on Home. (Small band/read-time change.)
 2. **Later SSE 401.** The Later stream uses a possibly-stale access token with no refresh/retry, so it intermittently 401s and shows empty for *every* source. This is the real "Later shows nothing" bug (distinct from Slack/Linear being empty by design). Fixed in the UX phase.
