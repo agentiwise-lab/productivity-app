@@ -153,7 +153,11 @@ export function LaterScreen({
     [all, source],
   );
   const label = source ? LABELS[source] : '';
-  const title = `${all.length} did not need you`;
+  // With nothing connected there is no count to report and no strip to show, so
+  // the screen is just the "connect a source" prompt: a big "0 did not need you"
+  // over an empty selector read as a broken screen rather than an empty one.
+  const empty = available.length === 0;
+  const title = empty ? 'Later' : `${all.length} did not need you`;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
@@ -165,10 +169,11 @@ export function LaterScreen({
           paddingBottom: space.xl,
         }}
       >
-        <ScreenHeader eyebrow="Last 30 days" title={title} />
+        <ScreenHeader eyebrow={empty ? undefined : 'Last 30 days'} title={title} />
 
         {/* Icon-only when inactive, icon plus label when active, so the strip
             stays one line however many sources there are. */}
+        {!empty ? (
         <View
           style={{
             flexDirection: 'row',
@@ -218,16 +223,19 @@ export function LaterScreen({
             );
           })}
         </View>
+        ) : null}
 
-        <SectionLabel
-          label={label}
-          tight
-          // The header never claims a total it does not have yet. `count`
-          // renders in the mono face, which is right for a figure and wrong
-          // for a word, so the pending state is the figure's absence rather
-          // than "counting..." typed out where the figure will go.
-          count={loading ? null : `${rows.length} items`}
-        />
+        {!empty ? (
+          <SectionLabel
+            label={label}
+            tight
+            // The header never claims a total it does not have yet. `count`
+            // renders in the mono face, which is right for a figure and wrong
+            // for a word, so the pending state is the figure's absence rather
+            // than "counting..." typed out where the figure will go.
+            count={loading ? null : `${rows.length} items`}
+          />
+        ) : null}
 
         {/* `source_ref` is a thread id, and a thread with two unread messages
             arrives twice, so the index keeps the key unique. */}
@@ -256,7 +264,7 @@ export function LaterScreen({
           />
         ))}
 
-        {loading ? (
+        {!empty && loading ? (
           <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.xl }}>
             <ActivityIndicator color={c.hue.later} />
             {all.length > 0 ? (

@@ -175,6 +175,15 @@ class SourceSync:
                 report.classified = classified
                 report.held = held
 
+        log.info(
+            "refresh user=%s ingested=%d classified=%d held=%d per_source=%s failed=%s",
+            user_id,
+            report.ingested,
+            report.classified,
+            report.held,
+            report.per_source,
+            report.failed or "-",
+        )
         return report
 
     def _classify_quietly(self, user_id: str) -> tuple[int, int]:

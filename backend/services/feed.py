@@ -12,6 +12,7 @@ It depends only on the other services' contracts, never their implementations.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone, tzinfo
 from typing import Any, Callable, Protocol
 from uuid import uuid4
@@ -25,6 +26,8 @@ from backend.services.hashing import content_hash
 from backend.services.ranking import effective_tier, read_time_reason, score
 from backend.models.tiers import Tier
 from backend.services.rules import RuleClassifier, RuleVerdict
+
+log = logging.getLogger(__name__)
 
 
 class ItemNotFound(Exception):
@@ -171,11 +174,15 @@ class DefaultFeedService:
         prefs = prefs or UserPreferences(user_id=user_id)
         now = self._now()
         rows = []
+        held = 0
         for item in self._repo.list_by_user(user_id):
             # Held items (deferred to the model, not yet judged) never reach a
             # screen: a placeholder tier and a blank reason is the one thing this
             # feed must not show. Passed meetings are equally over.
-            if _is_held(item) or _meeting_has_passed(item, now):
+            if _is_held(item):
+                held += 1
+                continue
+            if _meeting_has_passed(item, now):
                 continue
             data = item.model_dump()
             reason = read_time_reason(item, now=now, tz=tz)
@@ -189,6 +196,14 @@ class DefaultFeedService:
                 )
             )
         rows.sort(key=lambda row: row.priority_score, reverse=True)
+        log.info(
+            "feed user=%s rows=%d hidden_held=%d tz=%s | %s",
+            user_id,
+            len(rows),
+            held,
+            getattr(tz, "key", tz),
+            ", ".join(f"{r.source}:{r.tier.value}" for r in rows[:12]) or "-",
+        )
         return rows
 
     def comment(self, user_id: str, item_id: str, body: str) -> FeedItem:

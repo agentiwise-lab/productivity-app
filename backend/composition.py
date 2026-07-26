@@ -56,6 +56,14 @@ def _require(name: str) -> str:
 def build_app() -> FastAPI:
     load_dotenv()
 
+    # The app's own loggers default to the root WARNING level, which hides the
+    # INFO flow lines (refresh summaries, per-item classification, feed reads).
+    # BACKEND_LOG_LEVEL turns them up for live observation without touching
+    # uvicorn's own access log.
+    logging.getLogger("backend").setLevel(
+        os.environ.get("BACKEND_LOG_LEVEL", "INFO").upper()
+    )
+
     from composio import Composio
 
     composio = Composio(api_key=_require("COMPOSIO_API_KEY"))

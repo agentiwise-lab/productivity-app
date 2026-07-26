@@ -211,6 +211,11 @@ class DefaultClassificationService:
         verdicts = self._judge(batch)
         if verdicts is None:
             report.failed_batches += 1
+            log.info(
+                "classify gave up on %d item(s); showing at band ceiling: %s",
+                len(batch),
+                ", ".join(f"{i.source}[{i.id[:8]}]" for i in batch),
+            )
             self._repo.mark_attempted(
                 user_id, [item.id for item in batch], at=self._now()
             )
@@ -302,6 +307,14 @@ class DefaultClassificationService:
                 self._cache.put(
                     item.content_hash, tier, summary, reason, model=self._model_name
                 )
+            log.info(
+                "classified %s[%s] signal=%s -> %s | %s",
+                item.source,
+                item.id[:8],
+                item.signal,
+                tier.value,
+                reason or summary or item.title[:40],
+            )
             report.classified += 1
             applied.append((item, tier))
 
