@@ -1,109 +1,108 @@
-# Real-time feed + connect UX plan (RCA-grounded)
+# Real-time feed + connect UX plan (RCA-grounded, reviewed v2)
 
-Date: 2026-07-26. Follows the classification redesign ([classification-redesign-plan.md](classification-redesign-plan.md)). Every root cause below was verified against live backend logs, the Supabase rows, and a live Composio probe (a real GitHub issue created and timed end to end). File:line references are to the current tree.
+Date: 2026-07-26. Follows the classification redesign ([classification-redesign-plan.md](classification-redesign-plan.md)). Root causes verified against live backend logs, Supabase rows, and a live Composio probe (a real GitHub issue created and timed). Reviewed 2026-07-26 by three compound-engineering agents (architecture, flow-completeness, simplicity); v2 folds in their findings — the mitigations are leaner and three real gaps (disconnect purge, cold-start heavy sync, `held`-as-pill-signal) are fixed.
 
-**Status: DRAFT — for review + approval. Crucial decisions flagged at the end.**
+**Status: REVIEWED — awaiting approval. Crucial decisions at the end.**
 
 ---
 
 ## The evidence
 
-- **Webhook path works and is fast.** Probe: GitHub issue created `14:29:54` → `POST /webhooks/composio` `14:30:16` (22s, Composio's own trigger latency) → `classify_item` `14:30:18`. So a triggered event reaches the stored feed in ~24s.
-- **`/feed/refresh` fires every ~5–8 min, never on connect.** Session timeline: `14:01:57 → 14:06:42 → 14:12:31 → 14:20:44`, each landing the *previous* connect's data. There is **no refresh timer in the app**; the gaps are just whenever the user next triggered a full refresh.
-- **Composio account propagation delay is real.** Gmail linked ~`14:10` but every refresh returned `ActionExecute_ConnectedAccountNotFound` for gmail until `14:20`. Partly upstream; we can mitigate, not eliminate.
-- **Linear "all urgent" is correct data**, not a bug: 9 rows have overdue due dates (→ urgent), 6 have none (→ can_wait), exactly per the locked Linear rule.
+- **Webhook path works, ~24s.** Probe: issue created `14:29:54` → `/webhooks/composio` `14:30:16` → `classify_item` `14:30:18`.
+- **`/feed/refresh` fires every ~5–8 min, never on connect.** Timeline `14:01 → 14:06 → 14:12 → 14:20`; no refresh timer exists.
+- **Composio propagation delay is real** (Gmail unusable ~10 min post-link). Mitigate, not eliminate.
+- **Linear "all urgent" is correct overdue data**, not a bug.
+
+## North star (validated by all three reviews)
+
+The stored feed is the source of truth. Webhooks keep it current (`ingest → classify_item`); the client re-reads it cheaply. **No periodic provider polling.** Dedup/ordering between a webhook item and the connect-refresh is safe — both collapse on `(user_id, source_ref)` at `upsert` (`feed_repository.py:97`), ranking recomputed at read (`feed.py:198`).
+
+- **Heavy sync (`POST /feed/refresh` = poll all providers + classify)** runs only on **connect** (made reliable) and **manual pull-to-refresh**.
+- **Cheap `GET /feed`** (a DB read, `load()`) runs on **launch, foreground, and tab-switch to Day/To-dos** — this is what surfaces webhook-appended rows. Not a timer, not a provider poll.
 
 ---
 
-## Architecture decision (the north star)
+## Cluster A — Reliable connect-refresh + cheap reads (issues 2, 3, 9)
 
-**Do not periodically re-poll providers.** A timer that fires `/feed/refresh` every N seconds is the heavy, wrong design. Instead, three distinct mechanisms, each matched to its cost:
+**Root cause.** `connectSource` (`App.tsx:428-446`) fires `refresh()` only inside a 15×1s poll that usually times out on web OAuth; the foreground handler (`App.tsx:298-319`) only calls `loadSources()`, never the feed; no refresh timer. Day/To-dos read stored `/feed`; Activity/Later read live endpoints — hence the split.
 
-1. **Heavy provider sync (`POST /feed/refresh` = poll every provider + classify)** runs **only**:
-   - once on **connect** (made reliable — see Cluster A), and
-   - on **manual pull-to-refresh** (user-initiated).
-2. **Ongoing real-time updates come from webhook triggers.** A trigger (GitHub issue-assigned, Slack DM/channel, Gmail new message, Calendar starting-soon) already appends its item to the stored feed via `ingest → classify_item` (shipped in the redesign). Nothing periodic needed for these.
-3. **The client surfaces webhook-appended items with a cheap `GET /feed` read** — a single DB read, not a provider re-poll — on **app launch and on foreground**. This is the minimal thing that lets a webhook-delivered item become visible without a heavy sync. (See Crucial Decision 1.)
+**Fix (leaned).**
+1. **Flip-detection with a hydration guard.** Track connected sources by `connected_account_id` (`SourceInfo`, already on the wire), not the `status` string. The **first** `loadSources()` of a session establishes the baseline **without firing** anything (so a cold launch, where the skeleton starts all-disconnected, is not read as N fresh connects). Only a genuine new `connected_account_id` on a later read counts as a connect → fires one `refresh()` + starts the pill. This also ignores `expired→connected` reconciliation.
+2. **Single-flight `refresh()`.** Guard so concurrent connects and a pull-during-connect coalesce into one in-flight sweep instead of N overlapping full-provider polls.
+3. **Cheap `load()` (`GET /feed`) on foreground and on tab-switch to Day/To-dos**, so a webhook item that landed while backgrounded or while on another tab is seen.
+4. **To-dos gets pull-to-refresh** (parity with Day).
+5. **One deferred retry, not a loop.** If the just-connected source landed **zero rows** in the connect-refresh, schedule a single re-`refresh()` ~30–45s later (covers the short propagation slice). Longer propagation is covered by the next foreground/pull. (See Decision 3 for the backgrounding caveat.)
+6. **Cold-start is a cheap read, not a heavy sweep.** Today the mount effect runs a full `refresh()` every launch (`App.tsx:280-282`) — contradicts the north star. Change mount to `load()`; heavy sync stays reserved for connect + pull. (See Decision 1.)
 
-Net: the feed is a durable store that webhooks keep current; the app reads it cheaply when opened, and only pays the heavy provider sync on connect or explicit pull.
-
----
-
-## Cluster A — Reliable refresh-on-connect + cheap foreground read (issues 2, 3, 9)
-
-**Root cause.** `connectSource` (`App.tsx:428-446`) does call `refresh()` and set the pill, but only inside a 15×1s poll loop that usually times out before it catches `connected` on web OAuth (no reliable redirect back). The foreground/focus handler (`App.tsx:298-319`) only calls `loadSources()` — it re-reads connection status, never the feed. There is no refresh timer. So Day/To-dos serve stale stored rows until a manual Day pull-to-refresh (and To-dos has no pull-to-refresh at all). Day + To-dos read stored `/feed`; Activity reads live `/sources`; Later reads live `/later` — which is why only the latter two look instant.
-
-**Fix.**
-- Track the connected-source set across `loadSources()`. When a source **flips** disconnected→connected (detected in the foreground handler or the status poll), fire **one** full `refresh()` (feed + `/feed/refresh` + day + later + activity) and start the pill. This catches the web-OAuth case the 15×1s loop misses.
-- Keep a **bounded post-connect retry** (e.g. re-run `/feed/refresh` a few times over ~90s) so a source still propagating on Composio's side fills in without user action. Stop early once that source reports rows.
-- On **foreground/launch**, do a cheap `GET /feed` read (`load()`), so webhook-appended items surface. **Not** a `/feed/refresh`, **not** a timer.
-- Give **To-dos** a pull-to-refresh (parity with Day).
-
-**Seam.** The connect-detection lives in the sources-reconciliation path; `refresh()` and `load()` are the existing contracts. No backend change.
-
----
+**Seam.** All client-side (`App.tsx`); the `refresh()`/`load()` contracts are unchanged.
 
 ## Cluster B — Global syncing pill above the footer (issues 1, 11)
 
-**Root cause.** `syncing` state (`App.tsx:163`) is set only in the fragile connect-success branch (`App.tsx:438`), counts down a fixed **4s** (`App.tsx:462-473`) decoupled from the ~40s Gmail backfill, and renders only on the You screen (`YouScreen.tsx:232-250`). So it usually never shows on web OAuth, and when it does it is gone before data lands.
+**Root cause.** `syncing` set only in the fragile connect branch, fixed 4s countdown (`App.tsx:462-473`) decoupled from the ~40s backfill, rendered only on You (`YouScreen.tsx:232-250`).
 
-**Fix.** A single **global pill**, centered, pinned just above the footer, visible on every tab, with a spinner and "Syncing {source}…". Lifecycle driven by the **refresh/backfill lifecycle**, not a timer: it appears when a connect-refresh starts and clears when that refresh completes and the source's held/pending count reaches 0 (`RefreshResult.held`, already on the wire). Navigation stays free while it shows.
+**Fix (leaned — all three reviews rejected `held` gating).** State = `syncingSources: Set<Source>`. `connectSource` adds the source before the connect-`refresh()` and removes it in a `finally` (extended over the single deferred retry if used). A presentational `SyncPill` renders globally, centered just above the footer, with a spinner ("Syncing…" or the source names). **No countdown, no `held`/`per_source` gating** — the completion signal is the `refresh()` promise resolving. The pill means "we tried"; a source still propagating past the retry is covered by the later foreground read (Decision 7).
 
-**Seam.** New presentational `SyncPill` component + a `syncing` state machine in `App.tsx` fed by the refresh lifecycle. No backend change (the `held` count already ships).
+**Seam.** New `SyncPill` component + `syncingSources` state in `App.tsx`. No backend change; delete the `secs` field, the countdown effect, and the `held` plumbing from the pill.
 
----
+## Cluster C — Activity "could not read" (issue 4)
 
-## Cluster C — Activity "could not read this source right now" (issue 4)
+**Root cause.** Server always returns 200; the failure is the client 60s `DASHBOARD_TIMEOUT_MS` (`client.ts:30`) aborting. The overview fires every source's dashboard in parallel (`ActivityScreen.tsx:74-87`); GitHub's `repo_activity` ≈ 27 calls / 24-wide (`composio_github.py:307`) and Linear's `my_issues` up to 20 serial pages (`linear.py:260`) cross 60s under contention. Drill-in is one uncontended call + warm 60s cache (`stats.py:117,146`).
 
-**Root cause.** Not a server error — `GET /sources/{provider}` always returns 200 with `unavailable` appended (`stats.py:164-181`). The failure is the client 60s `DASHBOARD_TIMEOUT_MS` (`client.ts:30`) aborting. The Activity overview fires **all** connected sources' dashboards in parallel (`ActivityScreen.tsx:74-87`). GitHub's board runs `repo_activity` ≈ **27 GitHub calls, 24 concurrent** (`composio_github.py:307-371`), throttled by GitHub Search limits; Linear runs `my_issues`, **up to 20 serial paginated calls** (`linear.py:260-299`). Under overview contention they cross 60s → abort → the string at `ActivityScreen.tsx:80-84`. Drill-in is one uncontended call and hits the warm 60s server cache (`stats.py:117,144-151`), so it works; backing out re-fires the burst.
+**Fix (leaned — one approach, not three).** Make the **overview lite**: it requests summary-level data only (`activity_summary` = 2 calls, already wired at `stats.py:214`), via a `?detail=summary` param (or a lite board variant) on `GET /sources/{provider}`. The **drill-in stays rich** (unchanged endpoint call with full `repo_activity`/stats). The heavy work leaves the contended path entirely, so the overview cannot approach 60s. **Dropped as YAGNI:** the server soft-time-budget and the GitHub fan-out / Linear pagination tuning (a Linear-pagination cap is a deferrable drill-in cost optimization, not needed for issue 4).
 
-**Fix (options, pick in review).**
-- **Overview cheap, drill-in rich:** overview shows only the cheap summary (`activity_summary`, 2 calls) and headline counts; defer `repo_activity` / full Linear stats to the drill-in. Biggest win, changes overview richness.
-- **Bound the heavy reads:** cap Linear pagination for the dashboard (e.g. first 2–3 pages) and reduce GitHub `repo_activity` fan-out (fewer repos, longer cache); add a server-side soft time budget so a source returns partial-with-`unavailable` instead of running to 60s.
-- **Frontend:** sequence the overview calls (small concurrency) instead of all-at-once, and on abort show a retry/"still loading" state rather than a hard error.
-
-**Seam.** `stats.py` per-source builders, `composio_github.py.repo_activity`, `linear.py.my_issues` (a bounded variant), `ActivityScreen.tsx` fetch orchestration.
-
----
+**Seam.** `stats.py` (a summary-only build path), `main.py` `/sources/{provider}` (accept `detail`), `client.ts`/`ActivityScreen.tsx` (overview passes `detail=summary`, drill-in doesn't).
 
 ## Cluster D — Calendar current-day-only + timing copy (issues 6, 8)
 
-**Root cause.** Backend: `event_to_raw_event` uses an 18h rolling window (`calendar.py:101`, `DAY_AHEAD = 18h` at `calendar.py:31`) with **no calendar-day boundary and no user tz**, so tomorrow-1:15pm enters as `calendar_meeting` tiered "today". Frontend: the "next in N" copy (`YourDayScreen.tsx:332`) is fed by `ahead` (filtered only `end>now`, not day-filtered), while the count uses the correctly day-filtered `todayMeetings` (`YourDayScreen.tsx:111-114`) — hence "No meetings today, next in 17h". The ring also gets unfiltered `meetings` (`YourDayScreen.tsx:157`).
+**Root cause.** Backend feed leak: 18h rolling window, no day boundary (`calendar.py:101`, `DAY_AHEAD=18h`). Frontend copy: "next in N" (`YourDayScreen.tsx:332`) fed by `ahead` (filtered only `end>now`), while the count uses day-filtered `todayMeetings` — mismatch; ring gets unfiltered meetings (`YourDayScreen.tsx:157`).
 
-**Fix.**
-- Backend: constrain `calendar_meeting` to the user's **calendar day** (thread the user tz — the same tz the feed already receives — into the calendar poll / `event_to_raw_event`). Keep invites (`needsAction`) regardless of day; keep in-progress meetings.
-- Frontend: day-filter `ahead` and the ring the same way `todayMeetings` already is; fix "next in N" to only consider today (see Crucial Decision 5 for the tomorrow case).
+**Fix (leaned — no tz plumbing into the poll).** The calendar band already receives `tz` at read time (`tier_bands.py:89`, `_calendar_tier`), and the Linear band right below it already does `now.astimezone(tz).date()` (`tier_bands.py:104-116`). So:
+- **Backend, read-time:** drop a `calendar_meeting` whose start is not the user's local today (mirror the Linear band, reusing the `tz` already flowing to `effective_tier` / the passed-meeting drop in `feed.list_feed`); keep `calendar_invite` (needsAction) regardless of day. **No change to the poll, `event_to_raw_event`, or `/day`.**
+- **Frontend:** derive `next` from a day-filtered `ahead` and pass day-filtered meetings to `DayRing` (mirror the existing `todayMeetings` filter). `/day` staying wide is correct — the client owns the day boundary by design (`calendar.py:271-279`).
 
-**Seam.** `calendar.py` (tz param), the calendar poll caller, `YourDayScreen.tsx` (reuse the existing day filter).
-
----
+**Seam.** `tier_bands.py` (calendar-day check) or `feed.py` list_feed drop; `YourDayScreen.tsx` (day-filter `ahead`+ring).
 
 ## Cluster E — UI polish (issues 5, 10)
 
-- **Name row (issue 5).** The You header already shows the name (`YouScreen.tsx:98,112`); the bug is the separate name row (`YouScreen.tsx:116-140`). Add a `right` slot to `ScreenHeader` (`Chrome.tsx:26-46`), render an inline "Edit" (name set) / "Add your name" (absent) chip there, and delete the row. No standalone name listing either way.
-- **Later collapsed header (issue 10).** Delete `CollapsedTitle` at `LaterScreen.tsx:313` (purely a sticky mini-title; safe), and drop the now-dead scroll plumbing. (See Crucial Decision 6 re: the Day screen's collapsed header.)
+- **Name row.** Header already shows the name (`YouScreen.tsx:98,112`); delete the separate row (`YouScreen.tsx:116-140`). Add a `right` slot to `ScreenHeader` (`Chrome.tsx:26-46`) with an inline "Edit" (name set) / "Add your name" (absent) chip.
+- **Later collapsed header.** `CollapsedTitle` is **shared** — the Day screen imports it too (`YourDayScreen.tsx:21`), so delete only the **usage** in Later (`LaterScreen.tsx:313`), not the symbol (unless Decision 6 removes it from Day as well).
 
----
+## Cluster F — Disconnect purges stored rows (NEW, from flow review)
+
+**Root cause.** `disconnect` (`connections.py:230-240`) removes the Composio account + connection row but **never deletes that source's `feed_items`**, so they keep showing on Day/To-dos, keep counting, and stay in the Later exclusion set after a disconnect.
+
+**Fix.** On `disconnect`, purge stored feed items for `(user_id, source)` and clear any pill/counts for it. Add a repo method `delete_by_source(user_id, source)`; call it from `ConnectionService.disconnect`.
+
+**Seam.** `feed_repository.py` (both impls) + `connections.py`.
+
+## Small robustness (from arch review)
+
+- `_classify_soon` (`ingest.py:229-241`): if the background submit itself throws (pool saturated), the webhook item is left held forever. Mark it attempted (visible at ceiling) before/around the submit so the poll-only safety net still applies.
 
 ## Not in scope / not bugs
 
-- **Linear no trigger (issue 7):** by design — Linear triggers need a `team_id` unknown at connect, so Linear is poll-only. Deterministic tiering means the connect-refresh + manual pull fully cover it (no model, no webhook needed). Optionally provision per-team Linear triggers later (Crucial Decision 2).
-- **Linear "all urgent":** correct overdue data, not a defect.
+- Linear no-trigger (poll-only by design; deterministic tiering covers it). Linear per-team triggers + GitHub-notification foreground reads stay **deferred** (Decision 2) — do not let them creep in.
+- Linear "all urgent" = real overdue data.
 
 ---
 
 ## Crucial decisions (please confirm)
 
-1. **Cheap foreground `GET /feed` read.** You rejected periodic polling — agreed. But with zero client re-read, a webhook-appended item never becomes visible until the next connect/manual pull. I propose a single cheap `GET /feed` (DB read, no provider poll) on app launch + foreground. Not a timer. **OK?**
-2. **Poll-only staleness (Linear + GitHub notifications).** With no periodic sync, Linear changes and GitHub review-requests/mentions that happen *after* connect won't appear until the next connect or a manual pull. Accept that (rely on manual pull), or invest in Linear per-team triggers + treating GitHub notifications via a foreground read? **Recommend: accept for now.**
-3. **Composio propagation delay.** The first post-connect refresh can fail for a source for up to ~10 min (upstream). Mitigation is a bounded retry over ~90s; beyond that it fills on next foreground/pull. Cannot fully eliminate. **Accept the bounded-retry mitigation?**
-4. **Activity overview scope (Cluster C).** Move the heavy GitHub/Linear stats to drill-in and keep the overview to cheap summaries — the overview gets lighter but reliable. **OK, or keep rich overview with bounded reads + a soft budget?**
-5. **"Next in N" when the next meeting is tomorrow.** Label it "Tomorrow 1:15pm" or hide it entirely from the day view? **Which?**
-6. **Collapsed sticky header.** Remove from Later (confirmed). Also remove the "Good evening" collapsed header from the Day screen, or Later only?
-7. **Pill lifecycle.** Pill clears when the connect-refresh completes and the source's `held` count hits 0. If a source is still propagating on Composio's side past the retry window, the pill clears anyway (data fills later on foreground) rather than spinning forever. **OK?**
+1. **Cold-start + foreground are cheap `GET /feed`, not heavy sync.** Heavy provider sync runs only on connect + manual pull. Consequence: on app open, poll-only sources (Linear, GitHub notifications) show their last-synced state until you pull; webhook sources are current. This is the north star made literal — confirm you want cold-start to stop doing a full sweep.
+2. **Poll-only staleness accepted** (Linear/GitHub-notification changes after connect wait for the next connect or manual pull). Recommend accept; defer Linear triggers.
+3. **Propagation retry = one deferred client retry (~30–45s) for a zero-row source.** Lean, but a client timer can be suspended if you background the app right after OAuth; the longer tail then falls to foreground/pull. Accept the lean version, or invest in a backend per-source retry (more machinery, survives backgrounding)?
+4. **Activity overview goes lite** (summary only), rich on drill-in. Overview becomes lighter but reliable. OK?
+5. **"Next in N" when the next meeting is tomorrow** — label it "Tomorrow 1:15pm" or hide it from the day view?
+6. **Collapsed sticky header** — remove from Later (confirmed). Also from the Day screen ("Good evening" on scroll), or Later only? (Determines whether the shared `CollapsedTitle` symbol can be deleted.)
+7. **Pill = "we tried", cleared when the connect-refresh resolves.** A source still propagating past the retry clears the pill anyway (data fills on next foreground) rather than spinning. A failed source (`ConnectedAccountNotFound`) is indistinguishable from a genuine 0-item source in the pill. Acceptable, or should a still-connecting source show a distinct soft state?
 
 ---
 
-## Suggested build order
+## Build order
 
-1. Cluster E (quick, isolated). 2. Cluster A + B (the core lag + pill, one coherent change to the connect/refresh lifecycle). 3. Cluster D. 4. Cluster C. Each with tests where backend logic changes (RGR), each deployed to EC2 and verified live via the logging + browser loop.
+1. **E** (isolated, quick) + **F** (disconnect purge, small, high correctness value).
+2. **A + B** (the core lag + pill — one coherent connect/refresh lifecycle change; fix the hydration guard and drop `held`-gating first, per the reviews).
+3. **D** (calendar).
+4. **C** (Activity lite overview).
+
+Backend changes follow RGR; each cluster deploys to EC2 and is verified live via the logging + browser loop.
