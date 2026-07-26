@@ -217,17 +217,29 @@ class ComposioLinearService:
         return getattr(result, "data", {}) or {}
 
     def current_user_id(self) -> str | None:
-        """Cached: it never changes, and every refresh would otherwise pay for
-        it again."""
-        if self._me is _UNSET:
-            try:
-                data = self._execute("LINEAR_GET_CURRENT_USER", {})
-                user = data.get("user") or data.get("viewer") or data
-                self._me = user.get("id")
-            except Exception:
-                log.warning("could not resolve the Linear user", exc_info=True)
-                self._me = None
-        return self._me
+        """Resolved once and cached, but only on success.
+
+        Caching a *failure* is what poisoned this service for the life of the
+        process: the app fires a refresh on every launch, so the first one runs
+        before Linear is connected, ``LINEAR_GET_CURRENT_USER`` throws
+        ``ConnectedAccountNotFound``, and freezing ``self._me`` to ``None`` meant
+        Composio was never asked again even after the account went active. Linear
+        stayed empty until a restart. So a failed or empty resolution is left
+        unresolved (``_UNSET``) and the next refresh retries; only a real id is
+        remembered.
+        """
+        if self._me is not _UNSET:
+            return self._me
+        try:
+            data = self._execute("LINEAR_GET_CURRENT_USER", {})
+            user = data.get("user") or data.get("viewer") or data
+            resolved = user.get("id")
+        except Exception:
+            log.warning("could not resolve the Linear user", exc_info=True)
+            return None
+        if resolved:
+            self._me = resolved
+        return resolved
 
     def assigned_to_me(self) -> list[RawEvent]:
         """Only this user's issues, filtered by Linear rather than by us.

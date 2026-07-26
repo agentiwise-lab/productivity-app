@@ -149,8 +149,11 @@ class ComposioSlackService:
                     break
         except Exception:
             # A card showing a raw id is worse than no card, but not by enough
-            # to fail the whole refresh over.
+            # to fail the whole refresh over. Crucially the partial map is NOT
+            # cached: caching a directory built from a failed load froze empty
+            # names for the life of the process, so the next refresh retries.
             log.warning("could not load the Slack user directory", exc_info=True)
+            return names
 
         self._names = names
         return names

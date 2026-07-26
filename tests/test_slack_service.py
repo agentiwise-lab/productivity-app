@@ -70,6 +70,35 @@ def test_marking_read_moves_the_cursor_to_that_message(service):
     assert args == {"channel": "C01ENG", "ts": "1784812011.000200"}
 
 
+def test_a_failed_user_directory_load_is_not_cached_and_retries():
+    """user_names memoises the directory, but caching an empty map built from a
+    failed SLACK_LIST_ALL_USERS froze raw ids for the life of the process. A
+    failed load must not be cached, so the next refresh retries."""
+
+    class _FlakyTools:
+        def __init__(self):
+            self.calls: list[str] = []
+            self._attempts = 0
+
+        def execute(self, slug, user_id=None, arguments=None, version=None):
+            self.calls.append(slug)
+            if slug == "SLACK_LIST_ALL_USERS":
+                self._attempts += 1
+                if self._attempts == 1:
+                    raise RuntimeError("rate limited")
+                return {"data": {"members": [
+                    {"id": "U1", "profile": {"display_name": "Ada"}}
+                ]}}
+            return {"data": {}}
+
+    client = _FakeComposio()
+    client.tools = _FlakyTools()
+    svc = ComposioSlackService(client, user_id="me")
+
+    assert svc.user_names() == {}              # failed load, not cached
+    assert svc.user_names() == {"U1": "Ada"}   # next refresh retries, resolves
+
+
 def test_resolving_your_own_identity_reads_the_user_id(service):
     client = _FakeComposio({"successful": True, "data": {"user_id": "U_ME", "user": "vicky"}})
     svc = ComposioSlackService(client, user_id="me")

@@ -141,11 +141,19 @@ class ComposioCalendarService:
     @property
     def _email(self) -> str:
         """Which attendee row is ours. Asked once and remembered, because an
-        RSVP that patched the wrong attendee would answer for someone else."""
-        if self._own_email is None:
-            data = self._execute("GOOGLECALENDAR_GET_CALENDAR", {"calendar_id": "primary"})
-            self._own_email = str(data.get("id") or "")
-        return self._own_email
+        RSVP that patched the wrong attendee would answer for someone else.
+
+        Only a real address is cached: an empty result (the account not yet
+        readable) is left unresolved so the next call retries, rather than
+        freezing an empty ``self._own_email`` for the life of the process.
+        """
+        if self._own_email:
+            return self._own_email
+        data = self._execute("GOOGLECALENDAR_GET_CALENDAR", {"calendar_id": "primary"})
+        resolved = str(data.get("id") or "")
+        if resolved:
+            self._own_email = resolved
+        return resolved
 
     def _execute(self, slug: str, arguments: dict[str, Any]) -> dict[str, Any]:
         result = self._composio.tools.execute(

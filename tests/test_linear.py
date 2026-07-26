@@ -163,6 +163,43 @@ def test_no_assignee_means_no_linear_rather_than_everybodys_work():
     assert service.assigned_to_me() == []
 
 
+def test_a_failed_user_resolution_is_not_cached_and_retries():
+    """The poisoned-cache bug. The app fires a refresh on every launch, so the
+    first one runs before Linear is connected: LINEAR_GET_CURRENT_USER throws,
+    and caching that failure left Linear dead for the life of the process even
+    after the account went active. A failure must not be cached."""
+
+    class _FlakyTools(_FakeTools):
+        def __init__(self):
+            super().__init__({})
+            self._attempts = 0
+
+        def execute(self, slug, user_id=None, arguments=None, version=None):
+            self.calls.append((slug, arguments))
+            if slug == "LINEAR_GET_CURRENT_USER":
+                self._attempts += 1
+                if self._attempts == 1:
+                    raise RuntimeError("ConnectedAccountNotFound")
+                return {"data": {"user": {"id": "me"}}}
+            return {"data": {"issues": [_issue()]}}
+
+    client = _FakeComposio({})
+    client.tools = _FlakyTools()
+    service = ComposioLinearService(client, user_id="u")
+
+    assert service.current_user_id() is None   # first attempt failed, uncached
+    assert service.current_user_id() == "me"   # next refresh retries, resolves
+
+
+def test_a_resolved_user_is_cached_and_not_re_fetched():
+    client = _FakeComposio({"LINEAR_GET_CURRENT_USER": {"user": {"id": "me"}}})
+    service = ComposioLinearService(client, user_id="u")
+    assert service.current_user_id() == "me"
+    assert service.current_user_id() == "me"
+    resolves = [c for c in client.tools.calls if c[0] == "LINEAR_GET_CURRENT_USER"]
+    assert len(resolves) == 1
+
+
 # ------------------------------------------------------------ the dashboard
 
 
