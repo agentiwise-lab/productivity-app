@@ -33,6 +33,11 @@ type Status = 'loading' | 'signedOut' | 'signedIn';
 interface AuthValue {
   status: Status;
   email: string;
+  /** True for one read after a fresh signup (register), never after login or a
+   *  restored session. The name prompt keys off this so it appears once at
+   *  signup rather than on every launch of a nameless account. */
+  justSignedUp: boolean;
+  acknowledgeSignup: () => void;
   sendOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   register: (email: string, code: string, password: string) => Promise<void>;
@@ -57,6 +62,7 @@ export function AuthProvider({
 }) {
   const [status, setStatus] = useState<Status>('loading');
   const [email, setEmail] = useState('');
+  const [justSignedUp, setJustSignedUp] = useState(false);
   const tokens = useRef<{ access: string; refresh: string } | null>(null);
   const refreshing = useRef<Promise<boolean> | null>(null);
 
@@ -129,9 +135,13 @@ export function AuthProvider({
   const register = useCallback(
     async (e: string, code: string, password: string) => {
       await enter(await authApi.register(e, code, password), e);
+      // Signup is the one moment we prompt for a name; login and session-restore
+      // never set this.
+      setJustSignedUp(true);
     },
     [enter],
   );
+  const acknowledgeSignup = useCallback(() => setJustSignedUp(false), []);
   const login = useCallback(
     async (e: string, password: string) => {
       await enter(await authApi.login(e, password), e);
@@ -149,7 +159,17 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider
-      value={{ status, email, sendOtp, verifyOtp, register, login, signOut }}
+      value={{
+        status,
+        email,
+        justSignedUp,
+        acknowledgeSignup,
+        sendOtp,
+        verifyOtp,
+        register,
+        login,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>

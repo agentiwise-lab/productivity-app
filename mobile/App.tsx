@@ -10,7 +10,7 @@
  * app failing at its one job. If the call fails the row comes back and says so.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState, Linking, Platform, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
@@ -144,7 +144,7 @@ function Gate() {
 
 function Shell() {
   const c = useTheme();
-  const { email: authEmail, signOut } = useAuth();
+  const { email: authEmail, signOut, justSignedUp, acknowledgeSignup } = useAuth();
   const [rows, setRows] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
@@ -170,9 +170,6 @@ function Shell() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [nameModalOpen, setNameModalOpen] = useState(false);
-  // The post-signup prompt fires once per session: cancelling it must not make
-  // it pop again on the next data refresh.
-  const autoPrompted = useRef(false);
 
   useEffect(() => {
     haptics.prepare();
@@ -228,11 +225,6 @@ function Shell() {
     try {
       const profile = await api.me();
       setName(profile.name);
-      // No name yet means a fresh account: ask once, right after signup.
-      if (!profile.name && !autoPrompted.current) {
-        autoPrompted.current = true;
-        setNameModalOpen(true);
-      }
     } catch {
       // Non-fatal: the greeting stays generic until /me answers.
     }
@@ -282,6 +274,15 @@ function Shell() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // The name prompt is a signup step, not a per-launch nag: open it once when a
+  // fresh signup lands, and never on login or a restored session.
+  useEffect(() => {
+    if (justSignedUp) {
+      setNameModalOpen(true);
+      acknowledgeSignup();
+    }
+  }, [justSignedUp, acknowledgeSignup]);
 
   // Returning to the app re-reads connections. Web OAuth has no deep-link back:
   // Composio lands the user on its own "taking you back" tab, and the connect
@@ -424,6 +425,10 @@ function Shell() {
             if (info.status === 'connected') {
               await loadSources();
               haptics.commit();
+              // Pull the just-connected source's existing items into the feed
+              // now, rather than leaving it empty until a manual pull-to-refresh:
+              // refresh() runs the sync backfill and then reloads /feed.
+              void refresh();
               return;
             }
           } catch {
@@ -440,7 +445,7 @@ function Shell() {
         Alert.alert(`Connect ${label}`, 'Could not start the connection. Please try again.');
       }
     },
-    [loadSources],
+    [loadSources, refresh],
   );
 
   const disconnectSource = useCallback(

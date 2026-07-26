@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from dotenv import load_dotenv
@@ -77,12 +78,18 @@ def build_app() -> FastAPI:
         model_name=os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash"),
     )
 
+    # Runs the slow half of a connect finalize (trigger provisioning + stale
+    # cleanup) off the status poll's critical path, so the app reads "connected"
+    # as soon as the account is active rather than after several more Composio
+    # calls. Daemon threads; the work is idempotent and best-effort.
+    connect_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="connect")
     connection_service = DefaultConnectionService(
         composio,
         auth_config_ids=_auth_config_ids(),
         repo=connections,
         provisioner=DefaultTriggerProvisioner(composio),
         callback_url=os.environ.get("COMPOSIO_CALLBACK_URL", ""),
+        background=lambda work: connect_pool.submit(work),
     )
     # One factory mints each user's own bound integration services on demand, so
     # every read and write acts against the caller's account, not a shared one.

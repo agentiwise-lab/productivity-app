@@ -16,7 +16,7 @@ from the verified token, never from the client.
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from backend.models.connections import ConnectionRow
 from backend.models.feed import FeedItem
@@ -107,12 +107,19 @@ class DefaultConnectionService:
         repo: ConnectionRepositoryLike,
         provisioner: TriggerProvisionerLike,
         callback_url: str = "",
+        background: Callable[[Callable[[], None]], None] | None = None,
     ) -> None:
         self._composio = composio
         self._auth_config_ids = auth_config_ids
         self._repo = repo
         self._provisioner = provisioner
         self._callback_url = callback_url
+        # Where the slow half of a finalize runs. Production passes an executor so
+        # trigger provisioning and stale-account cleanup happen off the connect
+        # poll's critical path (they are several serial Composio calls, and the
+        # poll is what flips the UI to "connected"). Tests leave it None, which
+        # runs the work inline so behaviour is identical and assertable.
+        self._background = background
 
     def list_sources(self, user_id: str, items: list[FeedItem]) -> list[SourceInfo]:
         statuses = self._statuses(user_id)
@@ -188,8 +195,14 @@ class DefaultConnectionService:
                 provider_login=identity.github_login,
                 provider_user_id=identity.slack_user_id,
             )
-            self._provisioner.provision(user_id, source, live_id)
-            self._discard(stale_ids)
+            # The row is written; the app can read "connected" now. Trigger
+            # provisioning and stale-attempt cleanup are several more serial
+            # Composio calls, so they run in the background rather than holding up
+            # the poll. Both are idempotent and `_heal` re-runs them if this drops,
+            # so deferring them is safe.
+            self._defer(
+                lambda: self._provision_and_prune(user_id, source, live_id, stale_ids)
+            )
             return SourceInfo(
                 source=source,
                 label=LABELS[source],
@@ -275,6 +288,20 @@ class DefaultConnectionService:
                 log.warning(
                     "could not delete stale account %s", account_id, exc_info=True
                 )
+
+    def _provision_and_prune(
+        self, user_id: str, source: Source, live_id: str, stale_ids: list[str]
+    ) -> None:
+        """The slow half of a finalize: create the source's triggers and delete
+        the abandoned attempts. Runs on the background runner in production."""
+        self._provisioner.provision(user_id, source, live_id)
+        self._discard(stale_ids)
+
+    def _defer(self, work: Callable[[], None]) -> None:
+        if self._background is not None:
+            self._background(work)
+        else:
+            work()
 
     def _statuses(
         self, user_id: str, toolkit: str | None = None

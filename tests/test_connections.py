@@ -344,6 +344,40 @@ def test_finalize_does_not_delete_a_broken_prior_connection():
     assert composio.connected_accounts.deleted == []
 
 
+def test_finalize_defers_provisioning_to_the_background_runner():
+    """The status poll flips to connected as soon as the row is written; trigger
+    provisioning and stale cleanup run off the critical path so the UI is not held
+    up by several more Composio calls."""
+    deferred: list = []
+    composio = FakeComposio(
+        rows=[account("github", "ACTIVE", "ca_live")],
+        identity={"GITHUB_GET_THE_AUTHENTICATED_USER": {"login": "octocat"}},
+    )
+    repo = InMemoryConnectionRepository()
+    service = DefaultConnectionService(
+        composio,
+        auth_config_ids=AUTH_CONFIGS,
+        repo=repo,
+        provisioner=DefaultTriggerProvisioner(composio),
+        background=deferred.append,
+    )
+
+    info = service.finalize("u1", Source.GITHUB)
+
+    # Connected and the row is written immediately...
+    assert info.status is ConnectionStatus.CONNECTED
+    assert repo.get("u1", "github") is not None
+    # ...but the triggers have NOT been created yet — that work is queued.
+    assert composio.triggers.created == []
+    assert len(deferred) == 1
+
+    # Running the queued work provisions the trigger.
+    deferred[0]()
+    assert [c[0] for c in composio.triggers.created] == [
+        "GITHUB_ISSUE_ASSIGNED_TO_ME_TRIGGER"
+    ]
+
+
 def test_finalize_while_still_pending_writes_and_provisions_nothing():
     service, composio, repo = make(rows=[account("github", "INITIATED")])
     info = service.finalize("u1", Source.GITHUB)
