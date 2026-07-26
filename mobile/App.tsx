@@ -10,7 +10,7 @@
  * app failing at its one job. If the call fails the row comes back and says so.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Linking, Platform, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
@@ -246,40 +246,67 @@ function Shell() {
     }
   }, []);
 
-  const load = useCallback(async () => {
+  // A cheap read of the stored feed (Redis, one hop). Returns the rows so the
+  // cold-start path can tell an empty feed from a full one.
+  const load = useCallback(async (): Promise<FeedRow[]> => {
     try {
       const result = await api.getFeed();
       setRows(result.rows);
       setStale(result.stale);
       setFetchedAt(result.fetchedAt);
+      return result.rows;
     } catch (error) {
       if (error instanceof ApiError && error.kind === 'auth') {
         Alert.alert('Signed out', error.message);
       }
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
 
   /**
-   * Paint first, then fetch. Pulling five providers takes seconds, and making
-   * the user watch a skeleton for all of them before seeing anything is the
-   * difference between an app that feels instant and one that feels broken.
+   * The heavy path: poll every provider and re-classify, then re-read the feed.
+   * Reserved for connect and manual pull (the north star) — never a timer.
+   * Single-flight: concurrent connects and a pull-during-connect coalesce into
+   * one sweep rather than N overlapping full-provider polls.
    */
+  const refreshing = useRef(false);
   const refresh = useCallback(async () => {
-    await Promise.all([load(), loadSources(), loadDay(), loadProfile()]);
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
-      await api.refresh();
-    } catch {
-      // A failed pull is not a failed screen: the rows above still stand.
-      return;
+      await Promise.all([load(), loadSources(), loadDay(), loadProfile()]);
+      try {
+        await api.refresh();
+      } catch {
+        // A failed pull is not a failed screen: the rows above still stand.
+        return;
+      }
+      await Promise.all([load(), loadSources()]);
+    } finally {
+      refreshing.current = false;
     }
-    await Promise.all([load(), loadSources()]);
   }, [load, loadSources, loadDay, loadProfile]);
 
+  // Cold start is a cheap read, not a heavy sweep (north star). The feed is
+  // served from Redis; only if it is genuinely empty (a >24h-cold cache, or a
+  // brand-new account) do we fall back to one refresh, so a returning user sees
+  // their feed instantly instead of watching every provider get polled.
+  const started = useRef(false);
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (started.current) return;
+    started.current = true;
+    void (async () => {
+      const [rows] = await Promise.all([
+        load(),
+        loadSources(),
+        loadDay(),
+        loadProfile(),
+      ]);
+      if (rows.length === 0) void refresh();
+    })();
+  }, [load, loadSources, loadDay, loadProfile, refresh]);
 
   // The name prompt is a signup step, not a per-launch nag: open it once when a
   // fresh signup lands, and never on login or a restored session.
@@ -296,8 +323,13 @@ function Shell() {
   // back to the app we re-fetch, and because the backend reconciles on this read
   // a just-finished connect shows as connected without a manual pull-to-refresh.
   useEffect(() => {
+    // Foreground is a cheap read: the stored feed (Redis) plus connections and
+    // the day. This is what surfaces a webhook item that landed while the app was
+    // backgrounded, without polling providers.
     const reread = () => {
       void loadSources();
+      void load();
+      void loadDay();
     };
     if (Platform.OS === 'web') {
       const onVisible = () => {
@@ -316,7 +348,7 @@ function Shell() {
       if (state === 'active') reread();
     });
     return () => sub.remove();
-  }, [loadSources]);
+  }, [loadSources, load, loadDay]);
 
   // Open the sheet to read (compose=false) or straight into the composer.
   const openRow = useCallback((row: FeedRow, compose = false) => {
