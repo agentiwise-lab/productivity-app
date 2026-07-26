@@ -49,10 +49,18 @@ _TRIGGERS: dict[Source, list[tuple[str, dict[str, Any]]]] = {
     Source.CALENDAR: [
         ("GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER", {}),
     ],
-    # Linear is intentionally absent: every Linear trigger requires a team_id we
-    # do not have at connect time, so Linear stays poll-only (backfill on
-    # refresh) until team resolution is built.
+    # Linear is handled dynamically (see _provision_linear): its triggers require
+    # a team_id, resolved per-account at connect from LINEAR_LIST_LINEAR_TEAMS,
+    # one trigger of each kind per team.
 }
+
+#: Linear trigger kinds, provisioned once per team the user belongs to. Both have
+#: matching mappers in ``ingest._MAPPERS`` (issue-created and comment-received).
+_LINEAR_TEAM_TRIGGERS = (
+    "LINEAR_ISSUE_CREATED_TRIGGER",
+    "LINEAR_COMMENT_EVENT_TRIGGER",
+)
+_LINEAR_VERSION = "20260721_00"
 
 
 class TriggerProvisioner(Protocol):
@@ -78,6 +86,10 @@ class DefaultTriggerProvisioner:
     def provision(
         self, user_id: str, source: Source, connected_account_id: str
     ) -> None:
+        if source is Source.LINEAR:
+            self._provision_linear(user_id, connected_account_id)
+            return
+
         wanted = _TRIGGERS.get(source, [])
         if not wanted:
             return
@@ -86,23 +98,70 @@ class DefaultTriggerProvisioner:
         for slug, config in wanted:
             if slug in existing:
                 continue
-            try:
-                self._composio.triggers.create(
-                    slug=slug,
-                    user_id=user_id,
-                    connected_account_id=connected_account_id,
-                    trigger_config=config or None,
+            self._create(user_id, connected_account_id, slug, config or None)
+
+    def _provision_linear(self, user_id: str, connected_account_id: str) -> None:
+        """One issue-created + one comment trigger per team the user is in.
+
+        Linear's triggers are team-scoped and require a ``team_id``, resolved here
+        from ``LINEAR_LIST_LINEAR_TEAMS``. The mappers then filter team-wide events
+        down to this user (their assigned issues, others' comments)."""
+        teams = self._linear_team_ids(user_id)
+        if not teams:
+            log.warning("no Linear teams resolved; skipping trigger provisioning")
+            return
+        existing = self._existing_slugs(connected_account_id)
+        for team_id in teams:
+            for slug in _LINEAR_TEAM_TRIGGERS:
+                # create is an upsert keyed on (slug, account, config); the
+                # per-slug existing check is a coarse skip, safe to over-attempt.
+                if slug in existing and len(teams) == 1:
+                    continue
+                self._create(
+                    user_id, connected_account_id, slug, {"team_id": team_id}
                 )
-            except Exception:
-                # Best effort: one trigger failing must not abandon the rest or
-                # the connect flow. The next reconcile retries, and create is an
-                # upsert, so the retry cannot double up.
-                log.warning(
-                    "could not create trigger %s for %s",
-                    slug,
-                    connected_account_id,
-                    exc_info=True,
-                )
+
+    def _linear_team_ids(self, user_id: str) -> list[str]:
+        try:
+            result = self._composio.tools.execute(
+                "LINEAR_LIST_LINEAR_TEAMS",
+                user_id=user_id,
+                arguments={},
+                version=_LINEAR_VERSION,
+            )
+            data = (
+                result.get("data")
+                if isinstance(result, dict)
+                else getattr(result, "data", {})
+            ) or {}
+            teams = data.get("teams") or data.get("nodes") or []
+            if isinstance(teams, dict):
+                teams = teams.get("nodes") or []
+            return [t["id"] for t in teams if isinstance(t, dict) and t.get("id")]
+        except Exception:
+            log.warning("could not list Linear teams", exc_info=True)
+            return []
+
+    def _create(
+        self, user_id: str, connected_account_id: str, slug: str, config: dict | None
+    ) -> None:
+        try:
+            self._composio.triggers.create(
+                slug=slug,
+                user_id=user_id,
+                connected_account_id=connected_account_id,
+                trigger_config=config,
+            )
+        except Exception:
+            # Best effort: one trigger failing must not abandon the rest or the
+            # connect flow. The next reconcile retries, and create is an upsert,
+            # so the retry cannot double up.
+            log.warning(
+                "could not create trigger %s for %s",
+                slug,
+                connected_account_id,
+                exc_info=True,
+            )
 
     def _existing_slugs(self, connected_account_id: str) -> set[str]:
         """The trigger slugs already active for this account.

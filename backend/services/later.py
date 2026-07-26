@@ -193,8 +193,11 @@ class LaterService:
         if source is Source.SLACK:
             slack = self._integrations.slack(user_id)
             if slack is not None:
+                # Later uses the broader `recent` (DMs + channel activity, minus
+                # self), not `unread` (DM-only, for Home): otherwise every DM is
+                # elevated to Home and Slack Later reads empty (bible 3.3).
                 return self._one_page(
-                    lambda: slack.unread(self._identity("slack", user_id))
+                    lambda: slack.recent(self._identity("slack", user_id))
                 )
         if source is Source.LINEAR:
             linear = self._integrations.linear(user_id)

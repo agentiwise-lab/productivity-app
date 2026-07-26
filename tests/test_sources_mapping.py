@@ -17,7 +17,7 @@ from backend.integrations.calendar import (
     starting_soon_to_raw_event,
 )
 from backend.integrations.gmail import message_to_raw_event
-from backend.integrations.linear import issue_to_raw_event
+from backend.integrations.linear import comment_event_to_raw_event, issue_to_raw_event
 from backend.models.identity import Identity
 from backend.models.tiers import Tier, TypeTag
 from backend.services.rules import DefaultRuleClassifier
@@ -158,6 +158,51 @@ def test_an_issue_with_no_due_date_is_never_dropped_and_never_held():
 
 def test_a_completed_issue_is_not_in_the_feed():
     assert issue_to_raw_event(issue(state={"type": "completed"})) is None
+
+
+# --- Linear comment trigger (verified payload 2026-07-26) ------------------
+
+
+def _comment(**overrides):
+    base = {
+        "id": "cmt-1",
+        "body": "can you take a look when you get a sec?",
+        "createdAt": "2026-07-26T18:06:16.533Z",
+        "issue": {
+            "id": "iss-1",
+            "identifier": "AGE-206",
+            "team": {"key": "AGE", "name": "Agentiwise"},
+            "title": "the issue title",
+            "url": "https://linear.app/agentiwise/issue/AGE-206",
+        },
+        "userId": "commenter",
+        "user": {"id": "commenter", "name": "Harshit"},
+        "url": "https://linear.app/agentiwise/issue/AGE-206#comment-cmt-1",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_a_linear_comment_from_someone_else_is_llm_in_a_band():
+    raw = comment_event_to_raw_event(_comment(), identity=Identity(linear_user_id="me"))
+    assert raw is not None
+    verdict = classify(raw)
+    assert verdict.signal == "linear_comment"
+    assert verdict.needs_llm is True  # prose the model rates
+    assert raw.source_ref == "linear:comment:cmt-1"  # keyed on the comment
+    assert raw.title.startswith("AGE-206")
+
+
+def test_your_own_linear_comment_never_comes_back():
+    raw = comment_event_to_raw_event(
+        _comment(userId="me", user={"id": "me", "name": "Me"}),
+        identity=Identity(linear_user_id="me"),
+    )
+    assert raw is None
+
+
+def test_a_linear_comment_with_no_issue_is_dropped():
+    assert comment_event_to_raw_event(_comment(issue={}), identity=Identity()) is None
 
 
 def test_the_title_carries_the_identifier_people_actually_use():

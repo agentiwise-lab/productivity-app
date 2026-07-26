@@ -43,6 +43,7 @@ _PENDING = {"INITIATED", "INITIALIZING"}
 
 _GITHUB_VERSION = "20260721_00"
 _SLACK_VERSION = "20260721_00"
+_LINEAR_VERSION = "20260721_00"
 
 
 class MissingAuthConfig(Exception):
@@ -193,7 +194,7 @@ class DefaultConnectionService:
                 source.value,
                 composio_connected_account_id=live_id,
                 provider_login=identity.github_login,
-                provider_user_id=identity.slack_user_id,
+                provider_user_id=identity.slack_user_id or identity.linear_user_id,
             )
             # The row is written; the app can read "connected" now. Trigger
             # provisioning and stale-attempt cleanup are several more serial
@@ -361,6 +362,14 @@ class DefaultConnectionService:
                 return Identity(
                     slack_user_id=data.get("user_id") or data.get("user_id_str")
                 )
+            if source is Source.LINEAR:
+                # The team-scoped Linear triggers fire for the whole team; the
+                # mappers filter to this user with the id resolved here.
+                data = self._execute(
+                    "LINEAR_GET_CURRENT_USER", {}, user_id, _LINEAR_VERSION
+                )
+                user = data.get("user") or data.get("viewer") or data
+                return Identity(linear_user_id=user.get("id"))
         except Exception:
             log.warning("could not resolve %s identity", source.value, exc_info=True)
         return Identity()

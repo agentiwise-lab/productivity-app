@@ -26,6 +26,10 @@ from pydantic import BaseModel
 from backend.integrations.calendar import starting_soon_to_raw_event
 from backend.integrations.composio_github import notification_to_raw_event
 from backend.integrations.gmail import message_to_raw_event
+from backend.integrations.linear import (
+    comment_event_to_raw_event,
+    issue_to_raw_event as _linear_issue_to_raw_event,
+)
 from backend.integrations.slack import (
     channel_message_to_raw_event,
     direct_message_to_raw_event,
@@ -137,6 +141,24 @@ _MAPPERS: dict[str, Callable[..., RawEvent | None]] = {
     "GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER": (
         lambda data, identity, threads: starting_soon_to_raw_event(data)
     ),
+    # Linear's triggers are team-scoped; the mappers filter to this user. Issue
+    # creation keeps only issues assigned to them (deterministic, by due date);
+    # comments keep others' comments (LLM-in-a-band). Both verified against a
+    # live payload capture (2026-07-26).
+    "LINEAR_ISSUE_CREATED_TRIGGER": (
+        # Skip entirely without a resolved id: a None assignee filter would let
+        # every team-created issue through, not just this user's.
+        lambda data, identity, threads: (
+            _linear_issue_to_raw_event(data, assignee_id=identity.linear_user_id)
+            if getattr(identity, "linear_user_id", None)
+            else None
+        )
+    ),
+    "LINEAR_COMMENT_EVENT_TRIGGER": (
+        lambda data, identity, threads: comment_event_to_raw_event(
+            data, identity=identity
+        )
+    ),
 }
 
 # Trigger slug prefix -> the provider whose identity the mapper needs. Gmail and
@@ -147,6 +169,7 @@ _SLUG_PROVIDER = {
     "SLACK": "slack",
     "GMAIL": "gmail",
     "GOOGLECALENDAR": "calendar",
+    "LINEAR": "linear",
 }
 
 # Trigger slug prefix -> the provider whose connection it belongs to.
@@ -155,6 +178,7 @@ _PROVIDERS = {
     "SLACK": "slack",
     "GMAIL": "gmail",
     "GOOGLECALENDAR": "calendar",
+    "LINEAR": "linear",
 }
 
 

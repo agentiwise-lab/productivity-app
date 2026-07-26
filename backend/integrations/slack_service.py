@@ -25,6 +25,7 @@ from backend.integrations.slack import (
     direct_message_to_raw_event,
 )
 from backend.models.events import RawEvent
+from backend.models.feed import Actor
 from backend.models.identity import Identity
 
 log = logging.getLogger(__name__)
@@ -49,6 +50,9 @@ class SlackService(Protocol):
         ...
 
     def unread(self, identity: Identity, now: datetime | None = None) -> list[RawEvent]:
+        ...
+
+    def recent(self, identity: Identity, now: datetime | None = None) -> list[RawEvent]:
         ...
 
     def user_names(self) -> dict[str, str]:
@@ -202,6 +206,70 @@ class ComposioSlackService:
             if event is not None:
                 found.append(event)
         return found
+
+    def recent(
+        self, identity: Identity, now: datetime | None = None
+    ) -> list[RawEvent]:
+        """The top 100 recent messages the user is involved in, for Later.
+
+        Broader than ``unread`` (which stays DM-only so it does not over-elevate
+        Home): a single ``search.messages`` over the last 30 days, so recent DMs
+        *and* channel activity the user is part of populate Later rather than it
+        reading empty (bible 3.3). The user's own messages are excluded, since a
+        note-to-self never "needed" them. Later itself drops anything already on
+        Home, so this is deliberately inclusive.
+        """
+        from backend.integrations.slack import _ts_to_datetime
+
+        now = now or datetime.now(timezone.utc)
+        after = (now - BACKFILL).strftime("%Y-%m-%d")
+        try:
+            data = self._execute(
+                "SLACK_SEARCH_MESSAGES",
+                {"query": f"after:{after}", "count": 100},
+            )
+        except Exception:
+            log.warning("could not search recent Slack messages", exc_info=True)
+            return []
+
+        matches = (data.get("messages") or {}).get("matches") or []
+        names = self.user_names()
+        me = identity.slack_user_id
+
+        found: list[RawEvent] = []
+        for match in matches:
+            author = match.get("user") or ""
+            if me and author == me:
+                continue  # the user's own messages never come back
+            text = match.get("text") or ""
+            if not text.strip():
+                continue
+            channel = match.get("channel") or {}
+            channel_id = channel.get("id") or ""
+            channel_name = channel.get("name")
+            where = f"#{channel_name}" if channel_name else "Direct message"
+            found.append(
+                RawEvent(
+                    source="slack",
+                    # Same shape as the DM/channel mappers, so Later's on-home
+                    # exclusion collapses a message that is also on Home.
+                    source_ref=f"slack:{channel_id}:{match.get('ts', '')}",
+                    reason="slack_later",
+                    subject_type="Message",
+                    title=names.get(author) or where,
+                    body=text,
+                    url=match.get("permalink") or "",
+                    repo="",
+                    context_chip=where,
+                    actor=Actor(
+                        login=author, display_name=names.get(author) or None
+                    ),
+                    occurred_at=_ts_to_datetime(match.get("ts")),
+                    is_blocking=False,
+                    raw=match,
+                )
+            )
+        return found[:100]
 
     def channel_summary(self, now: datetime | None = None) -> dict[str, Any]:
         """Every conversation the user is in, each with its own 30-day count.

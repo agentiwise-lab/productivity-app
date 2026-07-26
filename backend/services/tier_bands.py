@@ -188,6 +188,9 @@ TIER_BANDS: dict[str, Policy] = {
     "linear_in_progress": _LINEAR,
     "linear_assigned": _LINEAR,
     "linear_backlog": _LINEAR,
+    # A comment on your issue is prose asking something: the model rates it,
+    # like a Slack mention, inside Can wait .. Urgent.
+    "linear_comment": Banded(C, U, TypeTag.REPLY),
     # --- Calendar: tier is set at read time from how close the start is -----
     "calendar_starting": _calendar(TypeTag.FYI),
     "calendar_meeting": _calendar(TypeTag.FYI),

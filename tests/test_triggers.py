@@ -13,7 +13,11 @@ import pytest
 
 from backend.models.sources import Source
 from backend.services.ingest import _MAPPERS
-from backend.services.triggers import _TRIGGERS, DefaultTriggerProvisioner
+from backend.services.triggers import (
+    _LINEAR_TEAM_TRIGGERS,
+    _TRIGGERS,
+    DefaultTriggerProvisioner,
+)
 
 
 class FakeTriggers:
@@ -41,9 +45,24 @@ class FakeTriggers:
         return type("T", (), {"id": "ti_1"})()
 
 
+class FakeTools:
+    """Answers LINEAR_LIST_LINEAR_TEAMS so the Linear provisioning path can run."""
+
+    def __init__(self, teams: list[str]):
+        self._teams = teams
+
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        if slug == "LINEAR_LIST_LINEAR_TEAMS":
+            return {"data": {"teams": [{"id": t} for t in self._teams]}}
+        return {"data": {}}
+
+
 class FakeComposio:
-    def __init__(self, triggers: FakeTriggers | None = None):
+    def __init__(
+        self, triggers: FakeTriggers | None = None, teams: list[str] | None = None
+    ):
         self.triggers = triggers or FakeTriggers()
+        self.tools = FakeTools(teams or [])
 
 
 # --- the map is honest -------------------------------------------------------
@@ -55,6 +74,9 @@ def test_every_provisioned_slug_has_an_ingest_mapper():
     for slugs in _TRIGGERS.values():
         for slug, _config in slugs:
             assert slug in _MAPPERS, f"{slug} is provisioned but has no ingest mapper"
+    # The dynamic (per-team) Linear triggers are held to the same contract.
+    for slug in _LINEAR_TEAM_TRIGGERS:
+        assert slug in _MAPPERS, f"{slug} is provisioned but has no ingest mapper"
 
 
 # --- creates the right triggers ---------------------------------------------
@@ -83,6 +105,29 @@ def test_slack_provisions_both_message_triggers():
 
 def test_a_source_with_no_triggers_is_a_no_op():
     fake = FakeComposio()
+    DefaultTriggerProvisioner(fake).provision("u1", Source.GOOGLE_DOCS, "ca_docs")
+    assert fake.triggers.created == []
+
+
+def test_linear_provisions_both_triggers_per_team():
+    """Linear's triggers are team-scoped: resolve the user's teams and create an
+    issue-created + comment trigger for each, with the team_id in the config."""
+    fake = FakeComposio(teams=["team_a", "team_b"])
+    DefaultTriggerProvisioner(fake).provision("u1", Source.LINEAR, "ca_linear")
+
+    created = {(slug, cfg["team_id"]) for slug, _u, _a, cfg in fake.triggers.created}
+    assert created == {
+        ("LINEAR_ISSUE_CREATED_TRIGGER", "team_a"),
+        ("LINEAR_COMMENT_EVENT_TRIGGER", "team_a"),
+        ("LINEAR_ISSUE_CREATED_TRIGGER", "team_b"),
+        ("LINEAR_COMMENT_EVENT_TRIGGER", "team_b"),
+    }
+
+
+def test_linear_with_no_teams_creates_nothing():
+    """No teams resolved (a failed or empty lookup) provisions nothing rather
+    than creating a trigger with no team_id, which Linear would reject."""
+    fake = FakeComposio(teams=[])
     DefaultTriggerProvisioner(fake).provision("u1", Source.LINEAR, "ca_linear")
     assert fake.triggers.created == []
 

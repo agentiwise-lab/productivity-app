@@ -118,6 +118,48 @@ def issue_to_raw_event(
     )
 
 
+def comment_event_to_raw_event(
+    data: dict[str, Any], *, identity: Any | None = None
+) -> RawEvent | None:
+    """A LINEAR_COMMENT_EVENT_TRIGGER payload: someone commented on an issue.
+
+    The trigger is team-scoped, so it fires for every comment in the team. Two
+    things are filtered here: a comment the user wrote themselves is not a thing
+    that needs them, and a payload with no issue is unusable. Everything else is
+    prose asking something, so it is LLM-in-a-band (``linear_comment``), like a
+    Slack mention — the model rates it inside Can wait .. Urgent."""
+    issue = data.get("issue") or {}
+    identifier = issue.get("identifier") or issue.get("id")
+    comment_id = data.get("id")
+    if not identifier or not comment_id:
+        return None
+
+    author_id = data.get("userId") or (data.get("user") or {}).get("id")
+    my_id = getattr(identity, "linear_user_id", None) if identity else None
+    if my_id and author_id == my_id:
+        return None  # the user's own comment never comes back as needing them
+
+    author = (data.get("user") or {}).get("name") or ""
+    team = (issue.get("team") or {}).get("key") or ""
+    return RawEvent(
+        source="linear",
+        # Keyed on the comment, not the issue, so several comments on one issue
+        # are distinct rows and none collides with the issue's own feed item.
+        source_ref=f"linear:comment:{comment_id}",
+        reason="linear_comment",
+        subject_type="Comment",
+        title=f"{identifier} {issue.get('title') or ''}".strip(),
+        body=data.get("body"),
+        url=data.get("url") or issue.get("url") or "",
+        repo="",
+        context_chip=team or "Linear",
+        actor=Actor(login=author, display_name=author or None),
+        occurred_at=_parse(data.get("createdAt")),
+        is_blocking=True,  # a person wrote it and is waiting on a reply
+        raw=data,
+    )
+
+
 def issue_stats_from_issues(
     issues: list[dict[str, Any]], *, now: datetime | None = None
 ) -> dict[str, Any]:

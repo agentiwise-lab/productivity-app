@@ -309,3 +309,54 @@ def test_the_backfill_keeps_the_conversation_id_so_a_reply_can_be_sent_back():
     _, _, events = _backfill()
     assert events[0].source_ref == "slack:D09N:1784834003.554529"
     assert parse_source_ref(events[0].source_ref).channel == "D09N"
+
+
+# --- the broader Later feed (recent) ---------------------------------------
+
+
+class _RecentSearchTools(_SummaryTools):
+    """The broad `after:` search Later uses: a DM, a channel message, and one of
+    the user's own messages (which must be excluded)."""
+
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        if slug == "SLACK_SEARCH_MESSAGES" and "is:dm" not in (arguments or {}).get(
+            "query", ""
+        ):
+            self.calls.append((slug, arguments))
+            return {"data": {"messages": {"matches": [
+                {"channel": {"id": "D1", "name": "U_PRIYA"}, "user": "U_PRIYA",
+                 "text": "ping about the deploy", "ts": "1784834003.5",
+                 "permalink": "https://x.slack.com/p1"},
+                {"channel": {"id": "C1", "name": "eng"}, "user": "U_BOB",
+                 "text": "shipped the fix", "ts": "1784834100.2",
+                 "permalink": "https://x.slack.com/p2"},
+                {"channel": {"id": "C1", "name": "eng"}, "user": "U_ME",
+                 "text": "thanks", "ts": "1784834200.3"},
+            ]}}}
+        return super().execute(slug, user_id=user_id, arguments=arguments, version=version)
+
+
+def _recent():
+    from backend.models.identity import Identity
+
+    client = _FakeComposio()
+    client.tools = _RecentSearchTools()
+    service = ComposioSlackService(client, user_id="me")
+    return service.recent(Identity(slack_user_id="U_ME"))
+
+
+def test_recent_includes_channel_activity_not_just_dms():
+    events = _recent()
+    channels = {e.context_chip for e in events}
+    assert "#eng" in channels  # channel activity, not only DMs
+
+
+def test_recent_excludes_your_own_messages():
+    events = _recent()
+    assert all(e.actor.login != "U_ME" for e in events)
+    assert "thanks" not in [e.body for e in events]
+
+
+def test_recent_source_ref_matches_the_home_shape_so_dedup_works():
+    events = _recent()
+    assert events[0].source_ref == "slack:D1:1784834003.5"

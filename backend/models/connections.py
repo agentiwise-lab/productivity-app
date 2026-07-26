@@ -36,4 +36,6 @@ class ConnectionRow(BaseModel):
             return Identity(github_login=self.provider_login)
         if self.provider == "slack":
             return Identity(slack_user_id=self.provider_user_id)
+        if self.provider == "linear":
+            return Identity(linear_user_id=self.provider_user_id)
         return Identity()

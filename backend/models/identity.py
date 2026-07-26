@@ -14,6 +14,10 @@ from pydantic import BaseModel
 class Identity(BaseModel):
     github_login: str | None = None
     slack_user_id: str | None = None
+    # The user's Linear user id. Linear's issue/comment triggers are team-scoped,
+    # so the mappers use this to keep only issues assigned to the user and to
+    # drop the user's own comments.
+    linear_user_id: str | None = None
     # The user's conversation with themselves. A note-to-self and a reply you
     # sent in someone else's DM look identical by sender, so this channel id is
     # the only thing that separates "saved for later" from "your own outbound
