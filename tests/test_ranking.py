@@ -187,3 +187,19 @@ def test_a_muted_repo_scores_to_the_floor():
     prefs = UserPreferences(user_id="u1", muted_repos={"octo/repo"})
     item = make_item(rule_tier=Tier.URGENT, repo="octo/repo")
     assert score(item, prefs, now=NOW) < 0
+
+
+def test_within_a_tier_the_platform_decides_the_order():
+    """The simple first-cut within-tier rule: platform priority. A GitHub urgent
+    sorts before a Slack urgent regardless of the Slack item being newer."""
+    gh = make_item(source="github", rule_tier=Tier.URGENT, occurred_at=NOW - timedelta(hours=5))
+    slack = make_item(source="slack", rule_tier=Tier.URGENT, occurred_at=NOW)
+    assert score(gh, PREFS, now=NOW) > score(slack, PREFS, now=NOW)
+
+
+def test_platform_order_never_crosses_a_tier():
+    """Even the lowest-priority platform on a higher tier beats the highest-
+    priority platform a tier below it."""
+    gmail_today = make_item(source="gmail", rule_tier=Tier.TODAY)
+    github_can_wait = make_item(source="github", rule_tier=Tier.CAN_WAIT, is_blocking=True)
+    assert score(gmail_today, PREFS, now=NOW) > score(github_can_wait, PREFS, now=NOW)

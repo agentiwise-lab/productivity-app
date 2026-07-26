@@ -16,17 +16,31 @@ from backend.models.feed import FeedItem, UserPreferences
 from backend.models.tiers import Tier, at_least, clamp
 from backend.services.tier_bands import band_for
 
-# Tier dominates. The gaps are wide enough that no stack of bonuses on a lower
-# tier can outrank the tier above it.
+# Tier dominates. The gaps (10_000) are wide enough that no stack of source
+# weight plus bonuses on a lower tier can outrank the tier above it.
 _TIER_WEIGHT: dict[Tier, float] = {
-    Tier.URGENT: 1000.0,
-    Tier.TODAY: 100.0,
-    Tier.CAN_WAIT: 10.0,
+    Tier.URGENT: 30_000.0,
+    Tier.TODAY: 20_000.0,
+    Tier.CAN_WAIT: 10_000.0,
     Tier.NOISE: 0.0,
 }
 
-# Large enough to sink an item below every live one regardless of its bonuses.
-_SUPPRESSED = -10_000.0
+# Within a tier, order by platform. A deliberately simple first cut: a fixed
+# source priority, spaced (1_000) well above the tie-break bonuses below (max
+# ~640) so the platform decides the order and the bonuses only break ties within
+# one platform, yet small enough (max 6_000) never to cross a tier. A smarter
+# per-item ordering can replace this later without touching the tier math.
+_SOURCE_WEIGHT: dict[str, float] = {
+    "github": 6_000.0,
+    "linear": 5_000.0,
+    "calendar": 4_000.0,
+    "slack": 3_000.0,
+    "gmail": 2_000.0,
+    "google_docs": 1_000.0,
+}
+
+# Large enough to sink an item below every live one regardless of its weight.
+_SUPPRESSED = -1_000_000.0
 
 _URGENT_STALE_AFTER = timedelta(hours=24)
 
@@ -70,6 +84,7 @@ def score(item: FeedItem, prefs: UserPreferences, *, now: datetime) -> float:
         return _SUPPRESSED
 
     total = _TIER_WEIGHT[effective_tier(item, now=now)]
+    total += _SOURCE_WEIGHT.get(item.source, 0.0)
     if item.is_blocking:
         total += 300.0
     total += _deadline_pressure(item.deadline, now)
