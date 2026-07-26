@@ -54,8 +54,7 @@ interface Props {
   notifyLevel: NotifyLevel;
   connections: SourceInfo[];
   /** The source currently pulling its first data after a connect, if any. */
-  syncingSource?: Source | null;
-  syncingSecs?: number;
+  syncingSources?: Set<Source>;
   onSetNotifyLevel: (level: NotifyLevel) => void;
   onConnect: (provider: Source) => void;
   onDisconnect: (provider: Source) => void;
@@ -68,8 +67,7 @@ export function YouScreen({
   name,
   notifyLevel,
   connections,
-  syncingSource = null,
-  syncingSecs = 0,
+  syncingSources,
   onSetNotifyLevel,
   onConnect,
   onDisconnect,
@@ -212,9 +210,10 @@ export function YouScreen({
             title={info.label}
             subtitle={statusLine(info)}
             trailing={
-              syncingSource === info.source ? (
-                // Reassurance that the just-connected source is pulling its
-                // data, with a short countdown, instead of a blocking loader.
+              syncingSources?.has(info.source) ? (
+                // Reassurance that the just-connected source is pulling its data,
+                // instead of a blocking loader. The global pill above the footer
+                // says the same thing on whatever tab the user is on.
                 <View
                   style={{
                     flexDirection: 'row',
@@ -228,7 +227,7 @@ export function YouScreen({
                 >
                   <ActivityIndicator size="small" color={c.hue.later} />
                   <T role="label" tone="mid">
-                    {syncingSecs > 0 ? `Syncing… ${syncingSecs}s` : 'Syncing…'}
+                    Syncing…
                   </T>
                 </View>
               ) : info.status === 'connected' ? (

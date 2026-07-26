@@ -30,6 +30,7 @@ import { AppearanceProvider, haptics, useTheme } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
 import { streamEvents, type StreamHandle } from './src/api/stream';
+import { SyncPill } from './src/components/SyncPill';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { AuthGate } from './src/screens/auth/AuthGate';
 import type {
@@ -158,12 +159,10 @@ function Shell() {
   const [snoozing, setSnoozing] = useState<FeedRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
-  // After a connect, the just-connected source shows a "Syncing…" pill with a
-  // short countdown on its own row while the backfill runs, so the user knows
-  // data is being pulled without a blocking loader. It clears itself.
-  const [syncing, setSyncing] = useState<{ source: Source; secs: number } | null>(
-    null,
-  );
+  // Sources whose connect-backfill is in flight. A global pill above the footer
+  // and a per-row cue both read this set. Promise-driven: a source clears when its
+  // refresh resolves, no countdown, no held-gating (the reviews rejected those).
+  const [syncingSources, setSyncingSources] = useState<Set<Source>>(new Set());
 
   const [sources, setSources] = useState<SourceInfo[]>(SOURCE_SKELETON);
   const [sourcesFailed, setSourcesFailed] = useState(false);
@@ -501,11 +500,17 @@ function Shell() {
               await loadSources();
               haptics.commit();
               // Pull the just-connected source's existing items into the feed
-              // now, rather than leaving it empty until a manual pull-to-refresh:
-              // refresh() runs the sync backfill and then reloads /feed. The
-              // syncing pill tells the user this is happening without a loader.
-              setSyncing({ source: provider, secs: 4 });
-              void refresh();
+              // now, rather than leaving it empty until a manual pull-to-refresh.
+              // The pill shows until the backfill resolves — the completion signal
+              // is the promise, not a countdown.
+              setSyncingSources((s) => new Set(s).add(provider));
+              void refresh().finally(() =>
+                setSyncingSources((s) => {
+                  const next = new Set(s);
+                  next.delete(provider);
+                  return next;
+                }),
+              );
               return;
             }
           } catch {
@@ -524,22 +529,6 @@ function Shell() {
     },
     [loadSources, refresh],
   );
-
-  // Drives the post-connect "Syncing…" countdown one second at a time, then
-  // clears the pill. The backfill (refresh) runs in parallel; the pill is a
-  // reassurance, not a gate, so it simply counts down and disappears.
-  useEffect(() => {
-    if (!syncing) return;
-    if (syncing.secs <= 0) {
-      setSyncing(null);
-      return;
-    }
-    const timer = setTimeout(
-      () => setSyncing((current) => (current ? { ...current, secs: current.secs - 1 } : null)),
-      1000,
-    );
-    return () => clearTimeout(timer);
-  }, [syncing]);
 
   const disconnectSource = useCallback(
     async (provider: Source) => {
@@ -621,8 +610,7 @@ function Shell() {
                 name={name}
                 notifyLevel={notifyLevel}
                 connections={sources}
-                syncingSource={syncing?.source ?? null}
-                syncingSecs={syncing?.secs ?? 0}
+                syncingSources={syncingSources}
                 onSetNotifyLevel={setNotifyLevel}
                 onConnect={connectSource}
                 onDisconnect={disconnectSource}
@@ -679,6 +667,9 @@ function Shell() {
           subtitle="This is how the app greets you. You can change it anytime in You."
         />
         <Grain />
+        {/* Global sync indicator: one pill above the footer while any connected
+            source is backfilling, on whatever tab the user is looking at. */}
+        <SyncPill sources={syncingSources} />
       </NavigationContainer>
     </>
   );
