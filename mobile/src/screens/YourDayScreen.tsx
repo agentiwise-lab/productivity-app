@@ -155,16 +155,14 @@ export function YourDayScreen({
         <ScreenHeader eyebrow={dateLine()} title={greeting(name)} />
         {stale ? <StaleBanner fetchedAt={fetchedAt} /> : null}
 
-        {sourcesLoading ? (
-          // Until we know what is connected, render nothing under the header
-          // rather than the day ring. A new user has no connections, so the ring
-          // would flash for a moment and then be replaced by the empty state.
-          null
-        ) : nothingConnected ? (
+        {nothingConnected ? (
           <NothingConnected onConnect={onConnect} />
-        ) : loading && counts.urgent + counts.byEod + counts.canWait === 0 ? (
-          // Connected, but the feed is still hydrating: hold the ring's shape and
-          // the day's rows with skeletons rather than flashing an empty ring.
+        ) : sourcesLoading ||
+          (loading && counts.urgent + counts.byEod + counts.canWait === 0) ? (
+          // Still learning what is connected, or the feed is still hydrating:
+          // hold the day's shape with skeletons rather than a blank screen (the
+          // old null branch) or a flashing empty ring. A brand-new user sees this
+          // for a beat, then the connect prompt once we know there are no sources.
           <>
             <RingSkeleton />
             <TilesSkeleton />
