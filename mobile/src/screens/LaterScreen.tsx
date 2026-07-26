@@ -25,7 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics, radius, size, space, topInset, useTheme } from '../theme';
-import { CollapsedTitle, ScreenHeader } from '../components/Chrome';
+import { ScreenHeader } from '../components/Chrome';
 import { BrandMark } from '../components/BrandMark';
 import { Row } from '../components/ListRow';
 import { SectionLabel, T } from '../components/ui';
@@ -313,7 +313,6 @@ export function LaterScreen({
           </View>
         ) : null}
       </AnimatedScrollView>
-      <CollapsedTitle title={title} scrollY={scrollY} />
     </View>
   );
 }

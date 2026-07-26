@@ -107,35 +107,18 @@ export function YouScreen({
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
-        {/* The name alone. The address was an eyebrow reading "Signed in" over
-            it, which labelled the obvious; the name is enough. */}
-        <ScreenHeader title={title} />
-
-        {/* Editable display name: what the greeting uses. Tapping opens the same
-            prompt shown once after signup. */}
-        <Pressable
-          onPress={onEditName}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.sm,
-            paddingHorizontal: space.md,
-            minHeight: 72,
-            marginTop: space.sm,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <T role="heading">Name</T>
-            <T role="secondary" tone="mid">
-              {name || 'Add your name'}
-            </T>
-          </View>
-          <Chip
-            label={name ? 'Edit' : 'Add'}
-            variant="outline"
-            onPress={onEditName}
-          />
-        </Pressable>
+        {/* The name is the title; editing it is an inline chip on the same row,
+            so the screen no longer repeats "Name" over the obvious. */}
+        <ScreenHeader
+          title={title}
+          right={
+            <Chip
+              label={name ? 'Edit' : 'Add your name'}
+              variant="outline"
+              onPress={onEditName}
+            />
+          }
+        />
 
         <Separator inset={0} />
 

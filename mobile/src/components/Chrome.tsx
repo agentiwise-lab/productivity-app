@@ -26,10 +26,13 @@ import { T } from './ui';
 export function ScreenHeader({
   eyebrow,
   title,
+  right,
 }: {
   /** Omitted where the title stands on its own, as the name does on You. */
   eyebrow?: string;
   title: string;
+  /** An inline control on the title row, e.g. the You screen's Edit-name chip. */
+  right?: React.ReactNode;
 }) {
   return (
     <View style={styles.header}>
@@ -38,9 +41,16 @@ export function ScreenHeader({
           {eyebrow}
         </T>
       ) : null}
-      <T role="display" style={eyebrow ? { marginTop: space.xxs } : undefined} lines={2}>
-        {title}
-      </T>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <T
+          role="display"
+          style={[{ flex: 1 }, eyebrow ? { marginTop: space.xxs } : undefined]}
+          lines={2}
+        >
+          {title}
+        </T>
+        {right}
+      </View>
     </View>
   );
 }
