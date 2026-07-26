@@ -104,10 +104,15 @@ export function railFor(row: FeedRow): RailAction[] {
 }
 
 function candidates(row: FeedRow): Action[] {
-  // Anything snoozed or dateless is in the Later group, where the only action
-  // unique to the group is promoting it back into the live queue.
-  if (row.status === 'snoozed' || row.tier === 'noise') {
+  // "Bring back" only makes sense for something the user actually snoozed:
+  // promoting it out of the snooze is the one action unique to that state.
+  if (row.status === 'snoozed') {
     return [OPEN, BRING_BACK, MARK_READ];
+  }
+  // A Later / noise item was never snoozed and is often read live with no
+  // stored id to act on, so the only reliable action is opening it.
+  if (row.tier === 'noise') {
+    return [OPEN];
   }
 
   switch (row.source) {

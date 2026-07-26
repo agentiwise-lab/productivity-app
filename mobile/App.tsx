@@ -508,7 +508,7 @@ function Shell() {
           </Tab.Screen>
           <Tab.Screen name="Later" options={{ title: 'Later' }}>
             {() => (
-              <LaterScreen api={api} onOpen={(url) => void Linking.openURL(url)} />
+              <LaterScreen api={api} sources={sources} onOpenRow={openRow} />
             )}
           </Tab.Screen>
           <Tab.Screen name="Activity" options={{ title: 'Activity' }}>

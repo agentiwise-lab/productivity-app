@@ -33,28 +33,94 @@ import { Explain } from '../components/states';
 import { streamEvents, type StreamHandle } from '../api/stream';
 import { ago } from '../lib/time';
 import type { ApiClient } from '../api/client';
-import type { LaterRow, Source } from '../api/types';
+import type { FeedRow, LaterRow, Source, SourceInfo } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
-/** Only the sources that have a "did not need you" pile worth reading. */
-const SOURCES: { id: Source; label: string }[] = [
-  { id: 'gmail', label: 'Gmail' },
-  { id: 'slack', label: 'Slack' },
-  { id: 'linear', label: 'Linear' },
-  { id: 'github', label: 'GitHub' },
-];
+/**
+ * A live Later row rendered as a FeedRow so it can open the same detail sheet
+ * the feed uses. It is noise (nothing here was judged), unread (never snoozed,
+ * so the sheet offers Open and nothing that would fail), and its id is
+ * synthetic because the row is streamed live and stored nowhere.
+ */
+function laterRowToFeedRow(row: LaterRow, index: number): FeedRow {
+  return {
+    id: `later:${row.source_ref}:${index}`,
+    user_id: '',
+    source: row.source,
+    source_ref: row.source_ref,
+    tier: 'noise',
+    priority_score: 0,
+    rule_tier: 'noise',
+    llm_tier: null,
+    tier_source: 'rule',
+    type_tag: 'fyi',
+    needs_llm: false,
+    title: row.title,
+    summary: row.summary,
+    reason: null,
+    url: row.url,
+    repo: '',
+    context_chip: row.context_chip,
+    sender_name: row.sender_name,
+    sender_handle: null,
+    deadline: null,
+    occurred_at: row.occurred_at,
+    created_at: null,
+    snoozed_until: null,
+    handled_at: null,
+    is_blocking: false,
+    status: 'unread',
+    body: row.summary,
+  };
+}
+
+const LABELS: Record<Source, string> = {
+  gmail: 'Gmail',
+  slack: 'Slack',
+  linear: 'Linear',
+  github: 'GitHub',
+  google_docs: 'Google Docs',
+  calendar: 'Calendar',
+};
 
 export function LaterScreen({
   api,
-  onOpen,
+  sources,
+  onOpenRow,
 }: {
   api: ApiClient;
-  onOpen: (url: string) => void;
+  sources: SourceInfo[];
+  onOpenRow: (row: FeedRow) => void;
 }) {
   const c = useTheme();
   const insets = useSafeAreaInsets();
-  const [source, setSource] = useState<Source>('gmail');
+
+  // Only sources the user has actually connected, and never Calendar: a meeting
+  // is not a "did not need you" pile. This replaces the old hardcoded strip that
+  // showed Linear even when it was never integrated.
+  const available = useMemo(
+    () =>
+      sources.filter(
+        (info) => info.status === 'connected' && info.source !== 'calendar',
+      ),
+    [sources],
+  );
+
+  const [source, setSource] = useState<Source | null>(null);
+  // Settle on the first connected source once connections are known, and never
+  // leave a source selected that the user has since disconnected.
+  useEffect(() => {
+    if (available.length === 0) {
+      setSource(null);
+      return;
+    }
+    setSource((current) =>
+      current && available.some((info) => info.source === current)
+        ? current
+        : available[0].source,
+    );
+  }, [available]);
   const [all, setAll] = useState<LaterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +149,10 @@ export function LaterScreen({
   }, [api]);
 
   const rows = useMemo(
-    () => all.filter((row) => row.source === source),
+    () => (source ? all.filter((row) => row.source === source) : []),
     [all, source],
   );
-  const label = SOURCES.find((entry) => entry.id === source)?.label ?? '';
+  const label = source ? LABELS[source] : '';
   const title = `${all.length} did not need you`;
 
   return (
@@ -111,14 +177,14 @@ export function LaterScreen({
             paddingTop: space.md,
           }}
         >
-          {SOURCES.map((entry) => {
-            const on = entry.id === source;
+          {available.map((entry) => {
+            const on = entry.source === source;
             return (
               <Pressable
-                key={entry.id}
+                key={entry.source}
                 onPress={() => {
                   haptics.select();
-                  setSource(entry.id);
+                  setSource(entry.source);
                 }}
                 style={[
                   {
@@ -138,14 +204,14 @@ export function LaterScreen({
                   on ? { borderColor: c.hue.later, backgroundColor: c.overlay } : null,
                 ]}
               >
-                <BrandMark source={entry.id} size={24} />
+                <BrandMark source={entry.source} size={24} />
                 {on ? (
                   // The hue lives in the border and the fill. As text on a
                   // tinted overlay it measured 3.6 in light mode, and a label
                   // that has to be legible cannot be the place the colour is
                   // carried.
                   <T role="label" tone="high">
-                    {entry.label}
+                    {LABELS[entry.source]}
                   </T>
                 ) : null}
               </Pressable>
@@ -183,8 +249,10 @@ export function LaterScreen({
             }
             subtitle={row.summary}
             meta={ago(row.occurred_at)}
-            glyph={row.url ? 'external' : null}
-            onPress={row.url ? () => onOpen(row.url) : undefined}
+            // Opens the same detail sheet the feed uses, with the full content;
+            // the external link is the sheet's Open button, not the row tap.
+            glyph="chevron"
+            onPress={() => onOpenRow(laterRowToFeedRow(row, index))}
           />
         ))}
 
@@ -214,7 +282,12 @@ export function LaterScreen({
           <Explain title="Could not read Later" body={error} />
         ) : null}
 
-        {!loading && !error && rows.length === 0 ? (
+        {available.length === 0 ? (
+          <Explain
+            title="No sources connected"
+            body="Connect a source in You, and anything from it that did not need you shows up here."
+          />
+        ) : !loading && !error && rows.length === 0 ? (
           <Explain
             title="Nothing waiting here"
             body={`Everything from ${label} either needed you, and is on Your day, or you have already dealt with it.`}
