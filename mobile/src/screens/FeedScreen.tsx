@@ -127,43 +127,71 @@ export function FeedScreen({
     </Pressable>
   );
 
-  return (
-    <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: topInset(insets.top) }}>
+  // A fixed-width (equal-half) bordered box whose contents scroll horizontally
+  // within it, so the two selectors never resize each other.
+  const selectorBox = (children: React.ReactNode) => (
+    <View
+      style={{
+        flex: 1,
+        height: 40,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: c.hairline,
+        backgroundColor: c.surface,
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
+    >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          gap: space.xs,
+        contentContainerStyle={{ gap: space.xs, paddingHorizontal: space.xs, alignItems: 'center' }}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.canvas, paddingTop: topInset(insets.top) }}>
+      {/* Two fixed-width selectors side by side: platforms (left) and tiers
+          (right), each a bordered box that scrolls horizontally within its half
+          so neither ever resizes the other. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: space.sm,
           paddingHorizontal: space.md,
           paddingVertical: space.sm,
-          alignItems: 'center',
         }}
       >
-        {platforms.map((s) =>
-          iconBtn(
-            `src-${s}`,
-            sourceFilter === s,
-            c.hue.later,
-            () => setSourceFilter((cur) => (cur === s ? null : s)),
-            <BrandMark source={s} size={20} />,
+        {selectorBox(
+          platforms.map((s) =>
+            iconBtn(
+              `src-${s}`,
+              sourceFilter === s,
+              c.hue.later,
+              () => setSourceFilter((cur) => (cur === s ? null : s)),
+              <BrandMark source={s} size={20} />,
+            ),
           ),
         )}
-        {platforms.length && tiers.length ? (
-          <View
-            style={{ width: 1, height: 20, backgroundColor: c.hairline, marginHorizontal: space.xs }}
-          />
-        ) : null}
-        {tiers.map((t) => {
-          const category = CATEGORY_OF_TIER[t];
-          return iconBtn(
-            `tier-${t}`,
-            tierFilter === t,
-            c.hue[category],
-            () => setTierFilter((cur) => (cur === t ? null : t)),
-            <Icon name={CATEGORY_GLYPH[category]} size={20} color={c.hue[category]} />,
-          );
-        })}
-      </ScrollView>
+        {selectorBox(
+          tiers.map((t) => {
+            const category = CATEGORY_OF_TIER[t];
+            // Later wears a watch, matching the Later tab's clock glyph.
+            const glyph =
+              t === 'noise' ? 'clock' : CATEGORY_GLYPH[category];
+            return iconBtn(
+              `tier-${t}`,
+              tierFilter === t,
+              c.hue[category],
+              () => setTierFilter((cur) => (cur === t ? null : t)),
+              <Icon name={glyph} size={20} color={c.hue[category]} />,
+            );
+          }),
+        )}
+      </View>
       <FlatList
         data={filtered}
         keyExtractor={(row) => row.id}
