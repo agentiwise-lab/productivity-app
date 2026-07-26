@@ -195,10 +195,10 @@ Triggers are provisioned on connect (`services/triggers.py`). What arrives in re
 | Slack | `SLACK_DIRECT_MESSAGE_RECEIVED`, `SLACK_CHANNEL_MESSAGE_RECEIVED` | DMs + channel mentions push in real-time. |
 | Gmail | `GMAIL_NEW_GMAIL_MESSAGE` | New mail pushes (also carries Google Docs mention/comment/share). |
 | Calendar | `GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER` | Starting-soon pushes. |
-| **Linear** | **none today** — Composio's Linear triggers require a `team_id` not known at connect, so Linear is poll-only. **To fix (Vicky's call 2026-07-26):** resolve the user's team(s) at connect and provision a per-team Linear trigger (issue + comment events). | poll-only → real-time after the fix |
-| Google Docs | none (no Composio trigger) | arrives via the Gmail trigger (Docs notifications are emails). |
+| **Linear** | **none today.** Native triggers exist (`LINEAR_ISSUE_CREATED_TRIGGER`, `LINEAR_COMMENT_EVENT_TRIGGER`) but **all require `team_id`** (verified 2026-07-26). **To fix:** resolve the user's team(s) at connect (`LINEAR_LIST_TEAMS`) and provision one trigger per team (issue-created + comment-event). Optional backstop: sniff Linear notification emails via the Gmail trigger, like Docs. | poll-only → real-time after the fix |
+| **Google Docs** | **none today** (rides Gmail). Native triggers DO exist (verified 2026-07-26): document lifecycle under the **googledocs** toolkit (`GOOGLEDOCS_DOCUMENT_UPDATED_TRIGGER`, works on the Docs connection), and **comments + shares under the googledrive toolkit** (`GOOGLEDRIVE_COMMENT_ADDED_TRIGGER`, `GOOGLEDRIVE_FILE_SHARED_PERMISSIONS_ADDED`, **no required config**). **To fix (Vicky's call 2026-07-26):** bundle a Google Drive connection with the Docs connect and provision the Drive comment + share triggers, so Docs comments/mentions/shares are native real-time and do not depend on Gmail. Gmail sniffing stays as a redundant fallback. | Gmail-only → native real-time after the fix |
 
-So the connections that create **no** trigger of their own are **Linear** (to be fixed with per-team provisioning) and **Google Docs** (by design, rides Gmail). Everything else is real-time.
+So today only **GitHub, Slack, Gmail, Calendar** create their own triggers; **Linear** (needs per-team provisioning) and **Google Docs** (needs a bundled Drive connection) are being upgraded to native real-time.
 
 ## 7. Known gaps against this model (to fix)
 
