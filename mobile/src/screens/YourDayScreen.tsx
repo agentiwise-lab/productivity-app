@@ -27,7 +27,14 @@ import {
 import { Row } from '../components/ListRow';
 import { BrandMark } from '../components/BrandMark';
 import { SectionLabel, T } from '../components/ui';
-import { Clear, NothingConnected, Skeleton, StaleBanner } from '../components/states';
+import {
+  Clear,
+  NothingConnected,
+  RingSkeleton,
+  Skeleton,
+  StaleBanner,
+  TilesSkeleton,
+} from '../components/states';
 import { ago, deadlineLabel } from '../lib/time';
 import { listSubtitle, primaryLine } from '../lib/rowText';
 import type { FeedRow } from '../api/types';
@@ -155,6 +162,16 @@ export function YourDayScreen({
           null
         ) : nothingConnected ? (
           <NothingConnected onConnect={onConnect} />
+        ) : loading && counts.urgent + counts.byEod + counts.canWait === 0 ? (
+          // Connected, but the feed is still hydrating: hold the ring's shape and
+          // the day's rows with skeletons rather than flashing an empty ring.
+          <>
+            <RingSkeleton />
+            <TilesSkeleton />
+            <View style={{ marginTop: space.lg }}>
+              <Skeleton rows={2} />
+            </View>
+          </>
         ) : (
           <>
             <DayRing meetings={todayMeetings} counts={counts} />

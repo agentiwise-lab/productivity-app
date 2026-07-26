@@ -60,6 +60,48 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
+/** The Day ring while its counts hydrate: a pulsing ring of the same size, so
+ *  the screen holds its shape instead of flashing an empty "0 NEED YOU". */
+export function RingSkeleton() {
+  const c = useTheme();
+  const pulse = usePulse();
+  return (
+    <View style={{ height: 300, alignItems: 'center', justifyContent: 'center', marginTop: space.md }}>
+      <Animated.View
+        style={[
+          {
+            width: 232,
+            height: 232,
+            borderRadius: 116,
+            borderWidth: 22,
+            borderColor: c.surface,
+          },
+          pulse,
+        ]}
+      />
+    </View>
+  );
+}
+
+/** The three tier tiles under the ring, as placeholders. */
+export function TilesSkeleton() {
+  const c = useTheme();
+  const pulse = usePulse();
+  return (
+    <View style={{ flexDirection: 'row', gap: space.xs, marginHorizontal: space.md }}>
+      {[0, 1, 2].map((i) => (
+        <Animated.View
+          key={i}
+          style={[
+            { flex: 1, height: 64, borderRadius: radius.md, backgroundColor: c.surface },
+            pulse,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 /** A block of honest copy. Two lines, and never a shrug. */
 export function Explain({
   title,

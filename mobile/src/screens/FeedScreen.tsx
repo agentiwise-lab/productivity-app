@@ -113,14 +113,16 @@ export function FeedScreen({
       key={key}
       onPress={onPress}
       style={{
-        width: 34,
-        height: 34,
-        borderRadius: radius.md,
+        width: 30,
+        height: 30,
+        borderRadius: radius.sm,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        borderColor: on ? ring : 'transparent',
-        backgroundColor: on ? c.overlay : 'transparent',
+        // Every option carries a hairline border (like the Later selector);
+        // selection colours the border and tints the fill.
+        borderColor: on ? ring : c.hairline,
+        backgroundColor: on ? c.overlay : c.surface,
       }}
     >
       {glyph}
@@ -132,8 +134,8 @@ export function FeedScreen({
   const selectorBox = (children: React.ReactNode) => (
     <View
       style={{
-        flex: 1,
-        height: 40,
+        width: '42%',
+        height: 38,
         borderRadius: radius.md,
         borderWidth: 1,
         borderColor: c.hairline,
@@ -145,7 +147,7 @@ export function FeedScreen({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: space.xs, paddingHorizontal: space.xs, alignItems: 'center' }}
+        contentContainerStyle={{ gap: 4, paddingHorizontal: 4, alignItems: 'center' }}
       >
         {children}
       </ScrollView>
@@ -160,7 +162,7 @@ export function FeedScreen({
       <View
         style={{
           flexDirection: 'row',
-          gap: space.sm,
+          justifyContent: 'space-between',
           paddingHorizontal: space.md,
           paddingVertical: space.sm,
         }}
