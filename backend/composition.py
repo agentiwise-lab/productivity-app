@@ -78,7 +78,11 @@ def build_app() -> FastAPI:
     # a live-resolution fallback) for local work.
     connections = _build_connection_repository(composio, composio_user)
 
-    repo = _build_repository()
+    # The durable action ledger (snooze/dismiss/handled). The feed content itself
+    # lives in Redis (ephemeral) when REDIS_URL is set; the ledger is the only
+    # durable trace of what the user did to an item.
+    feed_actions = _build_feed_actions()
+    repo = _build_repository(feed_actions)
     classifier = DefaultClassificationService(
         model=DefaultTriageModel(),
         repo=repo,
@@ -224,7 +228,19 @@ def _supabase_provider() -> SupabaseClientProvider | None:
     return _SUPABASE_PROVIDER
 
 
-def _build_repository():
+def _build_repository(feed_actions):
+    """The feed store. Redis (ephemeral, 24h TTL) when REDIS_URL is set, with the
+    durable action ledger overlaid; otherwise the Supabase/in-memory feed table."""
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        import redis
+
+        from backend.repositories.redis_feed_repository import RedisFeedRepository
+
+        client = redis.from_url(redis_url)
+        log.info("feed store: Redis at %s", redis_url)
+        return RedisFeedRepository(client, feed_actions)
+
     provider = _supabase_provider()
     if provider is None:
         log.warning("Supabase is not configured; using the in-memory store")
@@ -233,6 +249,20 @@ def _build_repository():
     from backend.repositories.supabase_feed_repository import SupabaseFeedRepository
 
     return SupabaseFeedRepository(provider)
+
+
+def _build_feed_actions():
+    provider = _supabase_provider()
+    if provider is None:
+        from backend.repositories.feed_actions import InMemoryFeedActionsRepository
+
+        return InMemoryFeedActionsRepository()
+
+    from backend.repositories.supabase_feed_actions import (
+        SupabaseFeedActionsRepository,
+    )
+
+    return SupabaseFeedActionsRepository(provider)
 
 
 #: Which env var holds each toolkit's Composio auth config id (ac_...). These are
@@ -258,6 +288,13 @@ def _auth_config_ids() -> dict[Source, str]:
 
 
 def _build_classification_cache():
+    # In Redis mode the classification rides in the Redis row (24h TTL) and the
+    # durable feed_items table is gone, so the DB-backed cache no longer applies:
+    # a cold Redis re-pulls and re-classifies (cheap Gemini Flash). A per-process
+    # in-memory cache still saves re-judging identical content within a run.
+    if os.environ.get("REDIS_URL"):
+        return InMemoryClassificationCache()
+
     provider = _supabase_provider()
     if provider is None:
         return InMemoryClassificationCache()

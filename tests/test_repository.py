@@ -39,10 +39,16 @@ def make_item(item_id="i1", user_id="me", source_ref="octo/repo#1", **overrides)
     return FeedItem(**defaults)
 
 
-@pytest.fixture(params=["memory", "supabase"])
+@pytest.fixture(params=["memory", "supabase", "redis"])
 def repo(request):
     if request.param == "memory":
         return InMemoryFeedRepository()
+    if request.param == "redis":
+        from backend.repositories.feed_actions import InMemoryFeedActionsRepository
+        from backend.repositories.redis_feed_repository import RedisFeedRepository
+        from tests.fake_redis import FakeRedis
+
+        return RedisFeedRepository(FakeRedis(), InMemoryFeedActionsRepository())
     fake = FakeSupabaseClient()
     return SupabaseFeedRepository(SupabaseClientProvider(lambda: fake))
 
@@ -340,3 +346,39 @@ def test_assigned_work_never_ages_out_even_with_no_deadline():
     assert "assigned" in kept, "an urgent assigned issue must not age out"
     assert "backlog" in kept, "backlog work belongs in Later, not nowhere"
     assert "old_mention" not in kept, "a month-old Slack line is genuinely stale"
+
+
+# --- Redis serializer round-trip (data-integrity fix #5) -------------------
+
+
+def test_redis_row_roundtrips_every_ranking_field():
+    """The Redis row is the FeedItem minus exactly the three ledger-owned fields.
+    Everything that drives ranking, the model's sent_at, and dedupe must survive
+    serialize -> deserialize, so a dropped field fails here, not in production."""
+    from backend.repositories.redis_feed_repository import RedisFeedRepository
+
+    item = make_item(
+        is_blocking=True,
+        content_hash="abc123",
+        deadline=NOW + timedelta(hours=3),
+        occurred_at=NOW - timedelta(minutes=5),
+        created_at=NOW - timedelta(minutes=10),
+        llm_tier=Tier.URGENT,
+        summary="s",
+        reason="r",
+        signal="assign",
+        needs_llm=True,
+        body="the full body",
+    )
+    restored = RedisFeedRepository._deserialize(RedisFeedRepository._serialize(item))
+
+    for field in (
+        "is_blocking", "content_hash", "deadline", "occurred_at", "created_at",
+        "llm_tier", "summary", "reason", "signal", "needs_llm", "body",
+        "source_ref", "rule_tier", "type_tag", "id", "user_id",
+    ):
+        assert getattr(restored, field) == getattr(item, field), field
+    # The three ledger-owned fields are intentionally not stored: they default.
+    assert restored.status is FeedStatus.UNREAD
+    assert restored.snoozed_until is None
+    assert restored.handled_at is None
