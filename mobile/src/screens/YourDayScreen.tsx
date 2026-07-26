@@ -101,8 +101,11 @@ export function YourDayScreen({
    */
   const ahead = useMemo(() => {
     const now = new Date();
+    const today = now.toDateString();
+    // Today only: the calendar window can spill into tomorrow, and "next in N"
+    // over a same-day count read as a bug when it pointed at tomorrow's meeting.
     return meetings
-      .filter((meeting) => meeting.end > now)
+      .filter((meeting) => meeting.end > now && meeting.start.toDateString() === today)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [meetings]);
 
@@ -154,7 +157,7 @@ export function YourDayScreen({
           <NothingConnected onConnect={onConnect} />
         ) : (
           <>
-            <DayRing meetings={meetings} counts={counts} />
+            <DayRing meetings={todayMeetings} counts={counts} />
             <TierSelector
               counts={counts}
               selected={selected}

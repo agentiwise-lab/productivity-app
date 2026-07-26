@@ -69,6 +69,18 @@ def _is_held(item: FeedItem) -> bool:
     )
 
 
+def _calendar_off_day(item: FeedItem, now: datetime, tz: tzinfo) -> bool:
+    """A calendar_meeting whose start is not the user's local today does not
+    belong on Home: the poll window spills a day either side of midnight. Invites
+    (needsAction) are kept regardless — they want an answer whenever they land."""
+    if item.source != "calendar" or item.signal == "calendar_invite":
+        return False
+    start = item.occurred_at
+    if start is None:
+        return False
+    return start.astimezone(tz).date() != now.astimezone(tz).date()
+
+
 def _meeting_has_passed(item: FeedItem, now: datetime) -> bool:
     """A calendar item whose meeting has ended is over and does not belong on the
     feed at any tier. ``deadline`` carries the meeting's end. This also clears any
@@ -183,6 +195,8 @@ class DefaultFeedService:
                 held += 1
                 continue
             if _meeting_has_passed(item, now):
+                continue
+            if _calendar_off_day(item, now, tz):
                 continue
             tier = effective_tier(item, now=now, tz=tz)
             # Home is the three elevated buckets. An item the model settled as

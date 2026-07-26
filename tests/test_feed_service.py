@@ -208,3 +208,31 @@ def test_something_the_rules_defer_is_stored_but_held_until_judged():
     assert svc.list_feed("me", prefs) == []  # held
     _classify(svc, stored.id, Tier.CAN_WAIT)
     assert len(svc.list_feed("me", prefs)) == 1
+
+
+def test_calendar_meeting_not_on_the_users_day_is_dropped():
+    """The calendar poll window spills past midnight; a meeting whose start is
+    tomorrow in the user's zone must not sit on Home. Invites are kept."""
+    from datetime import timezone as _tz
+    from zoneinfo import ZoneInfo
+    from backend.models.feed import FeedItem
+    from backend.services.feed import _calendar_off_day
+
+    tz = ZoneInfo("Asia/Kolkata")  # UTC+5:30
+    now = datetime(2026, 7, 23, 12, 0, tzinfo=_tz.utc)  # 17:30 IST on 23 Jul
+
+    def cal(signal, start):
+        return FeedItem(
+            id="c", user_id="me", source="calendar", source_ref=f"cal:{signal}",
+            rule_tier=Tier.TODAY, signal=signal, title="Sync", url="",
+            occurred_at=start,
+        )
+
+    tomorrow = datetime(2026, 7, 24, 9, 0, tzinfo=_tz.utc)  # 24 Jul 14:30 IST
+    today = datetime(2026, 7, 23, 9, 0, tzinfo=_tz.utc)     # 23 Jul 14:30 IST
+    # A meeting on tomorrow's local day is dropped.
+    assert _calendar_off_day(cal("calendar_meeting", tomorrow), now, tz) is True
+    # An invite is kept regardless of day.
+    assert _calendar_off_day(cal("calendar_invite", tomorrow), now, tz) is False
+    # A meeting on the user's current local day is kept.
+    assert _calendar_off_day(cal("calendar_meeting", today), now, tz) is False
