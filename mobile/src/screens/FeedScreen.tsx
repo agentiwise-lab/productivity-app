@@ -15,8 +15,8 @@
  * sheet where the decision is made.
  */
 
-import React, { useMemo } from 'react';
-import { FlatList, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, topInset, useTheme } from '../theme';
 import { FeedCard } from '../components/FeedCard';
@@ -30,14 +30,28 @@ export function FeedScreen({
   loading,
   onAction,
   onOpen,
+  onRefresh,
 }: {
   rows: FeedRow[];
   loading: boolean;
   onAction: (row: FeedRow, action: string) => void;
   onOpen: (row: FeedRow, compose?: boolean) => void;
+  /** Pull-to-refresh: the manual heavy sync, parity with Day. */
+  onRefresh?: () => Promise<void> | void;
 }) {
   const c = useTheme();
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const pull = useCallback(async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh]);
 
   // One continuous stream, ordered by tier then priority. The tier is never
   // spelled out as a heading: the card's wash and chip already carry it.
@@ -82,6 +96,15 @@ export function FeedScreen({
         renderItem={({ item }) => (
           <FeedCard row={item} onAction={onAction} onOpen={onOpen} />
         )}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={pull}
+              tintColor={c.low}
+            />
+          ) : undefined
+        }
       />
     </View>
   );

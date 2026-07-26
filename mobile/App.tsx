@@ -585,6 +585,7 @@ function Shell() {
                 loading={loading}
                 onAction={act}
                 onOpen={openRow}
+                onRefresh={refresh}
               />
             )}
           </Tab.Screen>
