@@ -23,7 +23,9 @@ from typing import Any, Callable, Protocol
 
 from pydantic import BaseModel
 
+from backend.integrations.calendar import starting_soon_to_raw_event
 from backend.integrations.composio_github import notification_to_raw_event
+from backend.integrations.gmail import message_to_raw_event
 from backend.integrations.slack import (
     channel_message_to_raw_event,
     direct_message_to_raw_event,
@@ -125,13 +127,35 @@ _MAPPERS: dict[str, Callable[..., RawEvent | None]] = {
             data, identity=identity, my_threads=threads
         )
     ),
+    # Gmail and Calendar have real triggers; Linear does not (its triggers need a
+    # team_id we do not have at connect time) and Google Docs has none at all —
+    # both stay poll-only. The Gmail mapper also produces Google Docs items when
+    # the sender is a Docs notification address.
+    "GMAIL_NEW_GMAIL_MESSAGE": (
+        lambda data, identity, threads: message_to_raw_event(data)
+    ),
+    "GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER": (
+        lambda data, identity, threads: starting_soon_to_raw_event(data)
+    ),
 }
 
-# Trigger slug prefix -> the provider whose identity the mapper needs.
-_SLUG_PROVIDER = {"GITHUB": "github", "SLACK": "slack"}
+# Trigger slug prefix -> the provider whose identity the mapper needs. Gmail and
+# Calendar mappers ignore identity, but the prefix must still resolve so the
+# connection lookup does not blank.
+_SLUG_PROVIDER = {
+    "GITHUB": "github",
+    "SLACK": "slack",
+    "GMAIL": "gmail",
+    "GOOGLECALENDAR": "calendar",
+}
 
 # Trigger slug prefix -> the provider whose connection it belongs to.
-_PROVIDERS = {"GITHUB": "github", "SLACK": "slack"}
+_PROVIDERS = {
+    "GITHUB": "github",
+    "SLACK": "slack",
+    "GMAIL": "gmail",
+    "GOOGLECALENDAR": "calendar",
+}
 
 
 class WebhookIngestService:

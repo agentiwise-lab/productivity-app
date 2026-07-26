@@ -39,6 +39,19 @@ _TRIGGERS: dict[Source, list[tuple[str, dict[str, Any]]]] = {
         ("SLACK_DIRECT_MESSAGE_RECEIVED", {}),
         ("SLACK_CHANNEL_MESSAGE_RECEIVED", {}),
     ],
+    # Gmail and Calendar both take poll-type triggers that provision cleanly with
+    # their own defaults (a two-minute poll). The Gmail message trigger also
+    # carries Google Docs comment/mention/share notifications, since those are
+    # delivered as email and Docs has no trigger of its own.
+    Source.GMAIL: [
+        ("GMAIL_NEW_GMAIL_MESSAGE", {}),
+    ],
+    Source.CALENDAR: [
+        ("GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER", {}),
+    ],
+    # Linear is intentionally absent: every Linear trigger requires a team_id we
+    # do not have at connect time, so Linear stays poll-only (backfill on
+    # refresh) until team resolution is built.
 }
 
 

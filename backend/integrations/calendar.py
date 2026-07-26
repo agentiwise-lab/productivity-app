@@ -123,6 +123,55 @@ def event_to_raw_event(
     )
 
 
+def starting_soon_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
+    """GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER -> a feed item.
+
+    The trigger fires when a meeting is minutes out, which is the one calendar
+    event that cannot be handled later. Its payload is flatter than the events
+    list (a ``start_timestamp`` rather than a ``start`` object), so it has its
+    own mapper. The tier is settled by the ``calendar_starting`` band, not here.
+    """
+    event_id = data.get("event_id") or data.get("id")
+    if not event_id:
+        return None
+    start = _parse(data.get("start_timestamp") or data.get("start_time") or data.get("start"))
+    if start is None:
+        return None
+
+    summary = data.get("summary") or "(no title)"
+    location = data.get("location")
+    conference = data.get("hangout_link") or data.get("hangoutLink")
+    body = "\n".join(
+        part
+        for part in (
+            data.get("description"),
+            f"Location: {location}" if location else None,
+            f"Join: {conference}" if conference else None,
+            f"Starts {start:%H:%M}",
+        )
+        if part
+    )
+    organizer = data.get("organizer_email") or data.get("creator_email") or ""
+    return RawEvent(
+        source="calendar",
+        source_ref=f"calendar:{event_id}",
+        reason="calendar_starting",
+        subject_type="Event",
+        title=summary,
+        url=data.get("html_link") or data.get("htmlLink") or "",
+        repo="",
+        context_chip=start.strftime("%H:%M"),
+        body=body,
+        actor=Actor(login=organizer, display_name=organizer.split("@")[0] or None)
+        if organizer
+        else None,
+        deadline=start,
+        occurred_at=start,
+        is_blocking=False,
+        raw=data,
+    )
+
+
 class ComposioCalendarService:
     """Reads the calendar. Never writes without an explicit user action."""
 

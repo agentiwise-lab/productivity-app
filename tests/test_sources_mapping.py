@@ -11,7 +11,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend.integrations.calendar import event_to_meeting, event_to_raw_event
+from backend.integrations.calendar import (
+    event_to_meeting,
+    event_to_raw_event,
+    starting_soon_to_raw_event,
+)
 from backend.integrations.gmail import message_to_raw_event
 from backend.integrations.linear import issue_to_raw_event
 from backend.models.identity import Identity
@@ -206,6 +210,94 @@ def test_a_mailing_list_header_outweighs_the_inbox_tab():
         {"name": "List-Unsubscribe", "value": "<https://x.com/u>"}
     )
     assert classify(message_to_raw_event(bulk)).tier is Tier.NOISE
+
+
+# --- Google Docs, delivered via Gmail notifications ------------------------
+
+
+def test_a_docs_comment_mention_email_becomes_a_google_docs_item():
+    """Google emails a mention from comments-noreply@docs.google.com. It must
+    surface as a Google Docs card, not a generic email, and land at the
+    docs_mention band (can_wait floor, the model may lift) rather than noise."""
+    raw = message_to_raw_event(
+        message(
+            payload={
+                "headers": [
+                    {"name": "Subject", "value": "Priya mentioned you in Q3 plan"},
+                    {
+                        "name": "From",
+                        "value": "Priya (Google Docs) <comments-noreply@docs.google.com>",
+                    },
+                ]
+            }
+        )
+    )
+    assert raw is not None
+    assert raw.source == "google_docs"
+    assert raw.reason == "docs_mention"
+    verdict = classify(raw)
+    assert verdict.tier is Tier.CAN_WAIT
+    assert verdict.needs_llm is True
+
+
+def test_a_drive_share_email_becomes_a_docs_share_item():
+    raw = message_to_raw_event(
+        message(
+            payload={
+                "headers": [
+                    {"name": "Subject", "value": "Priya shared a document with you"},
+                    {
+                        "name": "From",
+                        "value": "Priya <drive-shares-noreply@google.com>",
+                    },
+                ]
+            }
+        )
+    )
+    assert raw.source == "google_docs"
+    assert raw.reason == "docs_share"
+
+
+def test_a_docs_notification_is_surfaced_even_without_the_unread_label():
+    """Docs mail is exempt from the unread gate: the notification is worth
+    showing whether or not Gmail marked it unread."""
+    raw = message_to_raw_event(
+        message(
+            labelIds=["INBOX"],  # no UNREAD
+            payload={
+                "headers": [
+                    {"name": "Subject", "value": "mentioned you"},
+                    {"name": "From", "value": "<comments-noreply@docs.google.com>"},
+                ]
+            },
+        )
+    )
+    assert raw is not None
+    assert raw.source == "google_docs"
+
+
+# --- Calendar starting-soon trigger ----------------------------------------
+
+
+def test_the_starting_soon_trigger_maps_to_a_calendar_item():
+    """GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER has a flatter payload than the
+    events list; its own mapper turns it into an urgent, imminent meeting."""
+    raw = starting_soon_to_raw_event(
+        {
+            "event_id": "ev1",
+            "summary": "Standup",
+            "start_timestamp": at(10, 30),
+            "html_link": "https://calendar.google.com/event?eid=ev1",
+            "hangout_link": "https://meet.google.com/abc",
+        }
+    )
+    assert raw is not None
+    assert raw.source == "calendar"
+    assert raw.reason == "calendar_starting"
+    assert raw.url == "https://calendar.google.com/event?eid=ev1"
+    verdict = classify(raw)
+    assert verdict.tier is Tier.URGENT
+    assert verdict.needs_llm is False
 
 
 def test_the_sender_name_is_split_from_the_address():
