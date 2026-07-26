@@ -86,6 +86,18 @@ def _github_row_label(repo: dict) -> str:
     return " · ".join(parts) if parts else "no recent activity"
 
 
+def _ago(then: datetime | None, now: datetime) -> str:
+    """A compact relative time for a document's last edit."""
+    if then is None:
+        return "recently"
+    seconds = (now - then).total_seconds()
+    if seconds < 3600:
+        return f"{max(1, round(seconds / 60))}m ago"
+    if seconds < 86400:
+        return f"{round(seconds / 3600)}h ago"
+    return f"{round(seconds / 86400)}d ago"
+
+
 def _minutes_label(minutes: float) -> str:
     if minutes >= 60:
         hours = minutes / 60
@@ -162,6 +174,8 @@ class SourceStatsService:
                 self._gmail_board(board, mine, resolve("gmail"))
             elif source is Source.SLACK:
                 self._slack_board(board, mine, now, resolve("slack"))
+            elif source is Source.GOOGLE_DOCS:
+                self._google_docs_board(board, now, resolve("google_docs"))
         except Exception:
             log.warning("dashboard build failed for %s", source.value, exc_info=True)
             board.unavailable.append("live activity")
@@ -403,6 +417,59 @@ class SourceStatsService:
                 senders_map.items(), key=lambda kv: kv[1], reverse=True
             )[:25]
         ]
+
+    # ---------------------------------------------------------- Google Docs
+
+    def _google_docs_board(
+        self, board: SourceDashboard, now: datetime, docs: Any | None
+    ) -> None:
+        board.breakdown_title = "Recent documents"
+        if docs is None:
+            board.unavailable.append("google docs")
+            return
+
+        # The two reads are independent: documents come from the Docs account
+        # directly, mention/share counts from the Gmail notifications.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            docs_f = pool.submit(docs.documents)
+            mentions_f = pool.submit(docs.mentions)
+
+        try:
+            mentions = mentions_f.result()
+            board.headline += [
+                StatLine(
+                    label="Mentions",
+                    value=sum(1 for e in mentions if e.reason == "docs_mention"),
+                    detail="last 30 days",
+                ),
+                StatLine(
+                    label="Shares",
+                    value=sum(1 for e in mentions if e.reason == "docs_share"),
+                    detail="last 30 days",
+                ),
+            ]
+        except Exception:
+            log.warning("google docs mentions failed", exc_info=True)
+            board.unavailable.append("mentions")
+
+        try:
+            files = docs_f.result()
+            board.headline.insert(
+                1, StatLine(label="Documents", value=len(files), detail="recent")
+            )
+            board.breakdown = [
+                StatLine(
+                    label=doc["name"],
+                    value=0,
+                    value_label=f"edited {_ago(doc['modified'], now)}",
+                    detail=None,
+                    url=doc["url"] or None,
+                )
+                for doc in files
+            ]
+        except Exception:
+            log.warning("google docs documents failed", exc_info=True)
+            board.unavailable.append("documents")
 
     # --------------------------------------------------------------- Slack
 

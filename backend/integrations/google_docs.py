@@ -19,6 +19,7 @@ comments API later would make it fully independent.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from backend.integrations.gmail import (
@@ -81,8 +82,21 @@ def docs_notification_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     )
 
 
+def _parse_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 class GoogleDocsService(Protocol):
     def mentions(self, limit: int = 50) -> list[RawEvent]:
+        ...
+
+    def documents(self, limit: int = 25) -> list[dict[str, Any]]:
         ...
 
 
@@ -118,3 +132,28 @@ class ComposioGoogleDocsService:
         messages = data.get("messages") or data.get("emails") or []
         found = [docs_notification_to_raw_event(message) for message in messages]
         return [event for event in found if event is not None]
+
+    def documents(self, limit: int = 25) -> list[dict[str, Any]]:
+        """The user's recent Google Docs, newest first. Unlike ``mentions`` this
+        reads the Docs account directly (GOOGLEDOCS_SEARCH_DOCUMENTS), so it works
+        from the Docs connection alone."""
+        try:
+            data = self._execute(
+                "GOOGLEDOCS_SEARCH_DOCUMENTS", {"max_results": limit}
+            )
+        except Exception:
+            log.warning("could not list Google Docs documents", exc_info=True)
+            return []
+        files = data.get("files") or data.get("documents") or []
+        out: list[dict[str, Any]] = []
+        for f in files:
+            if not isinstance(f, dict):
+                continue
+            out.append(
+                {
+                    "name": f.get("name") or "(untitled)",
+                    "url": f.get("webViewLink") or f.get("display_url") or "",
+                    "modified": _parse_time(f.get("modifiedTime")),
+                }
+            )
+        return out

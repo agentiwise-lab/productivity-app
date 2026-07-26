@@ -95,3 +95,72 @@ def test_mentions_reads_gmail_and_keeps_only_docs_notifications():
     slug, args = client.tools.calls[0]
     assert slug == "GMAIL_FETCH_EMAILS"
     assert "comments-noreply@docs.google.com" in args["query"]
+
+
+class _DocsTools:
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        assert slug == "GOOGLEDOCS_SEARCH_DOCUMENTS"
+        return {
+            "data": {
+                "files": [
+                    {
+                        "name": "Roadmap",
+                        "webViewLink": "https://docs.google.com/document/d/1",
+                        "modifiedTime": "2026-07-20T10:00:00Z",
+                    },
+                    {"name": "(untitled)"},  # missing fields tolerated
+                ]
+            }
+        }
+
+
+class _DocsComposio:
+    def __init__(self):
+        self.tools = _DocsTools()
+
+
+def test_documents_lists_recent_docs_from_the_docs_account():
+    svc = ComposioGoogleDocsService(_DocsComposio(), user_id="u")
+    docs = svc.documents()
+    assert docs[0]["name"] == "Roadmap"
+    assert docs[0]["url"].endswith("/1")
+    assert docs[0]["modified"] is not None
+    assert docs[1]["name"] == "(untitled)"  # tolerated
+
+
+def test_the_activity_board_shows_documents_and_mention_counts():
+    from datetime import datetime, timezone
+
+    from backend.models.sources import Source
+    from backend.services.stats import SourceStatsService
+
+    class _FakeDocs:
+        def documents(self, limit=25):
+            return [
+                {
+                    "name": "Roadmap",
+                    "url": "https://docs.google.com/document/d/1",
+                    "modified": datetime(2026, 7, 24, tzinfo=timezone.utc),
+                }
+            ]
+
+        def mentions(self, limit=50):
+            return [
+                docs_notification_to_raw_event(
+                    _message('"P (Google Docs)" <comments-noreply@docs.google.com>')
+                )
+            ]
+
+    class _Ints:
+        def google_docs(self, user_id):
+            return _FakeDocs()
+
+    now = datetime(2026, 7, 26, tzinfo=timezone.utc)
+    svc = SourceStatsService(integrations=_Ints(), clock=lambda: now)
+    board = svc.dashboard("u", Source.GOOGLE_DOCS, items=[], now=now)
+
+    labels = [s.label for s in board.headline]
+    assert "Documents" in labels
+    assert "Mentions" in labels
+    assert board.breakdown[0].label == "Roadmap"
+    assert "edited" in (board.breakdown[0].value_label or "")
