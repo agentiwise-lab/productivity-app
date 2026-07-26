@@ -160,6 +160,90 @@ def test_list_notifications_handles_empty_payload():
     assert ComposioGitHubService(client, user_id="me").list_notifications() == []
 
 
+class _SlugTools:
+    """Answers each Composio slug differently, so the enrichment path (which
+    calls a second slug after the notifications list) can be tested."""
+
+    def __init__(self, notification, issue_body="", comment_body=""):
+        self._notification = notification
+        self._issue_body = issue_body
+        self._comment_body = comment_body
+        self.calls: list[tuple] = []
+
+    def execute(self, slug, user_id=None, arguments=None, version=None):
+        self.calls.append((slug, arguments))
+        if slug == "GITHUB_LIST_NOTIFICATIONS":
+            return {"data": {"notifications": [self._notification]}}
+        if slug == "GITHUB_GET_AN_ISSUE":
+            return {"data": {"body": self._issue_body}}
+        if slug == "GITHUB_GET_AN_ISSUE_COMMENT":
+            return {"data": {"body": self._comment_body}}
+        return {"data": {}}
+
+
+class _SlugComposio:
+    def __init__(self, tools):
+        self.tools = tools
+
+
+def _mention(latest_comment_url):
+    return {
+        "id": "1",
+        "reason": "mention",
+        "repository": {"full_name": "octo/repo"},
+        "subject": {
+            "title": "testing 4",
+            "type": "Issue",
+            "url": "https://api.github.com/repos/octo/repo/issues/4",
+            "latest_comment_url": latest_comment_url,
+        },
+        "updated_at": "2026-07-26T11:00:00Z",
+    }
+
+
+def test_a_mention_in_the_issue_body_is_enriched_with_the_real_text():
+    """The notifications API has no body, so the card showed a synthetic
+    "you were mentioned" line. When the notification points back at the issue,
+    the issue body is the sentence you were mentioned in."""
+    tools = _SlugTools(
+        _mention("https://api.github.com/repos/octo/repo/issues/4"),
+        issue_body="@vicky see this issue properly",
+    )
+    events = ComposioGitHubService(_SlugComposio(tools), user_id="me").list_notifications()
+    assert events[0].body == "@vicky see this issue properly"
+    assert any(
+        c[0] == "GITHUB_GET_AN_ISSUE" and c[1]["issue_number"] == 4 for c in tools.calls
+    )
+
+
+def test_a_reply_notification_is_enriched_from_the_comment():
+    tools = _SlugTools(
+        _mention("https://api.github.com/repos/octo/repo/issues/comments/99"),
+        comment_body="left you a reply",
+    )
+    events = ComposioGitHubService(_SlugComposio(tools), user_id="me").list_notifications()
+    assert events[0].body == "left you a reply"
+    assert any(
+        c[0] == "GITHUB_GET_AN_ISSUE_COMMENT" and c[1]["comment_id"] == 99
+        for c in tools.calls
+    )
+
+
+def test_a_failed_enrichment_keeps_the_synthetic_body():
+    """One bad fetch must not blank the card or fail the refresh."""
+
+    class _Boom(_SlugTools):
+        def execute(self, slug, user_id=None, arguments=None, version=None):
+            if slug != "GITHUB_LIST_NOTIFICATIONS":
+                raise RuntimeError("github said no")
+            return super().execute(slug, user_id, arguments, version)
+
+    tools = _Boom(_mention("https://api.github.com/repos/octo/repo/issues/4"))
+    events = ComposioGitHubService(_SlugComposio(tools), user_id="me").list_notifications()
+    assert events[0].body  # the synthetic description survives
+    assert "mentioned" in events[0].body.lower()
+
+
 def test_comment_on_pull_request_uses_issue_number():
     # PR discussion comments go through GitHub's issue-comment surface.
     client = _FakeComposio(

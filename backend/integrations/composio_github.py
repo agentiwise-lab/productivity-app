@@ -10,6 +10,7 @@ not a change to this file.
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
@@ -17,6 +18,12 @@ from typing import Any, Callable
 from backend.integrations.github import Comment, PRRef, PullRequest
 from backend.models.events import RawEvent
 from backend.models.feed import Actor
+
+log = logging.getLogger(__name__)
+
+#: Cap how many notifications we enrich with their real body per refresh: each is
+#: an extra GitHub call, and beyond a page nobody reads them anyway.
+_ENRICH_LIMIT = 15
 
 # GitHub caps notification pages at 50.
 _PAGE_SIZE = 50
@@ -164,9 +171,59 @@ class ComposioGitHubService:
             arguments["since"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         data = self._execute("GITHUB_LIST_NOTIFICATIONS", arguments)
-        return [
+        events = [
             notification_to_raw_event(n) for n in (data.get("notifications") or [])
         ]
+        self._enrich_bodies(events)
+        return events
+
+    def _enrich_bodies(self, events: list[RawEvent]) -> None:
+        """Replace the synthetic notification body with the real text.
+
+        The notifications API carries no body, so a card would read "You were
+        mentioned in an issue" and never show the sentence you were actually
+        mentioned in. This fetches the issue (or the specific comment, when the
+        notification points at one) so the detail sheet shows the real content.
+        Bounded and run in parallel: each is an extra call, and in series they
+        would add up on every refresh.
+        """
+        targets = [e for e in events if "#" in e.source_ref][:_ENRICH_LIMIT]
+        if not targets:
+            return
+        with ThreadPoolExecutor(max_workers=min(6, len(targets))) as pool:
+            pool.map(self._enrich_body, targets)
+
+    def _enrich_body(self, event: RawEvent) -> None:
+        repo, _, number = event.source_ref.partition("#")
+        owner, _, name = repo.partition("/")
+        if not owner or not name or not number.isdigit():
+            return
+        comment_url = ((event.raw or {}).get("subject") or {}).get(
+            "latest_comment_url"
+        ) or ""
+        try:
+            # latest_comment_url points at a specific comment only when the
+            # notification was a reply; otherwise it points back at the issue,
+            # so the issue body is the thing that was said.
+            comment_id = comment_url.rstrip("/").split("/")[-1]
+            if "/comments/" in comment_url and comment_id.isdigit():
+                data = self._execute(
+                    "GITHUB_GET_AN_ISSUE_COMMENT",
+                    {"owner": owner, "repo": name, "comment_id": int(comment_id)},
+                )
+            else:
+                data = self._execute(
+                    "GITHUB_GET_AN_ISSUE",
+                    {"owner": owner, "repo": name, "issue_number": int(number)},
+                )
+        except Exception:
+            # Keep the synthetic body: a card with a description beats a card
+            # that failed to load, and one bad fetch must not fail the refresh.
+            log.warning("could not enrich github body for %s", event.source_ref, exc_info=True)
+            return
+        body = str(data.get("body") or "").strip()
+        if body:
+            event.body = body[:4000]
 
     def get_pull_request(self, ref: PRRef) -> PullRequest:
         owner, _, name = ref.repo.partition("/")
