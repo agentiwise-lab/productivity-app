@@ -67,6 +67,18 @@ The stored feed is the source of truth. Webhooks keep it current (`ingest → cl
 - **Name row.** Header already shows the name (`YouScreen.tsx:98,112`); delete the separate row (`YouScreen.tsx:116-140`). Add a `right` slot to `ScreenHeader` (`Chrome.tsx:26-46`) with an inline "Edit" (name set) / "Add your name" (absent) chip.
 - **Later collapsed header.** `CollapsedTitle` is **shared** — the Day screen imports it too (`YourDayScreen.tsx:21`), so delete only the **usage** in Later (`LaterScreen.tsx:313`), not the symbol (unless Decision 6 removes it from Day as well).
 
+## Cluster G — Live feed stream (append to an open screen, NEW)
+
+**Requirement (Vicky):** when a trigger pings the backend while the app is open on Home/To-dos, the new item must **append live**, not wait for the next foreground/tab-switch. Not needed for Later.
+
+**Design (rides on the Redis work):**
+- `GET /feed/stream` — an SSE endpoint per user, same pattern as `/later`.
+- On webhook ingest, after `classify_item`, publish the classified row to Redis channel `feed:{user_id}:events`.
+- `/feed/stream` subscribes to that channel and forwards each new row; the open Home/To-dos screen **appends** it — dedup by `source_ref`, apply the action-ledger overlay, re-rank — with no full refresh and no polling.
+- Held items are not published until classified (the webhook classifies first). Later does not subscribe.
+
+**Seam:** new `/feed/stream` route + a Redis pub/sub publish in the webhook ingest path; a client SSE subscription on Home/To-dos that appends to the in-memory feed. Depends on Redis (Cluster 3 / Phase 0).
+
 ## Cluster F — Disconnect purges stored rows (NEW, from flow review)
 
 **Root cause.** `disconnect` (`connections.py:230-240`) removes the Composio account + connection row but **never deletes that source's `feed_items`**, so they keep showing on Day/To-dos, keep counting, and stay in the Later exclusion set after a disconnect.
