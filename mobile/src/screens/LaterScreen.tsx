@@ -144,6 +144,9 @@ export function LaterScreen({
         setError(message);
         setLoading(false);
       },
+      // A stale access token would otherwise 401 the stream and show empty for
+      // every source. Refresh once and reconnect with the new token.
+      onUnauthorized: () => api.reauth(),
     });
     return () => handle.current?.cancel();
   }, [api]);

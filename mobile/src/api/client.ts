@@ -80,6 +80,17 @@ export class ApiClient {
     this.onAuthError = handler;
   }
 
+  /**
+   * For streaming callers (the Later XHR) that cannot ride request()'s retry:
+   * run the single-flight refresh, then hand back fresh auth headers, or null
+   * when the session is gone. This is what stops a stale token from showing an
+   * empty Later for every source.
+   */
+  async reauth(): Promise<Record<string, string> | null> {
+    if (this.onAuthError && (await this.onAuthError())) return this.auth();
+    return null;
+  }
+
   private async request<T>(
     path: string,
     init: RequestInit = {},

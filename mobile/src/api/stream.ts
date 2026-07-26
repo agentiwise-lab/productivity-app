@@ -21,16 +21,27 @@ export function streamEvents<T>({
   onBatch,
   onDone,
   onError,
+  onUnauthorized,
 }: {
   url: string;
   headers: Record<string, string>;
   onBatch: (rows: T[]) => void;
   onDone: () => void;
   onError: (message: string) => void;
+  /**
+   * Called when the stream completes with a 401. A stale access token is the
+   * common cause (the token was minted before the screen mounted). The handler
+   * runs the single-flight refresh and returns fresh auth headers, or null when
+   * the session is truly gone. On fresh headers the stream reconnects once. A
+   * 401 response carries no SSE frames, so nothing was emitted yet and the
+   * reconnect starts clean — no duplicate rows.
+   */
+  onUnauthorized?: () => Promise<Record<string, string> | null>;
 }): StreamHandle {
-  const xhr = new XMLHttpRequest();
+  let xhr = new XMLHttpRequest();
   let consumed = 0;
   let finished = false;
+  let cancelled = false;
 
   const finish = () => {
     if (finished) return;
@@ -70,28 +81,53 @@ export function streamEvents<T>({
     }
   };
 
-  xhr.open('GET', url, true);
-  Object.entries({ Accept: 'text/event-stream', ...headers }).forEach(([k, v]) =>
-    xhr.setRequestHeader(k, v),
-  );
-  xhr.onprogress = drain;
-  xhr.onload = () => {
-    drain();
-    finish();
+  const connect = (currentHeaders: Record<string, string>, allowRetry: boolean) => {
+    xhr = new XMLHttpRequest();
+    consumed = 0;
+    xhr.open('GET', url, true);
+    Object.entries({ Accept: 'text/event-stream', ...currentHeaders }).forEach(
+      ([k, v]) => xhr.setRequestHeader(k, v),
+    );
+    xhr.onprogress = drain;
+    xhr.onload = () => {
+      if (xhr.status === 401 && allowRetry && onUnauthorized) {
+        // Do not finish: refresh the token, then reconnect once with it.
+        onUnauthorized()
+          .then((fresh) => {
+            if (cancelled || finished) return;
+            if (fresh) connect(fresh, false);
+            else {
+              finished = true;
+              onError('Your session expired. Sign in again.');
+            }
+          })
+          .catch(() => {
+            if (cancelled || finished) return;
+            finished = true;
+            onError('Your session expired. Sign in again.');
+          });
+        return;
+      }
+      drain();
+      finish();
+    };
+    xhr.onerror = () => {
+      if (finished) return;
+      finished = true;
+      onError("Can't reach the backend.");
+    };
+    // Cancelling fires onabort, not onerror: leaving the screen is not a failure.
+    xhr.onabort = () => {
+      finished = true;
+    };
+    xhr.send();
   };
-  xhr.onerror = () => {
-    if (finished) return;
-    finished = true;
-    onError("Can't reach the backend.");
-  };
-  // Cancelling fires onabort, not onerror: leaving the screen is not a failure.
-  xhr.onabort = () => {
-    finished = true;
-  };
-  xhr.send();
+
+  connect(headers, true);
 
   return {
     cancel: () => {
+      cancelled = true;
       if (!finished) xhr.abort();
     },
   };

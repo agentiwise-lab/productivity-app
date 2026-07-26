@@ -15,11 +15,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from supabase import Client
-
 from backend.models.feed import FeedItem, FeedStatus, TierSource
 from backend.models.tiers import Tier
 from backend.repositories.feed_repository import RETENTION
+from backend.repositories.supabase_client import SupabaseClientProvider
 
 _TABLE = "feed_items"
 
@@ -51,8 +50,12 @@ _SOURCE_COLUMNS = (
 
 
 class SupabaseFeedRepository:
-    def __init__(self, client: Client) -> None:
-        self._db = client
+    def __init__(self, provider: SupabaseClientProvider) -> None:
+        self._provider = provider
+
+    @property
+    def _db(self):
+        return self._provider.get()
 
     # ------------------------------------------------------------- ingest
 
@@ -259,8 +262,12 @@ class SupabaseClassificationCache:
     (H4). Reading the existing rows makes the cache durable and shared for free.
     ``put`` is a no-op: ``apply_classification`` has already written the row."""
 
-    def __init__(self, client: Client) -> None:
-        self._db = client
+    def __init__(self, provider: SupabaseClientProvider) -> None:
+        self._provider = provider
+
+    @property
+    def _db(self):
+        return self._provider.get()
 
     def get(self, content_hash: str) -> tuple[Tier, str, str] | None:
         rows = (

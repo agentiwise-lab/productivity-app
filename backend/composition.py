@@ -27,6 +27,7 @@ from backend.repositories.credentials_repository import (
     InMemoryCredentialsRepository,
 )
 from backend.repositories.feed_repository import InMemoryFeedRepository
+from backend.repositories.supabase_client import SupabaseClientProvider
 from backend.services.auth_service import DefaultAuthService
 from backend.services.connections import DefaultConnectionService
 from backend.services.later import LaterService
@@ -201,18 +202,37 @@ def build_app() -> FastAPI:
     )
 
 
-def _build_repository():
+_SUPABASE_PROVIDER: SupabaseClientProvider | None = None
+
+
+def _supabase_provider() -> SupabaseClientProvider | None:
+    """One provider for the whole process; hands out a client per thread.
+
+    Shared by every Supabase repository so they no longer contend on a single
+    httpx transport (the ``/feed`` 500s). Returns None when Supabase is not
+    configured, so each builder can fall back to its in-memory store.
+    """
+    global _SUPABASE_PROVIDER
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
+        return None
+    if _SUPABASE_PROVIDER is None:
+        from supabase import create_client
+
+        _SUPABASE_PROVIDER = SupabaseClientProvider(lambda: create_client(url, key))
+    return _SUPABASE_PROVIDER
+
+
+def _build_repository():
+    provider = _supabase_provider()
+    if provider is None:
         log.warning("Supabase is not configured; using the in-memory store")
         return InMemoryFeedRepository()
 
-    from supabase import create_client
-
     from backend.repositories.supabase_feed_repository import SupabaseFeedRepository
 
-    return SupabaseFeedRepository(create_client(url, key))
+    return SupabaseFeedRepository(provider)
 
 
 #: Which env var holds each toolkit's Composio auth config id (ac_...). These are
@@ -237,52 +257,43 @@ def _auth_config_ids() -> dict[Source, str]:
 
 
 def _build_classification_cache():
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
+    provider = _supabase_provider()
+    if provider is None:
         return InMemoryClassificationCache()
-
-    from supabase import create_client
 
     from backend.repositories.supabase_feed_repository import (
         SupabaseClassificationCache,
     )
 
-    return SupabaseClassificationCache(create_client(url, key))
+    return SupabaseClassificationCache(provider)
 
 
 def _build_connection_repository(composio, composio_user):
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
+    provider = _supabase_provider()
+    if provider is None:
         log.warning("Supabase is not configured; connections use the in-memory store")
         return InMemoryConnectionRepository(
             composio=composio, composio_user_id=composio_user
         )
 
-    from supabase import create_client
-
     from backend.repositories.supabase_connections_repository import (
         SupabaseConnectionRepository,
     )
 
-    return SupabaseConnectionRepository(create_client(url, key))
+    return SupabaseConnectionRepository(provider)
 
 
 def _build_credentials_repository() -> CredentialsRepository:
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
+    provider = _supabase_provider()
+    if provider is None:
         log.warning("Supabase is not configured; auth uses the in-memory store")
         return InMemoryCredentialsRepository()
-
-    from supabase import create_client
 
     from backend.repositories.supabase_credentials_repository import (
         SupabaseCredentialsRepository,
     )
 
-    return SupabaseCredentialsRepository(create_client(url, key))
+    return SupabaseCredentialsRepository(provider)
 
 
 app = build_app() if os.environ.get("APP_EAGER_START") else None

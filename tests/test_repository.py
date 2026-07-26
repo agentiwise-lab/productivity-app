@@ -17,6 +17,7 @@ from backend.models.feed import FeedItem, FeedStatus, TierSource
 from backend.models.tiers import Tier, TypeTag
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.repositories.supabase_feed_repository import SupabaseFeedRepository
+from backend.repositories.supabase_client import SupabaseClientProvider
 from tests.fake_supabase import FakeSupabaseClient
 
 NOW = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
@@ -42,7 +43,8 @@ def make_item(item_id="i1", user_id="me", source_ref="octo/repo#1", **overrides)
 def repo(request):
     if request.param == "memory":
         return InMemoryFeedRepository()
-    return SupabaseFeedRepository(FakeSupabaseClient())
+    fake = FakeSupabaseClient()
+    return SupabaseFeedRepository(SupabaseClientProvider(lambda: fake))
 
 
 def test_upsert_dedupes_on_user_and_source_ref(repo):
@@ -249,13 +251,14 @@ def test_the_db_backed_cache_reads_a_verdict_off_an_existing_row():
     )
 
     client = FakeSupabaseClient()
-    repo = SupabaseFeedRepository(client)
+    provider = SupabaseClientProvider(lambda: client)
+    repo = SupabaseFeedRepository(provider)
     item = repo.upsert(make_item(content_hash="shared", needs_llm=True))
     repo.apply_classification(
         "me", item.id, tier=Tier.URGENT, summary="blocked", reason="direct ask", at=NOW
     )
 
-    cache = SupabaseClassificationCache(client)
+    cache = SupabaseClassificationCache(provider)
     assert cache.get("shared") == (Tier.URGENT, "blocked", "direct ask")
     assert cache.get("never-seen") is None
 

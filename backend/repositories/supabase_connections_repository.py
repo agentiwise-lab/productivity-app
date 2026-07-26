@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import logging
 
-from supabase import Client
-
 from backend.models.connections import ConnectionRow
 from backend.models.identity import Identity
+from backend.repositories.supabase_client import SupabaseClientProvider
 
 log = logging.getLogger(__name__)
 
@@ -25,8 +24,12 @@ _TABLE = "connections"
 
 
 class SupabaseConnectionRepository:
-    def __init__(self, client: Client) -> None:
-        self._db = client
+    def __init__(self, provider: SupabaseClientProvider) -> None:
+        self._provider = provider
+
+    @property
+    def _db(self):
+        return self._provider.get()
 
     def mark_active(
         self,

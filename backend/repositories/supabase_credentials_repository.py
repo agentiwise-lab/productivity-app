@@ -17,9 +17,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from supabase import Client
-
 from backend.models.auth import OtpPurpose, OtpRecord, RefreshRecord, UserRecord
+from backend.repositories.supabase_client import SupabaseClientProvider
 
 _USERS = "users"
 _OTPS = "email_otps"
@@ -27,8 +26,12 @@ _REFRESH = "refresh_tokens"
 
 
 class SupabaseCredentialsRepository:
-    def __init__(self, client: Client) -> None:
-        self._db = client
+    def __init__(self, provider: SupabaseClientProvider) -> None:
+        self._provider = provider
+
+    @property
+    def _db(self):
+        return self._provider.get()
 
     # --- users ---------------------------------------------------------
     def get_user_by_email(self, email: str) -> UserRecord | None:

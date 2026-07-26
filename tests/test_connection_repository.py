@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from backend.repositories.connections import InMemoryConnectionRepository
+from backend.repositories.supabase_client import SupabaseClientProvider
 from backend.repositories.supabase_connections_repository import (
     SupabaseConnectionRepository,
 )
@@ -21,7 +22,8 @@ from tests.fake_supabase import FakeSupabaseClient
 def repo(request):
     if request.param == "memory":
         return InMemoryConnectionRepository()
-    return SupabaseConnectionRepository(FakeSupabaseClient())
+    fake = FakeSupabaseClient()
+    return SupabaseConnectionRepository(SupabaseClientProvider(lambda: fake))
 
 
 def test_mark_active_then_get(repo):
@@ -100,7 +102,7 @@ def test_identity_for_degrades_to_empty_when_the_store_raises():
         def table(self, *args, **kwargs):
             raise RuntimeError("invalid input syntax for type uuid: 'pg-test'")
 
-    repo = SupabaseConnectionRepository(RaisingClient())
+    repo = SupabaseConnectionRepository(SupabaseClientProvider(RaisingClient))
     ident = repo.identity_for("pg-test-not-a-uuid", "github")
     assert ident.github_login is None
     assert ident.slack_user_id is None
