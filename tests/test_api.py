@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 
 from backend.main import create_app
@@ -383,3 +385,70 @@ def test_refresh_is_idempotent():
     client.post("/feed/refresh", headers={"X-User-Id": "me"})
 
     assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1
+
+
+# --- the day ruler ---------------------------------------------------------
+
+
+class _FakeCalendar:
+    def __init__(self, meetings):
+        self._meetings = meetings
+
+    def day_window(self):
+        return self._meetings
+
+
+class _CalendarOnlyIntegrations:
+    """Mirrors the production factory shape: composition passes ``integrations``
+    and never ``calendar``, so /day must reach the calendar through here."""
+
+    def __init__(self, calendar):
+        self._calendar = calendar
+
+    def calendar(self, user_id):
+        return self._calendar
+
+    def github(self, user_id):
+        return None
+
+    def slack(self, user_id):
+        return None
+
+    def linear(self, user_id):
+        return None
+
+    def gmail(self, user_id):
+        return None
+
+
+def test_day_reads_the_calendar_through_the_per_user_factory():
+    """Regression for the empty-Day bug: /day read a bare ``calendar`` closure
+    that composition never wired (only ``integrations`` is passed in prod), so
+    it was always None and every day returned [] while the feed showed calendar
+    items fine. It must read the calendar from the factory, like the feed."""
+    from backend.integrations.calendar import Meeting
+
+    meeting = Meeting(
+        title="wiki testing",
+        start=datetime(2026, 7, 26, 15, 0, tzinfo=timezone.utc),
+        end=datetime(2026, 7, 26, 16, 0, tzinfo=timezone.utc),
+    )
+    app = create_app(
+        github=FakeGitHubService(),
+        auth_mode="dev",
+        integrations=_CalendarOnlyIntegrations(_FakeCalendar([meeting])),
+    )
+    client = TestClient(app)
+
+    response = client.get("/day", headers={"X-User-Id": "me"})
+
+    assert response.status_code == 200
+    assert [m["title"] for m in response.json()] == ["wiki testing"]
+
+
+def test_day_is_empty_when_no_calendar_is_connected():
+    app = dev_app()  # no integrations wired → factory returns no calendar
+    client = TestClient(app)
+    response = client.get("/day", headers={"X-User-Id": "me"})
+    assert response.status_code == 200
+    assert response.json() == []

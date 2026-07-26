@@ -414,8 +414,15 @@ def create_app(
     @app.get("/day", response_model=list[MeetingOut])
     def get_day(user_id: str = Depends(current_user)) -> list[MeetingOut]:
         """Read live on every open. A cached schedule is one that will
-        eventually be shown after it stopped being true."""
-        if calendar is None:
+        eventually be shown after it stopped being true.
+
+        Reads the calendar through the per-user factory, exactly as the feed
+        does. The endpoint used to read a bare ``calendar`` closure that
+        composition never wired, so it was always ``None`` and every day
+        returned empty while the feed showed calendar items fine.
+        """
+        cal = resolved_integrations.calendar(user_id)
+        if cal is None:
             return []
         try:
             return [
@@ -425,7 +432,7 @@ def create_app(
                     end=m.end,
                     conference_url=m.conference_url,
                 )
-                for m in calendar.day_window()
+                for m in cal.day_window()
             ]
         except Exception:
             log.warning("could not read the calendar", exc_info=True)
