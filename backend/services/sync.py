@@ -94,10 +94,12 @@ class SourceSync:
 
         gmail = self._integrations.gmail(user_id)
         if gmail is not None:
-            # Only mail that could need a reply. The broad fetch belongs to
-            # Later, which reads it live; asking for it here meant pulling 361
-            # messages to store 12 and made the refresh eight times slower.
-            sources[Source.GMAIL] = gmail.actionable
+            # Two model buckets (bible 3.2): the personal inbox slice
+            # (``actionable``) plus the transactional slice (updates/forums/list
+            # mail), each the newest 100. The queries are disjoint, so this is
+            # two fetches, not a re-scan. The broad unread firehose still belongs
+            # to Later, which reads it live.
+            sources[Source.GMAIL] = lambda g=gmail: g.actionable() + g.transactional()
 
         calendar = self._integrations.calendar(user_id)
         if calendar is not None:

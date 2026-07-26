@@ -199,23 +199,36 @@ def test_read_mail_is_not_a_feed_item():
 
 
 @pytest.mark.parametrize(
-    "label", ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS", "SPAM"]
+    "label", ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "SPAM", "TRASH"]
 )
 def test_bulk_mail_is_filtered_before_the_model(label):
-    """Gmail already sorted these. Classifying them would be paying to be told
-    what the label said."""
+    """Unambiguous bulk (promotions/social/spam/trash). Gmail already sorted
+    these; classifying them would be paying to be told what the label said."""
     verdict = classify(message_to_raw_event(message(labelIds=["UNREAD", label])))
     assert verdict.tier is Tier.NOISE
     assert verdict.needs_llm is False
+    assert verdict.signal == "gmail_bulk"
 
 
-def test_a_mailing_list_header_outweighs_the_inbox_tab():
-    """Gmail files plenty of transactional bulk mail under Primary."""
+@pytest.mark.parametrize("label", ["CATEGORY_UPDATES", "CATEGORY_FORUMS"])
+def test_transactional_mail_goes_to_the_model(label):
+    """Updates/forums can hide a renewal or payment notice (Vicky's call
+    2026-07-26), so they go to the model floored at later, not buried."""
+    verdict = classify(message_to_raw_event(message(labelIds=["UNREAD", label])))
+    assert verdict.needs_llm is True
+    assert verdict.signal == "gmail_transactional"
+
+
+def test_a_mailing_list_header_routes_mail_to_the_model():
+    """A List-Unsubscribe header marks transactional mail Gmail filed under
+    Primary; it goes to the model (floored at later), no longer buried."""
     bulk = message()
     bulk["payload"]["headers"].append(
         {"name": "List-Unsubscribe", "value": "<https://x.com/u>"}
     )
-    assert classify(message_to_raw_event(bulk)).tier is Tier.NOISE
+    verdict = classify(message_to_raw_event(bulk))
+    assert verdict.needs_llm is True
+    assert verdict.signal == "gmail_transactional"
 
 
 # --- Calendar starting-soon trigger ----------------------------------------

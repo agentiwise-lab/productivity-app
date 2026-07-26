@@ -28,8 +28,13 @@ class FakeSource:
     list_notifications = _fetch
     assigned_to_me = _fetch
     unread = _fetch
-    # Ingest asks Gmail for actionable mail only; Later keeps the broad fetch.
+    # Ingest asks Gmail for actionable + transactional (bible 3.2); Later keeps
+    # the broad fetch. The transactional slice is a disjoint query, empty here.
     actionable = _fetch
+
+    def transactional(self):
+        return []
+
     pending = _fetch
 
 

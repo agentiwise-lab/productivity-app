@@ -31,6 +31,7 @@ from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.models.profile import Profile
 from backend.models.sources import CATALOGUE, Source, SourceInfo
+from backend.models.tiers import Tier
 from backend.services.stats import SourceDashboard
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
 from backend.services.actions import (
@@ -58,6 +59,21 @@ def _parse_tz(name: str | None) -> tzinfo:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError, KeyError):
         return timezone.utc
+
+
+def _on_home_refs(repo: FeedRepository, user_id: str) -> set[str]:
+    """The source_refs Later must exclude: everything stored except what the
+    model settled as noise.
+
+    A held item (``llm_tier`` None, still pending) stays excluded so it does not
+    flicker into Later mid-classification. But an item the model judged noise
+    belongs in Later's live view (bible 7.1), so it is dropped from the exclusion
+    set and surfaces there rather than lingering hidden on neither screen."""
+    return {
+        item.source_ref
+        for item in repo.list_by_user(user_id)
+        if item.llm_tier is not Tier.NOISE
+    }
 
 
 class _UnconfiguredGitHubService:
@@ -387,7 +403,7 @@ def create_app(
         if later is None:
             raise HTTPException(status_code=503, detail="later not configured")
 
-        on_home = {item.source_ref for item in repo.list_by_user(user_id)}
+        on_home = _on_home_refs(repo, user_id)
 
         def events():
             try:
@@ -424,7 +440,7 @@ def create_app(
 
         # Home is the exclusion set: an item on both screens would be the two
         # of them disagreeing about the same message.
-        on_home = {item.source_ref for item in repo.list_by_user(user_id)}
+        on_home = _on_home_refs(repo, user_id)
 
         def events():
             try:

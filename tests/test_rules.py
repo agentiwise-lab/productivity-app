@@ -70,14 +70,15 @@ def test_ci_failure_on_my_own_pr_is_urgent(rules):
     assert verdict.type_tag is TypeTag.ALERT
 
 
-def test_ci_failure_on_someone_elses_pr_is_not_urgent(rules):
-    """The rule is scoped to *your* PR. Someone else's red build is not your
-    emergency, and mis-scoping it would flood the urgent tier."""
+def test_ci_failure_on_someone_elses_pr_is_urgent(rules):
+    """A broken build is worth surfacing even on a repo you only watch (Vicky's
+    call 2026-07-26): ci_failure_other is urgent, deterministic, no model."""
     event = make_event(
         reason="ci_activity", check_conclusion="failure", subject_author="priya"
     )
     verdict = rules.classify(event, identity=ME)
-    assert verdict.tier is Tier.NOISE
+    assert verdict.tier is Tier.URGENT
+    assert verdict.needs_llm is False
 
 
 def test_ci_success_is_noise(rules):

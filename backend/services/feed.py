@@ -184,6 +184,13 @@ class DefaultFeedService:
                 continue
             if _meeting_has_passed(item, now):
                 continue
+            tier = effective_tier(item, now=now, tz=tz)
+            # Home is the three elevated buckets. An item the model settled as
+            # noise belongs in Later (which reads it live), not lingering on Home
+            # at a noise tier (bible 7.1). Deterministic noise never reaches here
+            # — it is dropped at ingest — so this only catches model-rated noise.
+            if tier is Tier.NOISE:
+                continue
             data = item.model_dump()
             reason = read_time_reason(item, now=now, tz=tz)
             if reason is not None:
@@ -191,7 +198,7 @@ class DefaultFeedService:
             rows.append(
                 FeedRow(
                     **data,
-                    tier=effective_tier(item, now=now, tz=tz),
+                    tier=tier,
                     priority_score=score(item, prefs, now=now, tz=tz),
                 )
             )

@@ -38,6 +38,37 @@ def make_item(**overrides) -> FeedItem:
 # --- 3.8 effective tier ----------------------------------------------------
 
 
+def _linear(due: str | None) -> FeedItem:
+    from datetime import date
+
+    deadline = None
+    if due is not None:
+        y, m, d = (int(p) for p in due.split("-"))
+        # End of the due day, matching issue_to_raw_event.
+        deadline = datetime(y, m, d, 23, 59, tzinfo=timezone.utc)
+    return make_item(
+        source="linear", signal="linear", rule_tier=Tier.CAN_WAIT, deadline=deadline
+    )
+
+
+def test_linear_due_today_is_by_eod_not_urgent():
+    """Vicky's call 2026-07-26: due today -> By EOD. It only becomes urgent once
+    the day has passed."""
+    assert effective_tier(_linear("2026-07-23"), now=NOW) is Tier.TODAY
+
+
+def test_linear_overdue_is_urgent():
+    assert effective_tier(_linear("2026-07-22"), now=NOW) is Tier.URGENT
+
+
+def test_linear_future_due_date_can_wait():
+    assert effective_tier(_linear("2026-07-30"), now=NOW) is Tier.CAN_WAIT
+
+
+def test_linear_no_due_date_can_wait():
+    assert effective_tier(_linear(None), now=NOW) is Tier.CAN_WAIT
+
+
 def test_llm_tier_wins_over_the_rule_floor_once_it_lands():
     item = make_item(rule_tier=Tier.TODAY, llm_tier=Tier.CAN_WAIT)
     assert effective_tier(item, now=NOW) is Tier.CAN_WAIT

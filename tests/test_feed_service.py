@@ -46,6 +46,19 @@ def test_ingest_stores_and_holds_until_classified():
     assert [row.id for row in svc.list_feed("me", prefs)] == [stored.id]
 
 
+def test_model_rated_noise_is_dropped_from_home():
+    """Bible 7.1: an item the model settles as noise belongs in Later (read live),
+    not lingering on Home at a noise tier. Once classified noise, it leaves the
+    feed even though it is stored."""
+    svc = build()
+    mail = svc.ingest(
+        "me", make_event(source="gmail", source_ref="gmail:1", reason="gmail_message"), prefs
+    )
+    assert svc.list_feed("me", prefs) == []  # held until judged
+    _classify(svc, mail.id, Tier.NOISE)
+    assert svc.list_feed("me", prefs) == []  # model said noise -> off Home
+
+
 def test_ingest_stores_no_tier_of_its_own():
     """The tier the user sees belongs to read time. If ingest froze one, an
     item would keep claiming yesterday's urgency."""

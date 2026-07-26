@@ -108,12 +108,18 @@ def _linear_tier(item: "FeedItem", now: datetime, tz: tzinfo) -> Tier:
     nobody is waiting on, so it can wait. A due date that is today or already
     past is urgent — and "today" is the user's calendar day, not UTC's, so a
     task due the 24th is not urgent at 00:15 on the 24th in the user's own zone.
-    A future due date can wait, and flips to urgent on the day it arrives."""
+    A future due date can wait; on the day it is due it is By EOD; once the day
+    has passed it is Urgent (Vicky's call 2026-07-26: due today -> By EOD, in the
+    past -> Urgent, no matter the status)."""
     if item.deadline is None:
         return C
     due_date = item.deadline.date()
     today = now.astimezone(tz).date()
-    return U if due_date <= today else C
+    if due_date < today:
+        return U
+    if due_date == today:
+        return T
+    return C
 
 
 def linear_reason(item: "FeedItem", now: datetime, tz: tzinfo) -> str | None:
@@ -147,7 +153,9 @@ TIER_BANDS: dict[str, Policy] = {
     # --- GitHub: stated urgency, no model ---------------------------------
     "security_alert": Deterministic(type_tag=TypeTag.ALERT, tier=U),
     "ci_failure_mine": Deterministic(type_tag=TypeTag.ALERT, tier=U),
-    "ci_failure_other": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    # A broken build is worth surfacing even on a repo you only watch
+    # (Vicky's call 2026-07-26): urgent, not buried noise.
+    "ci_failure_other": Deterministic(type_tag=TypeTag.ALERT, tier=U),
     "ci_ok": Deterministic(type_tag=TypeTag.FYI, tier=N),
     "review_request_removed": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- GitHub: a gate or a person is waiting; the model rates within band -
@@ -166,7 +174,11 @@ TIER_BANDS: dict[str, Policy] = {
     "slack_bot_failure": Banded(C, U, TypeTag.ALERT),
     "slack_bot_noise": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- Gmail: the only source that may sink to later --------------------
+    # Personal inbox and the transactional slice (updates/forums/list mail) both
+    # go to the model floored at later, so a payment/renewal notice is seen and
+    # not buried; only true bulk (promotions/social/spam/trash) skips the model.
     "gmail_message": Banded(N, U, TypeTag.REPLY),
+    "gmail_transactional": Banded(N, U, TypeTag.REPLY),
     "gmail_bulk": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- Linear: due date is a stated field; the model never runs ----------
     "linear": _LINEAR,

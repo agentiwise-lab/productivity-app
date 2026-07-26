@@ -24,14 +24,19 @@ log = logging.getLogger(__name__)
 
 GMAIL_TOOLKIT_VERSION = "20260721_00"
 
-#: Gmail's own tabs. Anything filed here was never addressed to a person.
-_NOISE_LABELS = {
+#: Unambiguous bulk: never addressed to a person, skips the model (-> later).
+_BULK_LABELS = {
     "CATEGORY_PROMOTIONS",
     "CATEGORY_SOCIAL",
-    "CATEGORY_FORUMS",
-    "CATEGORY_UPDATES",
     "SPAM",
     "TRASH",
+}
+#: The transactional slice: updates/forums (and list mail). Not personal, but a
+#: renewal/payment/subscription notice hides here, so it goes to the model
+#: floored at later rather than being deterministically buried.
+_TRANSACTIONAL_LABELS = {
+    "CATEGORY_UPDATES",
+    "CATEGORY_FORUMS",
 }
 
 
@@ -169,11 +174,18 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     from_header = _header(payload, "From") or message.get("sender") or ""
     name, email = _sender(from_header)
 
-    noisy = bool(labels & _NOISE_LABELS)
+    bulk = bool(labels & _BULK_LABELS)
     # A mailing list header is a stronger signal than the category tab, which
     # Gmail applies inconsistently to transactional mail.
-    if _header(payload, "List-Unsubscribe"):
-        noisy = True
+    transactional = bool(labels & _TRANSACTIONAL_LABELS) or bool(
+        _header(payload, "List-Unsubscribe")
+    )
+    if bulk:
+        reason = "gmail_bulk"
+    elif transactional:
+        reason = "gmail_transactional"
+    else:
+        reason = "gmail_message"
 
     # The whole readable message, not just Gmail's one-line snippet. The
     # detail sheet shows the mail itself, and a snippet is not a mail.
@@ -182,7 +194,7 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     return RawEvent(
         source="gmail",
         source_ref=f"gmail:{message.get('id') or message.get('messageId', '')}",
-        reason="gmail_bulk" if noisy else "gmail_message",
+        reason=reason,
         subject_type="Email",
         title=subject,
         body=body,
@@ -194,8 +206,9 @@ def message_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
         context_chip="Inbox",
         actor=Actor(login=email, display_name=name or None),
         occurred_at=_sent_at(message),
-        # Someone wrote to this person by name and has had no answer.
-        is_blocking=not noisy,
+        # Someone wrote to this person by name and has had no answer. Bulk and
+        # transactional mail is not a person waiting, so it does not block.
+        is_blocking=reason == "gmail_message",
         raw=message,
     )
 
@@ -235,6 +248,29 @@ class ComposioGmailService:
                     "is:unread newer_than:30d "
                     "-category:promotions -category:social "
                     "-category:forums -category:updates"
+                ),
+                "max_results": limit,
+                "verbose": False,
+            },
+        )
+        messages = data.get("messages") or data.get("emails") or []
+        found = [message_to_raw_event(message) for message in messages]
+        return [event for event in found if event is not None]
+
+    def transactional(self, limit: int = PAGE_SIZE) -> list[RawEvent]:
+        """The transactional slice: updates and forums, the newest ``limit``.
+
+        The second model bucket (bible 3.2). ``actionable`` deliberately excludes
+        these tabs; this pulls them so a renewal/payment/subscription notice is
+        seen by the model (floored at later) rather than buried. The mapper tags
+        each ``gmail_transactional``. Capped like ``actionable`` at 100 newest.
+        """
+        data = self._execute(
+            "GMAIL_FETCH_EMAILS",
+            {
+                "query": (
+                    "is:unread newer_than:30d "
+                    "(category:updates OR category:forums)"
                 ),
                 "max_results": limit,
                 "verbose": False,
