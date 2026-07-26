@@ -1,13 +1,13 @@
-"""Deterministic classification: RawEvent -> (tier, type tag, needs_llm).
+"""Deterministic classification: RawEvent -> (tier, tag, needs_llm, signal).
 
-This is section 3 of the MVP plan in code. A rule fires whenever the source
-states both the *type* of the thing and an unambiguous *urgency*. Where urgency
-lives only in human language, the rule stops at a floor tier and hands the item
-to the model, which may promote or demote from there.
-
-The order of the checks in ``classify`` is the precedence ladder of 3.7 and is
-load-bearing: one item can match several rules, and exactly one tag reaches the
-card. Do not reorder without changing the plan.
+The rules do two small jobs and nothing else. First, ``_canonical_reason``
+normalises a RawEvent — whose urgency signal may live in a coarse ``reason``, a
+boolean flag, a ``review_state``, or a check conclusion — into one canonical
+``signal`` string. Second, that signal is looked up in ``TIER_BANDS`` (the whole
+triage policy, one table). There is no precedence ladder of tier decisions: the
+only ordering left is in ``_canonical_reason``, which decides *what the event
+is*, not how urgent it is. Urgency policy lives entirely in the band table, and
+the model's rating is confined to the band at read time by ``clamp``.
 """
 
 from __future__ import annotations
@@ -19,19 +19,24 @@ from pydantic import BaseModel
 from backend.models.events import RawEvent
 from backend.models.identity import Identity
 from backend.models.tiers import Tier, TypeTag
+from backend.services.tier_bands import band_for, label_override
 
 
 class RuleVerdict(BaseModel):
     """What the rules alone can say about an item.
 
-    ``tier`` is final when ``needs_llm`` is False, and a floor to move from when
-    it is True. Storing both is what lets the feed render instantly on rule
-    tiers and re-rank later when classification lands (4.4).
+    ``tier`` is the tier to render immediately (the band default, or a label's
+    verdict). ``signal`` is the canonical reason, stored on the row so the band
+    — and thus the floor/ceiling the model is clamped to — can be recovered at
+    read time. ``ephemeral`` marks a settled-noise item that should be dropped
+    rather than kept as a visible "later" row.
     """
 
     tier: Tier
     type_tag: TypeTag
     needs_llm: bool = False
+    signal: str = "manual"
+    ephemeral: bool = True
 
 
 class RuleClassifier(Protocol):
@@ -52,118 +57,51 @@ _URGENT_LABELS = {
 }
 _LOW_LABELS = {"low priority", "p3", "nice to have", "someday", "backlog", "wontfix"}
 
-# Reasons whose urgency is stated by the source itself.
-_TERMINAL: dict[str, tuple[Tier, TypeTag]] = {
-    "invitation": (Tier.TODAY, TypeTag.DECIDE),
-    "state_change": (Tier.NOISE, TypeTag.FYI),
-    "subscribed": (Tier.NOISE, TypeTag.FYI),
-    "author": (Tier.NOISE, TypeTag.FYI),
-    "manual": (Tier.NOISE, TypeTag.FYI),
-    "slack_bot_noise": (Tier.NOISE, TypeTag.FYI),
-    # Calendar (3.3). Both are stated by the source outright.
-    "calendar_starting": (Tier.URGENT, TypeTag.FYI),
-    "calendar_invite": (Tier.TODAY, TypeTag.RSVP),
-    "calendar_changed": (Tier.TODAY, TypeTag.FYI),
-    "calendar_cancelled": (Tier.NOISE, TypeTag.FYI),
-    # Linear (3.5). A native priority field is a stated urgency, so no model.
-    "linear_urgent": (Tier.URGENT, TypeTag.ASSIGNED),
-    "linear_high": (Tier.TODAY, TypeTag.ASSIGNED),
-    # A due date settles it by itself: read-time ranking promotes it as the
-    # deadline approaches and once it passes (3.8).
-    "linear_due": (Tier.TODAY, TypeTag.ASSIGNED),
-    # A backlog issue with no priority and no date. Nobody is waiting on it, but
-    # it is still the user's own task, so it belongs on Home under Can wait.
-    # Calling it noise filed the user's own backlog next to newsletters.
-    "linear_backlog": (Tier.CAN_WAIT, TypeTag.ASSIGNED),
-    # Filtered by Gmail's own category labels before the model, so we never pay
-    # to classify a newsletter.
-    "gmail_bulk": (Tier.NOISE, TypeTag.FYI),
-    "docs_edited": (Tier.NOISE, TypeTag.FYI),
-}
-
-# Reasons whose urgency lives in human language. The tag and the floor are
-# known; only the tier is open.
-_DEFERRED: dict[str, tuple[Tier, TypeTag]] = {
-    "assign": (Tier.TODAY, TypeTag.ASSIGNED),
-    "mention": (Tier.TODAY, TypeTag.REPLY),
-    "team_mention": (Tier.CAN_WAIT, TypeTag.REPLY),
-    "comment": (Tier.CAN_WAIT, TypeTag.COMMENT),
-    "review_request_removed": (Tier.NOISE, TypeTag.FYI),
-    # Slack (3.2). A message has no type, only text, so the tier is always a
-    # judgement. The rules' job on Slack is the filtering that happens in the
-    # mapper, before anything reaches here.
-    "slack_dm": (Tier.TODAY, TypeTag.REPLY),
-    "slack_mention": (Tier.TODAY, TypeTag.REPLY),
-    "slack_thread_reply": (Tier.CAN_WAIT, TypeTag.REPLY),
-    # Automation reporting that the user's own work broke is the one bot case
-    # that can matter, so it is judged rather than dropped.
-    "slack_bot_failure": (Tier.TODAY, TypeTag.ALERT),
-    # Linear with no priority and no due date (3.5). Everything else about
-    # Linear is stated outright and settled below without a model.
-    "linear_assigned": (Tier.TODAY, TypeTag.ASSIGNED),
-    # Work the user has actually started. No date, so the tier is a judgement,
-    # but started work belongs on Home rather than filed away.
-    "linear_in_progress": (Tier.TODAY, TypeTag.ASSIGNED),
-    # Gmail (3.6). An email has no type, so the tier is always a judgement.
-    "gmail_message": (Tier.TODAY, TypeTag.REPLY),
-    # A doc comment naming you is a question until the model says otherwise.
-    "docs_mention": (Tier.TODAY, TypeTag.COMMENT),
-    "docs_comment": (Tier.CAN_WAIT, TypeTag.COMMENT),
-}
-
 
 class DefaultRuleClassifier:
     def classify(self, event: RawEvent, *, identity: Identity) -> RuleVerdict:
-        # 1. Security alert.
+        signal = self._canonical_reason(event, identity)
+        band = band_for(signal)
+
+        labels = {label.strip().lower() for label in event.labels}
+        tier, needs_llm = label_override(
+            band,
+            urgent=bool(labels & _URGENT_LABELS),
+            low=bool(labels & _LOW_LABELS),
+        )
+        return RuleVerdict(
+            tier=tier,
+            type_tag=band.type_tag,
+            needs_llm=needs_llm,
+            signal=signal,
+            ephemeral=band.ephemeral,
+        )
+
+    @staticmethod
+    def _canonical_reason(event: RawEvent, identity: Identity) -> str:
+        """Collapse the event's several urgency channels into one signal.
+
+        The order here is the old precedence ladder, but it only decides *which
+        thing the event is* when several facts are true at once (a PR can be
+        review-requested and failing CI in the same notification, and the card
+        carries one tag). It sets no tiers; the band table does that.
+        """
         if event.reason == "security_alert":
-            return RuleVerdict(tier=Tier.URGENT, type_tag=TypeTag.ALERT)
-
-        # 2. CI failure, but only on the user's own PR. Someone else's red build
-        #    is not this user's emergency.
+            return "security_alert"
         if event.check_conclusion == "failure":
-            if identity.is_me_on_github(event.subject_author):
-                return RuleVerdict(tier=Tier.URGENT, type_tag=TypeTag.ALERT)
-            return RuleVerdict(tier=Tier.NOISE, type_tag=TypeTag.FYI)
-        if event.reason == "ci_activity":
-            return RuleVerdict(tier=Tier.NOISE, type_tag=TypeTag.FYI)
-
-        # 3. A gate is waiting on this user.
+            return (
+                "ci_failure_mine"
+                if identity.is_me_on_github(event.subject_author)
+                else "ci_failure_other"
+            )
+        if event.check_conclusion == "success" or event.reason == "ci_activity":
+            return "ci_ok"
         if event.reason == "approval_requested" or event.approval_requested:
-            return RuleVerdict(tier=Tier.URGENT, type_tag=TypeTag.APPROVE)
-
-        # 4. Someone explicitly asked for a review.
+            return "approval_requested"
         if event.reason == "review_requested" or event.review_requested:
-            return RuleVerdict(tier=Tier.URGENT, type_tag=TypeTag.REVIEW)
-
-        # 5. Changes requested on the user's own PR: the ball is back with them.
+            return "review_requested"
         if event.review_state == "changes_requested" and identity.is_me_on_github(
             event.subject_author
         ):
-            return RuleVerdict(tier=Tier.TODAY, type_tag=TypeTag.DECIDE)
-
-        # 6-7. Mentions, assignments and comments: type known, urgency is prose.
-        deferred = _DEFERRED.get(event.reason)
-        if deferred is not None:
-            floor, tag = deferred
-            labelled = self._tier_from_labels(event)
-            if labelled is not None:
-                return RuleVerdict(tier=labelled, type_tag=tag)
-            return RuleVerdict(tier=floor, type_tag=tag, needs_llm=True)
-
-        terminal = _TERMINAL.get(event.reason)
-        if terminal is not None:
-            tier, tag = terminal
-            return RuleVerdict(tier=tier, type_tag=tag)
-
-        # 8. Everything else. Unknown reasons are noise, never urgent: an
-        #    unrecognised signal must not be able to shout.
-        return RuleVerdict(tier=Tier.NOISE, type_tag=TypeTag.FYI)
-
-    @staticmethod
-    def _tier_from_labels(event: RawEvent) -> Tier | None:
-        labels = {label.strip().lower() for label in event.labels}
-        if labels & _URGENT_LABELS:
-            return Tier.URGENT
-        if labels & _LOW_LABELS:
-            return Tier.CAN_WAIT
-        return None
+            return "changes_requested_mine"
+        return event.reason

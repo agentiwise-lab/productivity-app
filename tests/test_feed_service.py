@@ -28,7 +28,7 @@ def build(github: FakeGitHubService | None = None) -> DefaultFeedService:
 def test_ingest_classifies_and_stores():
     svc = build()
     stored = svc.ingest("me", make_event(reason="review_requested"), prefs)
-    assert stored.rule_tier is Tier.URGENT
+    assert stored.rule_tier is Tier.TODAY  # band default; the model may lift it
     assert stored.type_tag is TypeTag.REVIEW
     assert [row.id for row in svc.list_feed("me", prefs)] == [stored.id]
 
@@ -52,7 +52,9 @@ def test_list_feed_is_ranked_by_score():
     )
     feed = svc.list_feed("me", prefs)
     assert [row.type_tag for row in feed] == [TypeTag.APPROVE, TypeTag.COMMENT]
-    assert [row.tier for row in feed] == [Tier.URGENT, Tier.CAN_WAIT]
+    # An approval request defaults to Today (band floor), a comment to Can wait;
+    # tier still dominates the order.
+    assert [row.tier for row in feed] == [Tier.TODAY, Tier.CAN_WAIT]
 
 
 def test_ingest_dedupes_by_source_ref():
@@ -126,9 +128,10 @@ def test_a_newsletter_is_not_stored_because_no_screen_reads_it_from_here():
     assert svc.list_feed("me", prefs) == []
 
 
-def test_a_backlog_issue_can_wait_rather_than_being_noise():
-    """It is the user's own task. Filing it as noise put their backlog in the
-    same bucket as promotional email."""
+def test_a_backlog_issue_is_kept_as_a_later_row_not_dropped():
+    """A backlog issue with no priority and no date settles as noise (its "later"
+    tier), but it is the user's own task, so it is kept and stays in the feed
+    under Later, unlike a newsletter which is dropped."""
     svc = build()
     stored = svc.ingest(
         "me",
@@ -137,8 +140,10 @@ def test_a_backlog_issue_can_wait_rather_than_being_noise():
         ),
         prefs,
     )
-    assert stored.rule_tier is Tier.CAN_WAIT
+    assert stored is not None  # kept, not dropped
+    assert stored.rule_tier is Tier.NOISE
     assert stored.type_tag is TypeTag.ASSIGNED
+    assert [row.id for row in svc.list_feed("me", prefs)] == [stored.id]
 
 
 def test_something_the_rules_defer_is_stored_because_the_tier_is_not_settled():

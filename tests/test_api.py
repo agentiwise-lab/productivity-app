@@ -44,7 +44,8 @@ def test_feed_endpoint_returns_ranked_items():
     body = response.json()
     assert [row["type_tag"] for row in body] == ["approve", "comment"]
     # The tier and the score exist only on the wire, never in a stored column.
-    assert [row["tier"] for row in body] == ["urgent", "can_wait"]
+    # Approval defaults to Today (its band floor), comment to Can wait.
+    assert [row["tier"] for row in body] == ["today", "can_wait"]
     assert body[0]["priority_score"] > body[1]["priority_score"]
 
 
@@ -370,8 +371,9 @@ def test_refresh_pulls_notifications_into_the_feed():
 
     assert response.status_code == 200
     assert response.json()["ingested"] == 1
+    # A review request defaults to Today under the bands; the model may lift it.
     assert [row["tier"] for row in client.get("/feed", headers={"X-User-Id": "me"}).json()] == [
-        "urgent"
+        "today"
     ]
 
 

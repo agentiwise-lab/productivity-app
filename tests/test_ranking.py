@@ -43,6 +43,35 @@ def test_llm_tier_wins_over_the_rule_floor_once_it_lands():
     assert effective_tier(item, now=NOW) is Tier.CAN_WAIT
 
 
+def test_the_band_floor_blocks_the_model_from_demoting_below_it():
+    """The triage bug this whole part exists to kill: the model filed a review
+    request as can_wait. The band floor for review_requested is Today, so the
+    clamp lifts the model's rating back to the floor."""
+    item = make_item(
+        signal="review_requested", rule_tier=Tier.TODAY, llm_tier=Tier.CAN_WAIT
+    )
+    assert effective_tier(item, now=NOW) is Tier.TODAY
+
+
+def test_the_band_lets_the_model_lift_within_it():
+    """Same band, the other direction: the model may raise a review request to
+    urgent, because the ceiling allows it."""
+    item = make_item(
+        signal="review_requested", rule_tier=Tier.TODAY, llm_tier=Tier.URGENT
+    )
+    assert effective_tier(item, now=NOW) is Tier.URGENT
+
+
+def test_gmail_may_sink_to_later_because_its_floor_is_noise():
+    """Gmail is the one source whose floor is noise: a newsletter-ish message
+    the model rates as noise stays noise rather than being propped up."""
+    item = make_item(
+        source="gmail", signal="gmail_message", rule_tier=Tier.CAN_WAIT,
+        llm_tier=Tier.NOISE,
+    )
+    assert effective_tier(item, now=NOW) is Tier.NOISE
+
+
 def test_rule_tier_is_used_while_classification_is_still_pending():
     """The feed never blocks on the model (4.4), so an unclassified item must
     still render at its rule tier."""

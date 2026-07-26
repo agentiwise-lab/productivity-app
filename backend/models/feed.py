@@ -53,6 +53,11 @@ class FeedItem(BaseModel):
     llm_tier: Tier | None = None
     tier_source: TierSource = TierSource.RULE
     type_tag: TypeTag = TypeTag.FYI
+    # The canonical classification signal (e.g. "slack_dm", "linear_due"). Stored
+    # so the tier band — the floor/ceiling the model's rating is clamped to — can
+    # be recovered at read time. None on legacy rows: treated as an unclamped
+    # band, i.e. exactly the pre-band behaviour.
+    signal: str | None = None
     # Set by the rules when urgency lives in prose. The classification queue is
     # exactly the rows where this is true and llm_tier is still None.
     needs_llm: bool = False

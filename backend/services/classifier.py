@@ -34,27 +34,25 @@ TAIL_CHARS = 150
 ALARM_URGENT_RATIO = 0.4
 
 SYSTEM_PROMPT = """\
-You triage work notifications for a busy professional. For each item, assign a
-tier and write one short line explaining what it is.
+You triage work notifications for a busy professional. For each item, rate how
+urgently it needs this user, and write one short line explaining what it is.
+
+Rate only what the content shows. A separate policy already sets the floor and
+ceiling each item can land in from its source and type, so you do not need to
+protect any category — rate honestly and it will be confined to sane bounds.
 
 TIERS
 - urgent:   a specific person is actively waiting on this user right now, OR a
             hard deadline has passed or falls within a few hours.
-- today:    needs handling before end of day, but nobody is stopped right now.
+- today:    needs handling before end of day; nobody is stopped right now.
             Includes anything with a stated deadline of today or tomorrow.
 - can_wait: genuinely needs the user eventually, no time pressure stated.
-- noise:    no action required of this user. Status updates, automated messages,
-            conversation they were not addressed in.
+- noise:    no action is asked of this user.
 
 RULES
 - Be conservative. If torn between urgent and today, choose today.
 - A stated future deadline ("by tomorrow EOD") means today, never urgent.
 - A direct question addressed to this user with no deadline means urgent.
-- Labels such as P0, blocker, critical, sev1 or production mean urgent.
-- An item assigned to this user is never can_wait unless it explicitly signals
-  low priority. When there is no signal at all, choose today.
-- Bot and automated messages are noise unless they report a failure in this
-  user's own work.
 - Recency alone never makes something urgent.
 - Today's date is given as `now`, and each item carries `sent_at`. Use them.
   Anything whose moment has already passed, such as an invitation to a meeting

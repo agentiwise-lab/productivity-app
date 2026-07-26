@@ -13,7 +13,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from backend.models.feed import FeedItem, UserPreferences
-from backend.models.tiers import Tier, at_least
+from backend.models.tiers import Tier, at_least, clamp
+from backend.services.tier_bands import band_for
 
 # Tier dominates. The gaps are wide enough that no stack of bonuses on a lower
 # tier can outrank the tier above it.
@@ -34,16 +35,20 @@ def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
     """What tier this item is *right now*.
 
     Starts from the stored judgement (the model's if it has landed, the rules'
-    otherwise), then applies the time-dependent corrections that a stored tier
-    could never keep up with.
+    otherwise) confined to the item's band, then applies the time-dependent
+    corrections that a stored tier could never keep up with. The band clamp is
+    what stops the model demoting an item below the floor its source guarantees
+    — the "review requested, filed as can_wait" bug — without a per-case branch.
+    A deadline can still lift within the band; it cannot break the ceiling.
     """
-    tier = item.llm_tier or item.rule_tier
+    band = band_for(item.signal)
+    tier = clamp(item.llm_tier or item.rule_tier, band.floor, band.ceiling)
 
     overdue = item.deadline is not None and item.deadline <= now
     if overdue:
-        return Tier.URGENT
+        return clamp(Tier.URGENT, band.floor, band.ceiling)
     if item.deadline is not None and item.deadline - now <= timedelta(hours=3):
-        tier = at_least(tier, Tier.TODAY)
+        tier = clamp(at_least(tier, Tier.TODAY), band.floor, band.ceiling)
 
     # An urgent item nobody chased for a day was not urgent. Without this the
     # top tier silts up and stops carrying information.

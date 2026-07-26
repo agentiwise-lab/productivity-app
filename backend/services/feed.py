@@ -42,8 +42,12 @@ def _reaches_no_screen(verdict: RuleVerdict) -> bool:
     Only settled verdicts qualify. An item still waiting on the model has no
     tier yet, and one the model has judged stays put: it is a small set, and
     keeping it is what stops every refresh re-classifying the same messages.
+
+    ``ephemeral`` is what separates a newsletter from the user's own untouched
+    Linear backlog: both settle as noise, but only the newsletter is churn worth
+    dropping. A non-ephemeral noise item is kept as a visible "later" row.
     """
-    return verdict.tier is Tier.NOISE and not verdict.needs_llm
+    return verdict.tier is Tier.NOISE and not verdict.needs_llm and verdict.ephemeral
 
 
 def _pr_ref_from_source_ref(source_ref: str) -> PRRef:
@@ -108,6 +112,7 @@ class DefaultFeedService:
             rule_tier=verdict.tier,
             type_tag=verdict.type_tag,
             needs_llm=verdict.needs_llm,
+            signal=verdict.signal,
             content_hash=content_hash(event),
             title=event.title,
             url=event.url,

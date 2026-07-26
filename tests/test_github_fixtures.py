@@ -43,8 +43,10 @@ def classify(**overrides):
 @pytest.mark.parametrize(
     "reason,tier,tag",
     [
-        ("review_requested", Tier.URGENT, TypeTag.REVIEW),
-        ("approval_requested", Tier.URGENT, TypeTag.APPROVE),
+        # Review/approval requests default to Today under the bands; the model
+        # lifts them to urgent when the content warrants (ceiling is urgent).
+        ("review_requested", Tier.TODAY, TypeTag.REVIEW),
+        ("approval_requested", Tier.TODAY, TypeTag.APPROVE),
         ("security_alert", Tier.URGENT, TypeTag.ALERT),
         ("invitation", Tier.TODAY, TypeTag.DECIDE),
         ("state_change", Tier.NOISE, TypeTag.FYI),

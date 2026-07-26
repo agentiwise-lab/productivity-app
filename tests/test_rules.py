@@ -28,8 +28,6 @@ def rules() -> DefaultRuleClassifier:
 @pytest.mark.parametrize(
     "reason,expected_tier,expected_tag",
     [
-        ("review_requested", Tier.URGENT, TypeTag.REVIEW),
-        ("approval_requested", Tier.URGENT, TypeTag.APPROVE),
         ("security_alert", Tier.URGENT, TypeTag.ALERT),
         ("invitation", Tier.TODAY, TypeTag.DECIDE),
         ("state_change", Tier.NOISE, TypeTag.FYI),
@@ -41,6 +39,26 @@ def test_deterministic_reasons(rules, reason, expected_tier, expected_tag):
     assert verdict.tier is expected_tier
     assert verdict.type_tag is expected_tag
     assert verdict.needs_llm is False
+
+
+@pytest.mark.parametrize(
+    "reason,expected_tag",
+    [
+        ("review_requested", TypeTag.REVIEW),
+        ("approval_requested", TypeTag.APPROVE),
+    ],
+)
+def test_review_and_approval_default_to_today_and_the_model_may_lift(
+    rules, reason, expected_tag
+):
+    """The band makes a review/approval request a Today floor, not an automatic
+    Urgent: the model lifts it to urgent when the content warrants, and the
+    clamp guarantees it can never sink below Today."""
+    verdict = rules.classify(make_event(reason=reason), identity=ME)
+    assert verdict.tier is Tier.TODAY
+    assert verdict.type_tag is expected_tag
+    assert verdict.needs_llm is True
+    assert verdict.signal == reason
 
 
 def test_ci_failure_on_my_own_pr_is_urgent(rules):
@@ -99,6 +117,42 @@ def test_unknown_reason_falls_back_to_noise_not_urgent(rules):
     verdict = rules.classify(make_event(reason="something_new"), identity=ME)
     assert verdict.tier is Tier.NOISE
     assert verdict.type_tag is TypeTag.FYI
+
+
+# --- band signals across the six sources -----------------------------------
+
+
+@pytest.mark.parametrize(
+    "reason,expected_default,needs_llm",
+    [
+        ("slack_dm", Tier.TODAY, True),          # floor can_wait, default today
+        ("gmail_message", Tier.CAN_WAIT, True),  # floor later, default can_wait
+        ("linear_due", Tier.TODAY, True),        # has a due date -> by-UD
+        ("linear_high", Tier.CAN_WAIT, True),    # priority, no date -> can_wait
+        ("calendar_starting", Tier.URGENT, False),  # imminent, stated
+        ("docs_mention", Tier.CAN_WAIT, True),   # a mention: can_wait floor, LLM lifts
+    ],
+)
+def test_source_signals_carry_their_band_default(rules, reason, expected_default, needs_llm):
+    verdict = rules.classify(make_event(source=reason.split("_")[0], reason=reason), identity=ME)
+    assert verdict.tier is expected_default
+    assert verdict.needs_llm is needs_llm
+    assert verdict.signal == reason
+
+
+def test_linear_backlog_is_kept_as_a_later_row_not_dropped(rules):
+    """A backlog issue with no priority and no date settles as noise, but it is
+    the user's own task, so it is kept (ephemeral False) and shown under Later,
+    unlike a newsletter."""
+    verdict = rules.classify(make_event(source="linear", reason="linear_backlog"), identity=ME)
+    assert verdict.tier is Tier.NOISE
+    assert verdict.ephemeral is False
+
+
+def test_a_newsletter_is_ephemeral_noise_and_will_be_dropped(rules):
+    verdict = rules.classify(make_event(source="gmail", reason="gmail_bulk"), identity=ME)
+    assert verdict.tier is Tier.NOISE
+    assert verdict.ephemeral is True
 
 
 # --- 3.7 precedence --------------------------------------------------------

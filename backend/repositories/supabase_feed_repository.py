@@ -33,6 +33,7 @@ _SOURCE_COLUMNS = (
     "rule_tier",
     "type_tag",
     "needs_llm",
+    "signal",
     "title",
     "url",
     "repo",

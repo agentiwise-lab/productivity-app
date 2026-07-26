@@ -69,7 +69,9 @@ def test_an_event_lands_in_the_feed_of_the_user_it_names(ingest):
     items = repo.list_by_user(USER)
     assert len(items) == 1
     assert items[0].source_ref == "octo/repo#42"
-    assert items[0].rule_tier is Tier.URGENT
+    # A review request renders at Today and the model may lift it to Urgent
+    # within its band; it is no longer an automatic Urgent.
+    assert items[0].rule_tier is Tier.TODAY
     assert items[0].type_tag is TypeTag.REVIEW
 
 

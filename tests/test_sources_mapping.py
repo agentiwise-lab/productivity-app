@@ -114,8 +114,13 @@ def test_linear_priority_urgent_needs_no_model():
     assert verdict.needs_llm is False
 
 
-def test_linear_priority_high_is_today():
-    assert classify(issue_to_raw_event(issue(priority=2))).tier is Tier.TODAY
+def test_linear_priority_high_with_no_date_can_wait_until_the_model_lifts_it():
+    """A stated priority but no due date sits at Can wait by default; the model
+    can lift it within the band (ceiling urgent), but it is not by-UD work until
+    a date says so."""
+    verdict = classify(issue_to_raw_event(issue(priority=2)))
+    assert verdict.tier is Tier.CAN_WAIT
+    assert verdict.needs_llm is True
 
 
 def test_a_due_date_is_carried_so_ranking_can_use_it():
@@ -131,10 +136,14 @@ def test_a_due_date_means_end_of_that_day_not_midnight():
     assert raw.deadline.hour == 23 and raw.deadline.minute == 59
 
 
-def test_an_issue_with_no_priority_and_no_due_date_goes_to_the_model():
+def test_an_issue_with_no_priority_and_no_due_date_settles_as_later():
+    """No priority and no date: the user's own backlog task that nobody is
+    waiting on. It settles to Later (noise) without paying the model, and is
+    kept as a visible later row rather than dropped."""
     verdict = classify(issue_to_raw_event(issue()))
-    assert verdict.needs_llm is True
-    assert verdict.tier is Tier.TODAY  # never can_wait by default (3.1)
+    assert verdict.needs_llm is False
+    assert verdict.tier is Tier.NOISE
+    assert verdict.ephemeral is False
 
 
 def test_a_completed_issue_is_not_in_the_feed():
