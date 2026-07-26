@@ -82,6 +82,79 @@ def docs_notification_to_raw_event(message: dict[str, Any]) -> RawEvent | None:
     )
 
 
+def _doc_url(file_id: str) -> str:
+    return f"https://drive.google.com/open?id={file_id}" if file_id else ""
+
+
+def drive_comment_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
+    """GOOGLEDRIVE_COMMENT_ADDED_TRIGGER: a comment on a Doc/Sheet/Slide.
+
+    The native replacement for sniffing ``comments-noreply@docs.google.com`` mail.
+    A comment the user wrote themselves (``commenter.me``) is not a thing that
+    needs them. Everything else is prose, so it is LLM-in-a-band (docs_comment).
+    """
+    comment_id = data.get("comment_id")
+    file_id = data.get("file_id")
+    if not comment_id or not file_id:
+        return None
+    commenter = data.get("commenter") or {}
+    if commenter.get("me") is True:
+        return None
+
+    text = (data.get("comment_text") or "").strip()
+    author = commenter.get("displayName") or ""
+    return RawEvent(
+        source="google_docs",
+        source_ref=f"google_docs:comment:{comment_id}",
+        reason="docs_comment",
+        subject_type="Document",
+        title=(text.splitlines()[0][:120] if text else "New comment on a document"),
+        body=text,
+        url=_doc_url(file_id),
+        repo="",
+        context_chip="Google Drive",
+        actor=Actor(login=author or "someone", display_name=author or None),
+        occurred_at=_parse_time(data.get("created_time")),
+        is_blocking=True,  # a comment usually expects a reply
+        raw=data,
+    )
+
+
+def drive_share_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
+    """GOOGLEDRIVE_FILE_SHARED_PERMISSIONS_ADDED: a file was shared.
+
+    The payload may carry a single permission or a list; the first usable entry
+    is taken. There is no reliable "shared *with me*" flag, so every share is
+    surfaced as docs_share (fyi) and the model rates its relevance."""
+    entry = data
+    perms = data.get("permissions")
+    if isinstance(perms, list) and perms:
+        entry = perms[0]
+    permission_id = entry.get("permission_id") or data.get("permission_id")
+    file_id = entry.get("file_id") or data.get("file_id")
+    if not permission_id or not file_id:
+        return None
+
+    file_name = entry.get("file_name") or "a document"
+    grantee = entry.get("grantee") or {}
+    who = grantee.get("displayName") or grantee.get("emailAddress") or ""
+    return RawEvent(
+        source="google_docs",
+        source_ref=f"google_docs:share:{permission_id}",
+        reason="docs_share",
+        subject_type="Document",
+        title=f"Shared: {file_name}",
+        body=f"{who} was given {entry.get('role') or 'access'} to {file_name}".strip(),
+        url=_doc_url(file_id),
+        repo="",
+        context_chip="Google Drive",
+        actor=Actor(login=who or "someone", display_name=who or None),
+        occurred_at=None,
+        is_blocking=False,
+        raw=data,
+    )
+
+
 def _parse_time(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None

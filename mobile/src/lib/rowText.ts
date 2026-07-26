@@ -23,7 +23,7 @@ const SOURCE_NAME: Record<FeedRow['source'], string> = {
   gmail: 'Gmail',
   linear: 'Linear',
   calendar: 'Calendar',
-  google_docs: 'Google Docs',
+  google_docs: 'Google Drive',
 };
 
 /** The kind of ask, in words, for the sources that carry no better context. */

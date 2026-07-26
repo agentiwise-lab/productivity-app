@@ -17,6 +17,10 @@ from backend.integrations.calendar import (
     starting_soon_to_raw_event,
 )
 from backend.integrations.gmail import message_to_raw_event
+from backend.integrations.google_docs import (
+    drive_comment_to_raw_event,
+    drive_share_to_raw_event,
+)
 from backend.integrations.linear import comment_event_to_raw_event, issue_to_raw_event
 from backend.models.identity import Identity
 from backend.models.tiers import Tier, TypeTag
@@ -203,6 +207,43 @@ def test_your_own_linear_comment_never_comes_back():
 
 def test_a_linear_comment_with_no_issue_is_dropped():
     assert comment_event_to_raw_event(_comment(issue={}), identity=Identity()) is None
+
+
+# --- Google Drive triggers (verified payload schema 2026-07-26) -------------
+
+
+def test_a_drive_comment_is_llm_in_a_band():
+    raw = drive_comment_to_raw_event({
+        "comment_id": "c1", "file_id": "f1",
+        "comment_text": "can you review section 2?",
+        "commenter": {"displayName": "Priya", "me": False},
+        "created_time": "2026-07-26T10:00:00Z",
+    })
+    assert raw is not None
+    assert raw.source == "google_docs"
+    assert raw.source_ref == "google_docs:comment:c1"
+    verdict = classify(raw)
+    assert verdict.signal == "docs_comment"
+    assert verdict.needs_llm is True
+
+
+def test_your_own_drive_comment_never_comes_back():
+    raw = drive_comment_to_raw_event({
+        "comment_id": "c2", "file_id": "f1", "comment_text": "note to self",
+        "commenter": {"displayName": "Me", "me": True},
+    })
+    assert raw is None
+
+
+def test_a_drive_share_is_fyi_in_a_band():
+    raw = drive_share_to_raw_event({
+        "permission_id": "p1", "file_id": "f1", "file_name": "Q3 plan",
+        "role": "reader",
+        "grantee": {"displayName": "Harshit", "type": "user"},
+    })
+    assert raw is not None
+    assert raw.source_ref == "google_docs:share:p1"
+    assert classify(raw).signal == "docs_share"
 
 
 def test_the_title_carries_the_identifier_people_actually_use():

@@ -244,7 +244,8 @@ _AUTH_CONFIG_ENV: dict[Source, str] = {
     Source.CALENDAR: "COMPOSIO_AUTH_CONFIG_GOOGLECALENDAR",
     Source.LINEAR: "COMPOSIO_AUTH_CONFIG_LINEAR",
     Source.GMAIL: "COMPOSIO_AUTH_CONFIG_GMAIL",
-    Source.GOOGLE_DOCS: "COMPOSIO_AUTH_CONFIG_GOOGLEDOCS",
+    # The Docs source now connects Google Drive (native comment/share triggers).
+    Source.GOOGLE_DOCS: "COMPOSIO_AUTH_CONFIG_GOOGLEDRIVE",
 }
 
 

@@ -23,6 +23,9 @@ class Source(str, Enum):
     CALENDAR = "calendar"
     LINEAR = "linear"
     GMAIL = "gmail"
+    # The connected toolkit is Google Drive (native comment/share triggers); the
+    # items it surfaces are Google Docs comments/shares, so the internal key stays
+    # ``google_docs`` while the user-facing label and toolkit are Drive.
     GOOGLE_DOCS = "google_docs"
 
 
@@ -51,7 +54,7 @@ CATALOGUE: list[tuple[Source, str, str]] = [
     (Source.CALENDAR, "Google Calendar", "googlecalendar"),
     (Source.LINEAR, "Linear", "linear"),
     (Source.GMAIL, "Gmail", "gmail"),
-    (Source.GOOGLE_DOCS, "Google Docs", "googledocs"),
+    (Source.GOOGLE_DOCS, "Google Drive", "googledrive"),
 ]
 
 TOOLKIT_TO_SOURCE: dict[str, Source] = {

@@ -26,6 +26,10 @@ from pydantic import BaseModel
 from backend.integrations.calendar import starting_soon_to_raw_event
 from backend.integrations.composio_github import notification_to_raw_event
 from backend.integrations.gmail import message_to_raw_event
+from backend.integrations.google_docs import (
+    drive_comment_to_raw_event,
+    drive_share_to_raw_event,
+)
 from backend.integrations.linear import (
     comment_event_to_raw_event,
     issue_to_raw_event as _linear_issue_to_raw_event,
@@ -159,6 +163,13 @@ _MAPPERS: dict[str, Callable[..., RawEvent | None]] = {
             data, identity=identity
         )
     ),
+    # Google Drive: native comment/share triggers, replacing the Gmail sniffing.
+    "GOOGLEDRIVE_COMMENT_ADDED_TRIGGER": (
+        lambda data, identity, threads: drive_comment_to_raw_event(data)
+    ),
+    "GOOGLEDRIVE_FILE_SHARED_PERMISSIONS_ADDED": (
+        lambda data, identity, threads: drive_share_to_raw_event(data)
+    ),
 }
 
 # Trigger slug prefix -> the provider whose identity the mapper needs. Gmail and
@@ -170,6 +181,8 @@ _SLUG_PROVIDER = {
     "GMAIL": "gmail",
     "GOOGLECALENDAR": "calendar",
     "LINEAR": "linear",
+    # Drive triggers belong to the Docs source's (now Drive) connection.
+    "GOOGLEDRIVE": "google_docs",
 }
 
 # Trigger slug prefix -> the provider whose connection it belongs to.
@@ -179,6 +192,7 @@ _PROVIDERS = {
     "GMAIL": "gmail",
     "GOOGLECALENDAR": "calendar",
     "LINEAR": "linear",
+    "GOOGLEDRIVE": "google_docs",
 }
 
 

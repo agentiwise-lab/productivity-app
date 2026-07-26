@@ -49,6 +49,13 @@ _TRIGGERS: dict[Source, list[tuple[str, dict[str, Any]]]] = {
     Source.CALENDAR: [
         ("GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER", {}),
     ],
+    # The Docs source connects Google Drive: native comment/share triggers,
+    # neither of which needs config (both default to a two-minute scan). These
+    # replace the old Gmail-notification sniffing, which stays as a fallback.
+    Source.GOOGLE_DOCS: [
+        ("GOOGLEDRIVE_COMMENT_ADDED_TRIGGER", {}),
+        ("GOOGLEDRIVE_FILE_SHARED_PERMISSIONS_ADDED", {}),
+    ],
     # Linear is handled dynamically (see _provision_linear): its triggers require
     # a team_id, resolved per-account at connect from LINEAR_LIST_LINEAR_TEAMS,
     # one trigger of each kind per team.

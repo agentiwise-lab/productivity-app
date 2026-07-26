@@ -103,10 +103,14 @@ def test_slack_provisions_both_message_triggers():
     }
 
 
-def test_a_source_with_no_triggers_is_a_no_op():
+def test_google_docs_provisions_the_drive_triggers():
+    """The Docs source connects Google Drive: native comment + share triggers."""
     fake = FakeComposio()
-    DefaultTriggerProvisioner(fake).provision("u1", Source.GOOGLE_DOCS, "ca_docs")
-    assert fake.triggers.created == []
+    DefaultTriggerProvisioner(fake).provision("u1", Source.GOOGLE_DOCS, "ca_drive")
+    assert {c[0] for c in fake.triggers.created} == {
+        "GOOGLEDRIVE_COMMENT_ADDED_TRIGGER",
+        "GOOGLEDRIVE_FILE_SHARED_PERMISSIONS_ADDED",
+    }
 
 
 def test_linear_provisions_both_triggers_per_team():
