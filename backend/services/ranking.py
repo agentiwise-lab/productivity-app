@@ -10,11 +10,11 @@ disagree.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
 
 from backend.models.feed import FeedItem, UserPreferences
 from backend.models.tiers import Tier, at_least, clamp
-from backend.services.tier_bands import band_for
+from backend.services.tier_bands import Banded, Deterministic, linear_reason, policy_for
 
 # Tier dominates. The gaps (10_000) are wide enough that no stack of source
 # weight plus bonuses on a lower tier can outrank the tier above it.
@@ -44,35 +44,50 @@ _SUPPRESSED = -1_000_000.0
 
 _URGENT_STALE_AFTER = timedelta(hours=24)
 
-# A meeting is urgent within this window before it starts (and while it runs).
-STARTING_SOON = timedelta(hours=1)
 
-
-def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
+def effective_tier(
+    item: FeedItem, *, now: datetime, tz: tzinfo = timezone.utc
+) -> Tier:
     """What tier this item is *right now*.
 
-    Starts from the stored judgement (the model's if it has landed, the rules'
-    otherwise) confined to the item's band, then applies the time-dependent
-    corrections that a stored tier could never keep up with. The band clamp is
-    what stops the model demoting an item below the floor its source guarantees
-    — the "review requested, filed as can_wait" bug — without a per-case branch.
-    A deadline can still lift within the band; it cannot break the ceiling.
-    """
-    # A meeting is not a deadline task: its urgency is purely how close its start
-    # is, so it is judged from that rather than from the generic deadline rule
-    # (which would pin a passed meeting to Urgent forever). Passed meetings are
-    # dropped before display in ``feed.list_feed``.
-    if item.source == "calendar":
-        return _calendar_tier(item, now)
+    One branch per policy shape (``tier_bands.Policy``):
 
-    band = band_for(item.signal)
-    tier = clamp(item.llm_tier or item.rule_tier, band.floor, band.ceiling)
+    - ``Deterministic`` with a read-time function (calendar, Linear) hands the
+      whole judgement to that function, which owns its own clock and due-date
+      logic — a passed meeting is not pinned Urgent, an overdue Linear task is
+      not demoted by the generic stale rule.
+    - ``Deterministic`` with a fixed tier returns it.
+    - ``Banded`` confines the model's rating to ``[floor, ceiling]``. A failed
+      attempt (attempted, no ``llm_tier``) surfaces at the ceiling; an item with
+      no model verdict and no attempt (a label-pinned or legacy row) falls back
+      to its stored ``rule_tier``. Deadline pressure can lift within the band.
+
+    ``tz`` is the user's timezone, used only where "today" is a calendar day
+    rather than a duration (a Linear due date). Everything else is duration math
+    and needs no zone.
+    """
+    policy = policy_for(item.signal)
+
+    if isinstance(policy, Deterministic):
+        if policy.tier_fn is not None:
+            return policy.tier_fn(item, now, tz)
+        return policy.tier  # a fixed deterministic tier
+
+    # Banded: the model's territory. A model that was attempted and gave up
+    # surfaces at the ceiling (Decision B); a genuinely held item is filtered out
+    # in list_feed before it reaches this. Everything else uses the model's
+    # rating if it landed, otherwise the stored rule tier (a label-pinned or
+    # legacy row), and either way stays subject to the deadline corrections below.
+    if item.needs_llm and item.llm_tier is None and item.llm_attempted_at is not None:
+        return policy.ceiling
+
+    tier = clamp(item.llm_tier or item.rule_tier, policy.floor, policy.ceiling)
 
     overdue = item.deadline is not None and item.deadline <= now
     if overdue:
-        return clamp(Tier.URGENT, band.floor, band.ceiling)
+        return clamp(Tier.URGENT, policy.floor, policy.ceiling)
     if item.deadline is not None and item.deadline - now <= timedelta(hours=3):
-        tier = clamp(at_least(tier, Tier.TODAY), band.floor, band.ceiling)
+        tier = clamp(at_least(tier, Tier.TODAY), policy.floor, policy.ceiling)
 
     # An urgent item nobody chased for a day was not urgent. Without this the
     # top tier silts up and stops carrying information.
@@ -84,18 +99,20 @@ def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
     return tier
 
 
-def _calendar_tier(item: FeedItem, now: datetime) -> Tier:
-    """Urgent within the hour before it starts (and while it runs); by-EOD if it
-    is on the day but further out. ``occurred_at`` is the meeting start."""
-    start = item.occurred_at
-    if start is None:
-        return Tier.TODAY
-    if start - now <= STARTING_SOON:
-        return Tier.URGENT
-    return Tier.TODAY
+def read_time_reason(
+    item: FeedItem, *, now: datetime, tz: tzinfo = timezone.utc
+) -> str | None:
+    """A deterministic reason computed on read, or None to use the stored one.
+
+    Only Linear's due-date line is worth showing deterministically; every other
+    deterministic card would just restate its tag. The model's reason (on Banded
+    rows) is untouched."""
+    return linear_reason(item, now, tz)
 
 
-def score(item: FeedItem, prefs: UserPreferences, *, now: datetime) -> float:
+def score(
+    item: FeedItem, prefs: UserPreferences, *, now: datetime, tz: tzinfo = timezone.utc
+) -> float:
     """Rank within and across tiers. Higher sorts first."""
     if item.repo and item.repo in prefs.muted_repos:
         return _SUPPRESSED
@@ -104,7 +121,7 @@ def score(item: FeedItem, prefs: UserPreferences, *, now: datetime) -> float:
     if item.snoozed_until is not None and item.snoozed_until > now:
         return _SUPPRESSED
 
-    total = _TIER_WEIGHT[effective_tier(item, now=now)]
+    total = _TIER_WEIGHT[effective_tier(item, now=now, tz=tz)]
     total += _SOURCE_WEIGHT.get(item.source, 0.0)
     if item.is_blocking:
         total += 300.0

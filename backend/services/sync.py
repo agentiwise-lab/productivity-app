@@ -32,6 +32,10 @@ log = logging.getLogger(__name__)
 class SyncReport(BaseModel):
     ingested: int = 0
     classified: int = 0
+    #: Items ingested that the model has not yet judged when the refresh returns
+    #: (past the sync budget, or a failed attempt). The app shows "still
+    #: classifying N" rather than reading an incomplete feed as a finished one.
+    held: int = 0
     #: Per source, so the app can say which integration is quiet and which is
     #: broken instead of showing one undifferentiated empty screen.
     per_source: dict[str, int] = {}
@@ -53,9 +57,16 @@ class SourceSync:
         # behind it.
         timeout: float = 90.0,
         classify_async: bool = False,
+        # The synchronous refresh classifies inline so items appear already in
+        # their tier, never as a placeholder. This caps how long that inline pass
+        # may run: past it, the rest stays held and the next refresh sweeps it,
+        # so a first connect with hundreds of pending items cannot block the
+        # response past a client timeout.
+        classify_budget: float = 20.0,
     ) -> None:
         self._timeout = timeout
         self._classify_async = classify_async
+        self._classify_budget = classify_budget
         self._background = ThreadPoolExecutor(max_workers=1)
         self._feed = feed
         self._integrations = integrations
@@ -153,18 +164,27 @@ class SourceSync:
 
         if self._classifier is not None:
             if self._classify_async:
-                # The feed is already correct at rule tiers, so nobody waits for
-                # the model. Summaries appear on the next read (plan 4.4).
+                # Legacy background path (kept for tests/config). The read-time
+                # filter hides held items regardless, so this never shows a
+                # placeholder; it just fills tiers a beat later.
                 self._background.submit(self._classify_quietly, user_id)
             else:
-                report.classified = self._classify_quietly(user_id)
+                # Synchronous (Decision C): items appear already classified.
+                # Bounded, so a large first sync cannot block the response.
+                classified, held = self._classify_quietly(user_id)
+                report.classified = classified
+                report.held = held
 
         return report
 
-    def _classify_quietly(self, user_id: str) -> int:
+    def _classify_quietly(self, user_id: str) -> tuple[int, int]:
+        """Returns (classified, still-held). Never raises: rules-only is a
+        working product and a dead model is not an outage."""
         try:
-            return self._classifier.classify_pending(user_id).classified
+            result = self._classifier.classify_pending(
+                user_id, time_budget=self._classify_budget
+            )
+            return result.classified, result.unclassified
         except Exception:
-            # Rules-only is a working product; a dead model is not an outage.
             log.warning("classification pass failed", exc_info=True)
-            return 0
+            return 0, 0

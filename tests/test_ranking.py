@@ -65,6 +65,7 @@ def test_the_band_lets_the_model_lift_within_it():
 def test_a_meeting_within_the_hour_is_urgent():
     item = make_item(
         source="calendar",
+        signal="calendar_meeting",
         occurred_at=NOW + timedelta(minutes=30),
         deadline=NOW + timedelta(minutes=90),
     )
@@ -74,6 +75,7 @@ def test_a_meeting_within_the_hour_is_urgent():
 def test_an_in_progress_meeting_is_still_urgent():
     item = make_item(
         source="calendar",
+        signal="calendar_meeting",
         occurred_at=NOW - timedelta(minutes=10),
         deadline=NOW + timedelta(minutes=50),
     )
@@ -85,6 +87,7 @@ def test_a_meeting_later_today_is_by_eod_not_urgent():
     hours ahead; only the last hour before it starts does."""
     item = make_item(
         source="calendar",
+        signal="calendar_meeting",
         occurred_at=NOW + timedelta(hours=5),
         deadline=NOW + timedelta(hours=6),
     )

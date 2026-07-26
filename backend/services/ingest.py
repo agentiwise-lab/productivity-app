@@ -165,6 +165,8 @@ class WebhookIngestService:
         connections: ConnectionRepository,
         prefs_for: Callable[[str], UserPreferences] | None = None,
         threads_for: Callable[[str], set[str]] | None = None,
+        classifier: Any | None = None,
+        background: Callable[[Callable[[], Any]], Any] | None = None,
     ) -> None:
         self._feed = feed
         self._connections = connections
@@ -173,6 +175,13 @@ class WebhookIngestService:
         # threads joined before installing are invisible until someone mentions
         # you, because Slack gives us no way to learn about them.
         self._threads_for = threads_for or (lambda user_id: set())
+        # Classifying the single pushed item, off the delivery's critical path:
+        # Composio retry-storms on a slow HTTP response, so the item is
+        # classified *after* the 200 goes out, not before. It is held (invisible)
+        # by the read-time filter until that ~1s classify lands, so it still
+        # appears already-classified, never as a placeholder.
+        self._classifier = classifier
+        self._background = background or (lambda work: work())
 
     def handle(self, envelope: dict[str, Any]) -> IngestResult:
         event_type = envelope.get("type", "")
@@ -214,7 +223,22 @@ class WebhookIngestService:
             return IngestResult(handled=False, reason="not_for_this_user")
 
         item = self._feed.ingest(user_id, event, self._prefs_for(user_id), identity)
+        if item is None:
+            # Settled as noise by the rules and not stored.
+            return IngestResult(handled=False, reason="not_for_this_user")
+        self._classify_soon(user_id, item)
         return IngestResult(handled=True, reason="ingested", item_id=item.id)
+
+    def _classify_soon(self, user_id: str, item) -> None:
+        """Classify this one item just after the ack, if it needs the model."""
+        if self._classifier is None or not item.needs_llm or item.llm_tier is not None:
+            return
+        try:
+            self._background(lambda: self._classifier.classify_item(user_id, item))
+        except Exception:
+            # A classify that could not even be scheduled must not fail the
+            # webhook: the item is still ingested and the next refresh sweeps it.
+            log.warning("could not schedule classify for %s", item.id, exc_info=True)
 
     def _handle_expired(self, envelope: dict[str, Any]) -> IngestResult:
         """A dead connection must be visible. Left unrecorded, that source

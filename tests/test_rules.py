@@ -123,30 +123,45 @@ def test_unknown_reason_falls_back_to_noise_not_urgent(rules):
 
 
 @pytest.mark.parametrize(
-    "reason,expected_default,needs_llm",
+    "reason,floor,needs_llm",
     [
-        ("slack_dm", Tier.TODAY, True),          # floor can_wait, default today
-        ("gmail_message", Tier.CAN_WAIT, True),  # floor later, default can_wait
-        ("linear_due", Tier.TODAY, True),        # has a due date -> by-UD
-        ("linear_high", Tier.CAN_WAIT, True),    # priority, no date -> can_wait
-        ("calendar_starting", Tier.URGENT, False),  # imminent, stated
-        ("docs_mention", Tier.CAN_WAIT, True),   # a mention: can_wait floor, LLM lifts
+        ("slack_dm", Tier.CAN_WAIT, True),       # model rates; floor can_wait
+        ("gmail_message", Tier.NOISE, True),     # the one source that may sink to later
+        ("docs_mention", Tier.CAN_WAIT, True),   # a mention: can_wait floor, model lifts
     ],
 )
-def test_source_signals_carry_their_band_default(rules, reason, expected_default, needs_llm):
+def test_llm_signals_are_held_at_their_floor_until_the_model_lands(
+    rules, reason, floor, needs_llm
+):
+    """A banded signal shows no default tier: it is held off-screen until the
+    model rates it, so the stored ``tier`` is only the floor placeholder and
+    ``needs_llm`` is set. The floor is what the clamp guarantees the model can
+    never sink below."""
     verdict = rules.classify(make_event(source=reason.split("_")[0], reason=reason), identity=ME)
-    assert verdict.tier is expected_default
+    assert verdict.tier is floor
     assert verdict.needs_llm is needs_llm
     assert verdict.signal == reason
 
 
-def test_linear_backlog_is_kept_as_a_later_row_not_dropped(rules):
-    """A backlog issue with no priority and no date settles as noise, but it is
-    the user's own task, so it is kept (ephemeral False) and shown under Later,
-    unlike a newsletter."""
-    verdict = rules.classify(make_event(source="linear", reason="linear_backlog"), identity=ME)
-    assert verdict.tier is Tier.NOISE
+@pytest.mark.parametrize("reason", ["linear", "linear_due", "linear_backlog"])
+def test_linear_is_deterministic_and_never_runs_the_model(rules, reason):
+    """Linear urgency is the due date alone (decided at read time), so the model
+    never runs and the issue is never dropped: it is always kept (ephemeral
+    False) with a can_wait placeholder that read-time tiering overrides."""
+    verdict = rules.classify(make_event(source="linear", reason=reason), identity=ME)
+    assert verdict.needs_llm is False
     assert verdict.ephemeral is False
+    assert verdict.type_tag is TypeTag.ASSIGNED
+
+
+def test_calendar_starting_is_deterministic_not_the_model(rules):
+    """The meeting's tier is its proximity, computed at read time, so the rules
+    defer nothing to the model here."""
+    verdict = rules.classify(
+        make_event(source="calendar", reason="calendar_starting"), identity=ME
+    )
+    assert verdict.needs_llm is False
+    assert verdict.signal == "calendar_starting"
 
 
 def test_a_newsletter_is_ephemeral_noise_and_will_be_dropped(rules):

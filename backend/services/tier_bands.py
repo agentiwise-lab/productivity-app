@@ -1,127 +1,212 @@
 """The triage policy, as one table.
 
-Every ``(source, signal)`` maps to a band: a floor, a ceiling, the tier to show
-before the model has spoken (``default``), whether the model runs at all, and
-the card's tag. The model only ever *rates urgency*; the band decides how far
-that rating is allowed to move (``clamp(rating, floor, ceiling)`` in
-``ranking.effective_tier``). There is no precedence ladder and no per-case
-branch: to change what a source does, edit its row here.
+Every canonical ``signal`` maps to a ``Policy``, a tagged union of two shapes:
+
+- ``Deterministic`` — the rules (or the clock) fix the tier with no model. It
+  carries either a fixed ``tier`` or a read-time ``tier_fn(item, now, tz)`` for
+  the sources whose tier moves with the clock (calendar proximity, a Linear due
+  date crossing into today). Folding those functions into the table is what
+  keeps ``ranking.effective_tier`` a single branch instead of a growing list of
+  ``if source == ...`` special cases.
+- ``Banded`` — the model rates urgency and the rating is confined to
+  ``[floor, ceiling]``. Being ``Banded`` *is* "runs the model": there is no
+  separate boolean. The item is held off-screen until the model has spoken; if
+  the model is attempted and fails, it surfaces at the ``ceiling`` (Decision B).
 
 ``signal`` is the canonical reason a ``RawEvent`` is normalised to
-(``rules._canonical_reason``). It is stored on the feed row so the band can be
-recovered at read time, which is where the clamp happens — so editing a row here
-re-tiers existing items on the next read, no re-ingest.
+(``rules._canonical_reason``). It is stored on the feed row so the policy can be
+recovered at read time, which is where the tier is computed — so editing a row
+here re-tiers existing items on the next read, no re-ingest.
 
 Tiers, low to high: ``noise < can_wait < today < urgent``. ``noise`` is the
-"later" bucket the app shows under that label; ``today`` is "by upcoming
-deadline".
+"later" bucket shown under that label; ``today`` is "by upcoming deadline".
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, tzinfo
+from typing import TYPE_CHECKING, Callable, Union
 
-from backend.models.tiers import Tier, TypeTag, clamp
+from backend.models.tiers import Tier, TypeTag
+
+if TYPE_CHECKING:  # avoid importing the model at module load; only types need it
+    from backend.models.feed import FeedItem
 
 U = Tier.URGENT
 T = Tier.TODAY
 C = Tier.CAN_WAIT
 N = Tier.NOISE
 
+# A meeting is urgent within this window before it starts (and while it runs).
+STARTING_SOON = timedelta(hours=1)
+
+TierFn = Callable[["FeedItem", datetime, tzinfo], Tier]
+
 
 @dataclass(frozen=True)
-class Band:
-    default: Tier  # shown immediately, before the model has rated it
-    floor: Tier  # the model can never sink an item below this
-    ceiling: Tier  # nor lift it above this
+class Deterministic:
+    """The rules or the clock settle the tier; the model never runs.
+
+    Exactly one of ``tier`` / ``tier_fn`` is set. ``tier_fn`` is consulted at
+    read time with the current clock and the user's timezone, so a Linear task
+    flips to urgent the day its due date arrives without being re-ingested.
+    ``ephemeral`` marks settled-noise that is dropped at ingest rather than kept
+    as a visible "later" row (a newsletter, not the user's own backlog).
+    """
+
     type_tag: TypeTag
-    runs_llm: bool  # whether this item is queued for the model at all
-    # Only consulted for a settled ``noise`` item: True drops it from the store
-    # (newsletters, subscriptions — fetched live in Later, never archived);
-    # False keeps it as a visible "later" row (the user's own untouched tasks).
+    tier: Tier | None = None
+    tier_fn: TierFn | None = None
     ephemeral: bool = True
+
+    runs_llm = False
+
+
+@dataclass(frozen=True)
+class Banded:
+    """The model rates urgency; the rating is clamped to ``[floor, ceiling]``.
+
+    Held off-screen until the model lands. On a failed attempt the item is shown
+    at ``ceiling`` (Decision B): when the model cannot judge it, err toward
+    surfacing rather than burying.
+    """
+
+    floor: Tier
+    ceiling: Tier
+    type_tag: TypeTag
+    ephemeral: bool = True  # never a settled-noise item; kept for a uniform read
+
+    runs_llm = True
+
+
+Policy = Union[Deterministic, Banded]
+
+
+# ---------------------------------------------------------------- read-time fns
+
+
+def _calendar_tier(item: "FeedItem", now: datetime, tz: tzinfo) -> Tier:
+    """A meeting is urgent within the hour before it starts (and while it runs);
+    by-EOD if it is on the day but further out. ``occurred_at`` is the start.
+
+    Purely a function of how close the start is, so it is timezone-independent
+    (a duration, not a wall-clock date). Passed meetings are dropped before
+    display in ``feed.list_feed``, so this never has to represent "over"."""
+    start = item.occurred_at
+    if start is None:
+        return T
+    if start - now <= STARTING_SOON:
+        return U
+    return T
+
+
+def _linear_tier(item: "FeedItem", now: datetime, tz: tzinfo) -> Tier:
+    """Linear urgency is stated by the due date alone; priority is ignored.
+
+    Completed issues never reach here (dropped at ingest). No due date is a task
+    nobody is waiting on, so it can wait. A due date that is today or already
+    past is urgent — and "today" is the user's calendar day, not UTC's, so a
+    task due the 24th is not urgent at 00:15 on the 24th in the user's own zone.
+    A future due date can wait, and flips to urgent on the day it arrives."""
+    if item.deadline is None:
+        return C
+    due_date = item.deadline.date()
+    today = now.astimezone(tz).date()
+    return U if due_date <= today else C
+
+
+def linear_reason(item: "FeedItem", now: datetime, tz: tzinfo) -> str | None:
+    """The one deterministic reason worth showing: a Linear task's date line.
+
+    Every other deterministic card restates its own tag ("security alert",
+    "meeting"), which the card already says. The due date is new information the
+    card does not otherwise carry. Returns None for a future or absent date so
+    the detail sheet simply omits the "why" box."""
+    if item.deadline is None:
+        return None
+    due_date = item.deadline.date()
+    today = now.astimezone(tz).date()
+    if due_date < today:
+        return f"Overdue since {item.deadline:%-d %b}"
+    if due_date == today:
+        return "Due today"
+    return None
+
+
+# One policy shared by every Linear signal (priority is not consulted).
+_LINEAR = Deterministic(type_tag=TypeTag.ASSIGNED, tier_fn=_linear_tier, ephemeral=False)
+
+
+def _calendar(tag: TypeTag) -> Deterministic:
+    return Deterministic(type_tag=tag, tier_fn=_calendar_tier, ephemeral=False)
 
 
 # The single source of truth. Keyed by canonical signal.
-TIER_BANDS: dict[str, Band] = {
+TIER_BANDS: dict[str, Policy] = {
     # --- GitHub: stated urgency, no model ---------------------------------
-    "security_alert": Band(U, U, U, TypeTag.ALERT, runs_llm=False),
-    "ci_failure_mine": Band(U, U, U, TypeTag.ALERT, runs_llm=False),
-    "ci_failure_other": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    "ci_ok": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    "review_request_removed": Band(N, N, N, TypeTag.FYI, runs_llm=False),
+    "security_alert": Deterministic(type_tag=TypeTag.ALERT, tier=U),
+    "ci_failure_mine": Deterministic(type_tag=TypeTag.ALERT, tier=U),
+    "ci_failure_other": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    "ci_ok": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    "review_request_removed": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- GitHub: a gate or a person is waiting; the model rates within band -
-    "approval_requested": Band(T, T, U, TypeTag.APPROVE, runs_llm=True),
-    "review_requested": Band(T, T, U, TypeTag.REVIEW, runs_llm=True),
-    "changes_requested_mine": Band(T, T, U, TypeTag.DECIDE, runs_llm=True),
-    "assign": Band(T, T, U, TypeTag.ASSIGNED, runs_llm=True),
+    "approval_requested": Banded(T, U, TypeTag.APPROVE),
+    "review_requested": Banded(T, U, TypeTag.REVIEW),
+    "changes_requested_mine": Banded(T, U, TypeTag.DECIDE),
+    "assign": Banded(T, U, TypeTag.ASSIGNED),
     # A mention/comment is a can_wait floor: never later, never auto-urgent.
-    "mention": Band(C, C, U, TypeTag.REPLY, runs_llm=True),
-    "team_mention": Band(C, C, U, TypeTag.REPLY, runs_llm=True),
-    "comment": Band(C, C, U, TypeTag.COMMENT, runs_llm=True),
+    "mention": Banded(C, U, TypeTag.REPLY),
+    "team_mention": Banded(C, U, TypeTag.REPLY),
+    "comment": Banded(C, U, TypeTag.COMMENT),
     # --- Slack ------------------------------------------------------------
-    "slack_dm": Band(T, C, U, TypeTag.REPLY, runs_llm=True),
-    "slack_mention": Band(C, C, U, TypeTag.REPLY, runs_llm=True),
-    "slack_thread_reply": Band(C, C, U, TypeTag.REPLY, runs_llm=True),
-    "slack_bot_failure": Band(T, C, U, TypeTag.ALERT, runs_llm=True),
-    "slack_bot_noise": Band(N, N, N, TypeTag.FYI, runs_llm=False),
+    "slack_dm": Banded(C, U, TypeTag.REPLY),
+    "slack_mention": Banded(C, U, TypeTag.REPLY),
+    "slack_thread_reply": Banded(C, U, TypeTag.REPLY),
+    "slack_bot_failure": Banded(C, U, TypeTag.ALERT),
+    "slack_bot_noise": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- Gmail: the only source that may sink to later --------------------
-    "gmail_message": Band(C, N, U, TypeTag.REPLY, runs_llm=True),
-    "gmail_bulk": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    # --- Linear: priority and due date are stated fields ------------------
-    "linear_urgent": Band(U, T, U, TypeTag.ASSIGNED, runs_llm=False),
-    "linear_due": Band(T, T, U, TypeTag.ASSIGNED, runs_llm=True),
-    "linear_high": Band(C, C, U, TypeTag.ASSIGNED, runs_llm=True),
-    "linear_in_progress": Band(C, C, U, TypeTag.ASSIGNED, runs_llm=True),
-    # No priority and no date: the user's own task nobody is waiting on. It
-    # stays as a visible "later" row (ephemeral=False) rather than being
-    # dropped like a newsletter.
-    "linear_assigned": Band(N, N, C, TypeTag.ASSIGNED, runs_llm=False, ephemeral=False),
-    "linear_backlog": Band(N, N, C, TypeTag.ASSIGNED, runs_llm=False, ephemeral=False),
-    # --- Calendar: tier is set at read time from how close the start is
-    #     (ranking._calendar_tier), so these band tiers are only the instant
-    #     pre-read value; the model never runs on a meeting. ------------------
-    "calendar_starting": Band(U, N, U, TypeTag.FYI, runs_llm=False),
-    "calendar_meeting": Band(T, N, U, TypeTag.FYI, runs_llm=False),
-    "calendar_invite": Band(T, N, U, TypeTag.RSVP, runs_llm=False),
-    "calendar_changed": Band(T, N, U, TypeTag.FYI, runs_llm=False),
-    "calendar_cancelled": Band(N, N, N, TypeTag.FYI, runs_llm=False),
+    "gmail_message": Banded(N, U, TypeTag.REPLY),
+    "gmail_bulk": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    # --- Linear: due date is a stated field; the model never runs ----------
+    "linear": _LINEAR,
+    "linear_urgent": _LINEAR,
+    "linear_due": _LINEAR,
+    "linear_high": _LINEAR,
+    "linear_in_progress": _LINEAR,
+    "linear_assigned": _LINEAR,
+    "linear_backlog": _LINEAR,
+    # --- Calendar: tier is set at read time from how close the start is -----
+    "calendar_starting": _calendar(TypeTag.FYI),
+    "calendar_meeting": _calendar(TypeTag.FYI),
+    "calendar_invite": _calendar(TypeTag.RSVP),
+    "calendar_changed": _calendar(TypeTag.FYI),
+    "calendar_cancelled": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- Google Docs (delivered via Gmail notifications) ------------------
-    "docs_mention": Band(C, C, U, TypeTag.COMMENT, runs_llm=True),
-    "docs_comment": Band(C, C, U, TypeTag.COMMENT, runs_llm=True),
-    "docs_share": Band(C, C, U, TypeTag.FYI, runs_llm=True),
-    "docs_edited": Band(N, N, N, TypeTag.FYI, runs_llm=False),
+    "docs_mention": Banded(C, U, TypeTag.COMMENT),
+    "docs_comment": Banded(C, U, TypeTag.COMMENT),
+    "docs_share": Banded(C, U, TypeTag.FYI),
+    "docs_edited": Deterministic(type_tag=TypeTag.FYI, tier=N),
     # --- Generic / terminal -----------------------------------------------
-    "invitation": Band(T, C, U, TypeTag.DECIDE, runs_llm=False),
-    "state_change": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    "subscribed": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    "author": Band(N, N, N, TypeTag.FYI, runs_llm=False),
-    "manual": Band(N, N, N, TypeTag.FYI, runs_llm=False),
+    "invitation": Deterministic(type_tag=TypeTag.DECIDE, tier=T),
+    "state_change": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    "subscribed": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    "author": Deterministic(type_tag=TypeTag.FYI, tier=N),
+    "manual": Deterministic(type_tag=TypeTag.FYI, tier=N),
 }
 
-# An unrecognised signal is handled two ways by the same band. At ingest its
-# ``default`` (noise) plus ``ephemeral`` drops it — an unknown reason must not be
-# able to shout. At read time its band is deliberately *unclamped* (floor noise,
-# ceiling urgent), so a stored row whose signal is missing (a legacy row, or one
-# whose signal has since left the table) renders at its own tier rather than
-# being force-collapsed to noise.
-UNKNOWN = Band(N, N, U, TypeTag.FYI, runs_llm=False)
+# An unrecognised or missing signal (a legacy row, or one whose signal has since
+# left the table). Modelled as a wide band so a stored row renders at its own
+# recorded tier rather than being force-collapsed: with ``llm_tier`` None and the
+# item not marked as an attempted-and-failed model item, ``effective_tier`` falls
+# back to the stored ``rule_tier`` clamped into ``[noise, urgent]`` — i.e. the
+# pre-band behaviour.
+UNKNOWN = Banded(N, U, TypeTag.FYI)
 
 
-def band_for(signal: str | None) -> Band:
-    """The band a stored item is clamped to at read time. Unknown or missing
-    signals fall back to the unclamped ``UNKNOWN`` band."""
+def policy_for(signal: str | None) -> Policy:
+    """The policy a stored item is tiered by at read time. Unknown or missing
+    signals fall back to the wide ``UNKNOWN`` band."""
     if signal is None:
         return UNKNOWN
     return TIER_BANDS.get(signal, UNKNOWN)
-
-
-def label_override(band: Band, *, urgent: bool, low: bool) -> tuple[Tier, bool]:
-    """A structured label is a stated urgency, so it settles the tier without
-    the model. Urgent labels pin to the ceiling, low ones to the floor. Returns
-    ``(tier, runs_llm)``; ``runs_llm`` is always False when a label decided it."""
-    if urgent:
-        return clamp(U, band.floor, band.ceiling), False
-    if low:
-        return band.floor, False
-    return band.default, band.runs_llm

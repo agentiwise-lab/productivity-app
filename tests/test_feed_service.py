@@ -25,11 +25,24 @@ def build(github: FakeGitHubService | None = None) -> DefaultFeedService:
     )
 
 
-def test_ingest_classifies_and_stores():
+def _classify(svc: DefaultFeedService, item_id: str, tier: Tier = Tier.TODAY) -> None:
+    """Land a model verdict so a held (needs_llm) item becomes visible. A banded
+    item is held off the feed until the model rates it, which is the behaviour
+    these list_feed tests then check."""
+    svc._repo.apply_classification(
+        "me", item_id, tier=tier, summary="s", reason="r", at=NOW
+    )
+
+
+def test_ingest_stores_and_holds_until_classified():
     svc = build()
     stored = svc.ingest("me", make_event(reason="review_requested"), prefs)
-    assert stored.rule_tier is Tier.TODAY  # band default; the model may lift it
+    assert stored.rule_tier is Tier.TODAY  # the floor; the model may lift it
     assert stored.type_tag is TypeTag.REVIEW
+    assert stored.needs_llm is True
+    # Held off the feed until the model lands a verdict, never as a placeholder.
+    assert svc.list_feed("me", prefs) == []
+    _classify(svc, stored.id, Tier.TODAY)
     assert [row.id for row in svc.list_feed("me", prefs)] == [stored.id]
 
 
@@ -46,14 +59,19 @@ def test_list_feed_is_ranked_by_score():
     """Tier dominates the score: an approval outranks a comment however long
     the comment has been waiting."""
     svc = build()
-    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="comment"), prefs)
-    svc.ingest(
+    comment = svc.ingest(
+        "me", make_event(source_ref="octo/repo#1", reason="comment"), prefs
+    )
+    approval = svc.ingest(
         "me", make_event(source_ref="octo/repo#2", reason="approval_requested"), prefs
     )
+    # Both are banded and held until judged; the model rates the approval Today
+    # and the comment Can wait (both within their bands).
+    _classify(svc, comment.id, Tier.CAN_WAIT)
+    _classify(svc, approval.id, Tier.TODAY)
     feed = svc.list_feed("me", prefs)
     assert [row.type_tag for row in feed] == [TypeTag.APPROVE, TypeTag.COMMENT]
-    # An approval request defaults to Today (band floor), a comment to Can wait;
-    # tier still dominates the order.
+    # Tier dominates the order.
     assert [row.tier for row in feed] == [Tier.TODAY, Tier.CAN_WAIT]
 
 
@@ -65,6 +83,7 @@ def test_ingest_dedupes_by_source_ref():
     svc.ingest(
         "me", make_event(source_ref="octo/repo#1", reason="review_requested"), prefs
     )
+    _classify(svc, first.id, Tier.TODAY)
     feed = svc.list_feed("me", prefs)
     assert len(feed) == 1
     assert feed[0].id == first.id  # same row, identity preserved
@@ -73,10 +92,11 @@ def test_ingest_dedupes_by_source_ref():
 
 def test_feed_is_isolated_between_users():
     svc = build()
-    svc.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
+    me_item = svc.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
     svc.ingest(
         "other", make_event(source_ref="octo/repo#1"), UserPreferences(user_id="other")
     )
+    _classify(svc, me_item.id)
     assert len(svc.list_feed("me", prefs)) == 1
     assert svc.list_feed("me", prefs)[0].user_id == "me"
 
@@ -146,28 +166,32 @@ def test_a_passed_meeting_is_dropped_from_the_feed():
     assert svc.list_feed("me", prefs) == []
 
 
-def test_a_backlog_issue_is_kept_as_a_later_row_not_dropped():
-    """A backlog issue with no priority and no date settles as noise (its "later"
-    tier), but it is the user's own task, so it is kept and stays in the feed
-    under Later, unlike a newsletter which is dropped."""
+def test_a_linear_issue_with_no_due_date_is_kept_and_shown_not_dropped():
+    """A Linear task with no due date is deterministic (no model) and never
+    dropped: read-time tiering settles it at can_wait, so it shows on the feed
+    rather than being held or discarded like a newsletter."""
     svc = build()
     stored = svc.ingest(
         "me",
-        _noise_event(
-            source="linear", source_ref="linear:AGE-21", reason="linear_backlog",
-        ),
+        _noise_event(source="linear", source_ref="linear:AGE-21", reason="linear"),
         prefs,
     )
     assert stored is not None  # kept, not dropped
-    assert stored.rule_tier is Tier.NOISE
+    assert stored.needs_llm is False  # deterministic; never held
     assert stored.type_tag is TypeTag.ASSIGNED
-    assert [row.id for row in svc.list_feed("me", prefs)] == [stored.id]
+    feed = svc.list_feed("me", prefs)
+    assert [row.id for row in feed] == [stored.id]
+    assert feed[0].tier is Tier.CAN_WAIT
 
 
-def test_something_the_rules_defer_is_stored_because_the_tier_is_not_settled():
-    """A plain email floors at today and needs the model. Discarding it on the
-    rule tier would throw mail away before anything had judged it."""
+def test_something_the_rules_defer_is_stored_but_held_until_judged():
+    """A plain email needs the model. It is stored (throwing it away on the rule
+    tier would lose mail before anything judged it) but held off the feed until
+    the model lands a verdict, never shown as a placeholder."""
     svc = build()
     stored = svc.ingest("me", _noise_event(reason="gmail_message"), prefs)
     assert stored is not None
+    assert stored.needs_llm is True
+    assert svc.list_feed("me", prefs) == []  # held
+    _classify(svc, stored.id, Tier.CAN_WAIT)
     assert len(svc.list_feed("me", prefs)) == 1

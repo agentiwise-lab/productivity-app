@@ -125,27 +125,19 @@ def issue(**overrides):
     return base
 
 
-def test_linear_priority_urgent_needs_no_model():
-    """Linear states urgency in a field, so paying a model to infer it would be
-    the most expensive way to learn nothing."""
-    verdict = classify(issue_to_raw_event(issue(priority=1)))
-    assert verdict.tier is Tier.URGENT
-    assert verdict.needs_llm is False
-
-
-def test_linear_priority_high_with_no_date_can_wait_until_the_model_lifts_it():
-    """A stated priority but no due date sits at Can wait by default; the model
-    can lift it within the band (ceiling urgent), but it is not by-UD work until
-    a date says so."""
-    verdict = classify(issue_to_raw_event(issue(priority=2)))
-    assert verdict.tier is Tier.CAN_WAIT
-    assert verdict.needs_llm is True
+def test_linear_never_pays_the_model_whatever_the_priority():
+    """Linear urgency is the due date, decided at read time; priority is not
+    read at all, so the model never runs on any Linear issue."""
+    for priority in (1, 2, 0):
+        verdict = classify(issue_to_raw_event(issue(priority=priority)))
+        assert verdict.needs_llm is False
+        assert verdict.signal == "linear"
 
 
 def test_a_due_date_is_carried_so_ranking_can_use_it():
     raw = issue_to_raw_event(issue(dueDate="2026-07-23"))
-    assert classify(raw).tier is Tier.TODAY
-    assert raw.deadline is not None
+    assert classify(raw).needs_llm is False
+    assert raw.deadline is not None  # read-time _linear_tier uses this
 
 
 def test_a_due_date_means_end_of_that_day_not_midnight():
@@ -155,13 +147,12 @@ def test_a_due_date_means_end_of_that_day_not_midnight():
     assert raw.deadline.hour == 23 and raw.deadline.minute == 59
 
 
-def test_an_issue_with_no_priority_and_no_due_date_settles_as_later():
-    """No priority and no date: the user's own backlog task that nobody is
-    waiting on. It settles to Later (noise) without paying the model, and is
-    kept as a visible later row rather than dropped."""
+def test_an_issue_with_no_due_date_is_never_dropped_and_never_held():
+    """No due date: the user's own task nobody is waiting on. It is deterministic
+    (no model) and always kept (ephemeral False); read-time tiering settles it at
+    can_wait rather than dropping it or holding it for the model."""
     verdict = classify(issue_to_raw_event(issue()))
     assert verdict.needs_llm is False
-    assert verdict.tier is Tier.NOISE
     assert verdict.ephemeral is False
 
 
@@ -246,9 +237,9 @@ def test_the_starting_soon_trigger_maps_to_a_calendar_item():
     assert raw.source == "calendar"
     assert raw.reason == "calendar_starting"
     assert raw.url == "https://calendar.google.com/event?eid=ev1"
-    verdict = classify(raw)
-    assert verdict.tier is Tier.URGENT
-    assert verdict.needs_llm is False
+    # The tier is proximity, computed at read time (ranking), so the rules only
+    # confirm the model never runs on a meeting.
+    assert classify(raw).needs_llm is False
 
 
 def test_the_sender_name_is_split_from_the_address():

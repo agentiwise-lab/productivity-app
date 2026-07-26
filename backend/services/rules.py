@@ -18,8 +18,8 @@ from pydantic import BaseModel
 
 from backend.models.events import RawEvent
 from backend.models.identity import Identity
-from backend.models.tiers import Tier, TypeTag
-from backend.services.tier_bands import band_for, label_override
+from backend.models.tiers import Tier, TypeTag, clamp
+from backend.services.tier_bands import Banded, Deterministic, policy_for
 
 
 class RuleVerdict(BaseModel):
@@ -61,20 +61,46 @@ _LOW_LABELS = {"low priority", "p3", "nice to have", "someday", "backlog", "wont
 class DefaultRuleClassifier:
     def classify(self, event: RawEvent, *, identity: Identity) -> RuleVerdict:
         signal = self._canonical_reason(event, identity)
-        band = band_for(signal)
-
+        policy = policy_for(signal)
         labels = {label.strip().lower() for label in event.labels}
-        tier, needs_llm = label_override(
-            band,
-            urgent=bool(labels & _URGENT_LABELS),
-            low=bool(labels & _LOW_LABELS),
-        )
+
+        if isinstance(policy, Banded):
+            # A structured label states its own urgency, so it settles the tier
+            # without the model — an urgent label pins to the ceiling, a low one
+            # to the floor, and neither is ever held for classification.
+            if labels & _URGENT_LABELS:
+                tier = clamp(Tier.URGENT, policy.floor, policy.ceiling)
+                return RuleVerdict(
+                    tier=tier, type_tag=policy.type_tag, signal=signal, ephemeral=False
+                )
+            if labels & _LOW_LABELS:
+                return RuleVerdict(
+                    tier=policy.floor,
+                    type_tag=policy.type_tag,
+                    signal=signal,
+                    ephemeral=False,
+                )
+            # The model rates it. The stored ``rule_tier`` is only a placeholder:
+            # the item is held off-screen until the model lands (or shown at the
+            # ceiling if the attempt fails), so this value is never displayed.
+            return RuleVerdict(
+                tier=policy.floor,
+                type_tag=policy.type_tag,
+                needs_llm=True,
+                signal=signal,
+                ephemeral=policy.ephemeral,
+            )
+
+        # Deterministic: a fixed tier, or a read-time function owns it. When a
+        # function owns it (Linear, calendar) the stored tier is a can_wait
+        # placeholder — never noise, so ingest does not drop a live task — and
+        # the real tier is computed on every read.
+        tier = policy.tier if policy.tier is not None else Tier.CAN_WAIT
         return RuleVerdict(
             tier=tier,
-            type_tag=band.type_tag,
-            needs_llm=needs_llm,
+            type_tag=policy.type_tag,
             signal=signal,
-            ephemeral=band.ephemeral,
+            ephemeral=policy.ephemeral,
         )
 
     @staticmethod

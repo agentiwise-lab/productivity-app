@@ -81,21 +81,19 @@ def test_an_open_issue_still_reaches_the_feed():
     assert event.source_ref == "linear:AGE-52"
 
 
-def test_backlog_with_no_due_date_is_noise_so_it_lands_in_later():
-    """Home is what needs you now. An untouched backlog item with no date is
-    real work, but it does not belong in front of the user today."""
-    event = issue_to_raw_event(_issue(), assignee_id="me")
-    assert event.reason == "linear_backlog"
+def test_every_open_issue_carries_the_one_linear_signal():
+    """Priority and workflow state no longer branch the signal: urgency is the
+    due date alone, decided at read time. Every open assigned issue maps to the
+    single ``linear`` signal regardless of priority or backlog/in-progress."""
+    for issue in (_issue(), _issue(state={"name": "In Progress"}), _issue(priority=1)):
+        assert issue_to_raw_event(issue, assignee_id="me").reason == "linear"
 
 
-def test_in_progress_reaches_home():
-    event = issue_to_raw_event(_issue(state={"name": "In Progress"}), assignee_id="me")
-    assert event.reason == "linear_in_progress"
-
-
-def test_a_due_date_outranks_the_backlog_state():
+def test_a_due_date_is_carried_as_the_deadline_for_read_time_tiering():
+    """The due date is what read-time tiering uses to decide urgent-vs-can_wait,
+    so the mapper carries it as an end-of-day deadline."""
     event = issue_to_raw_event(_issue(dueDate="2026-07-21"), assignee_id="me")
-    assert event.reason == "linear_due"
+    assert event.reason == "linear"
     assert event.deadline == datetime(2026, 7, 21, 23, 59, 59, tzinfo=timezone.utc)
 
 

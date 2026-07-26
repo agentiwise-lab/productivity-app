@@ -85,34 +85,18 @@ def issue_to_raw_event(
     if assignee_id is not None and assignee.get("id") != assignee_id:
         return None
 
-    priority = issue.get("priority")
     due = _parse(issue.get("dueDate"))
     team = (issue.get("team") or {}).get("key") or ""
     creator = (issue.get("creator") or {}).get("displayName") or ""
 
-    state_name = str((issue.get("state") or {}).get("name") or "").strip().lower()
-
-    # The ladder that decides whether this belongs on Home or in Later. A stated
-    # priority or a real date is what puts an issue in front of the user; an
-    # untouched backlog item with neither is real work that nobody is waiting
-    # on, so it is filed rather than surfaced.
-    if priority == PRIORITY_URGENT:
-        reason = "linear_urgent"
-    elif priority == PRIORITY_HIGH:
-        reason = "linear_high"
-    elif due is not None:
-        reason = "linear_due"
-    elif "progress" in state_name or "started" in state_name:
-        reason = "linear_in_progress"
-    elif "backlog" in state_name:
-        reason = "linear_backlog"
-    else:
-        reason = "linear_assigned"
-
+    # Priority is deliberately not read. Urgency is the due date alone: a task
+    # due today or overdue is urgent, everything else can wait (decided at read
+    # time in ``tier_bands._linear_tier``, so it flips on the day it comes due).
+    # One signal covers every open assigned issue; the model never runs here.
     return RawEvent(
         source="linear",
         source_ref=f"linear:{identifier}",
-        reason=reason,
+        reason="linear",
         subject_type="Issue",
         title=f"{identifier} {issue.get('title') or ''}".strip(),
         body=issue.get("description"),

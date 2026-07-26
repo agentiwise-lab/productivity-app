@@ -66,7 +66,8 @@ def test_upsert_preserves_a_classification_already_applied(repo):
     silently send the item back through the classifier."""
     item = repo.upsert(make_item(content_hash="aaa"))
     repo.apply_classification(
-        "me", item.id, tier=Tier.URGENT, summary="Priya is blocked", reason="direct ask"
+        "me", item.id, tier=Tier.URGENT, summary="Priya is blocked",
+        reason="direct ask", at=NOW,
     )
     refetched = repo.upsert(make_item(content_hash="aaa", title="Add feature v2"))
     assert refetched.llm_tier is Tier.URGENT
@@ -78,7 +79,9 @@ def test_upsert_clears_the_classification_when_the_content_changed(repo):
     """A thread that gained replies is a different thing, so yesterday's
     summary no longer describes it."""
     item = repo.upsert(make_item(content_hash="aaa"))
-    repo.apply_classification("me", item.id, tier=Tier.URGENT, summary="s", reason="r")
+    repo.apply_classification(
+        "me", item.id, tier=Tier.URGENT, summary="s", reason="r", at=NOW
+    )
     refetched = repo.upsert(make_item(content_hash="bbb"))
     assert refetched.llm_tier is None
     assert refetched.summary is None
@@ -87,10 +90,12 @@ def test_upsert_clears_the_classification_when_the_content_changed(repo):
 def test_apply_classification_records_that_the_model_set_the_tier(repo):
     item = repo.upsert(make_item())
     updated = repo.apply_classification(
-        "me", item.id, tier=Tier.CAN_WAIT, summary="just an FYI", reason="no ask"
+        "me", item.id, tier=Tier.CAN_WAIT, summary="just an FYI", reason="no ask",
+        at=NOW,
     )
     assert updated.llm_tier is Tier.CAN_WAIT
     assert updated.tier_source is TierSource.LLM
+    assert updated.llm_attempted_at == NOW  # the attempt is stamped
     assert updated.rule_tier is Tier.TODAY  # the rule verdict is not overwritten
 
 
@@ -98,7 +103,7 @@ def test_apply_classification_is_scoped_to_the_user(repo):
     item = repo.upsert(make_item(user_id="me"))
     assert (
         repo.apply_classification(
-            "someone-else", item.id, tier=Tier.URGENT, summary="s", reason="r"
+            "someone-else", item.id, tier=Tier.URGENT, summary="s", reason="r", at=NOW
         )
         is None
     )
@@ -109,7 +114,9 @@ def test_pending_classification_returns_only_unclassified_items_that_need_it(rep
     wanted = repo.upsert(make_item(source_ref="r#1", needs_llm=True, title="wanted"))
     repo.upsert(make_item(source_ref="r#2", needs_llm=False, title="rule only"))
     done = repo.upsert(make_item(source_ref="r#3", needs_llm=True, title="done"))
-    repo.apply_classification("me", done.id, tier=Tier.NOISE, summary="s", reason="r")
+    repo.apply_classification(
+        "me", done.id, tier=Tier.NOISE, summary="s", reason="r", at=NOW
+    )
 
     pending = repo.list_pending_classification("me")
     assert [item.id for item in pending] == [wanted.id]
@@ -193,6 +200,64 @@ def test_get_is_scoped_to_the_user(repo):
     item = repo.upsert(make_item(user_id="me"))
     assert repo.get("me", item.id) is not None
     assert repo.get("intruder", item.id) is None
+
+
+def test_mark_attempted_makes_a_failed_item_distinct_from_a_held_one(repo):
+    """A held item and a failed one both lack an ``llm_tier``; only the attempt
+    marker separates them, and it is what lets the feed show the failed one at
+    its ceiling rather than hiding it with the still-pending ones."""
+    item = repo.upsert(make_item(needs_llm=True))
+    assert repo.get("me", item.id).llm_attempted_at is None  # held
+
+    repo.mark_attempted("me", [item.id], at=NOW)
+
+    got = repo.get("me", item.id)
+    assert got.llm_tier is None
+    assert got.llm_attempted_at == NOW  # failed, not held
+
+
+def test_mark_attempted_never_clobbers_a_verdict_that_landed(repo):
+    """The bulk mark runs after a failed batch, but a verdict may have landed on
+    one of its items in between; the ``llm_tier is null`` guard protects it."""
+    item = repo.upsert(make_item(needs_llm=True, content_hash="h"))
+    repo.apply_classification(
+        "me", item.id, tier=Tier.URGENT, summary="s", reason="r", at=NOW
+    )
+    repo.mark_attempted("me", [item.id], at=NOW + timedelta(hours=1))
+    assert repo.get("me", item.id).llm_tier is Tier.URGENT
+
+
+def test_content_change_keeps_a_classified_card_visible(repo):
+    """H1: when a classified item's content changes it is re-queued, but its
+    attempt marker survives so it stays visible (at the ceiling) instead of
+    dropping back into the hidden held state mid-session."""
+    item = repo.upsert(make_item(needs_llm=True, content_hash="aaa"))
+    repo.apply_classification(
+        "me", item.id, tier=Tier.CAN_WAIT, summary="s", reason="r", at=NOW
+    )
+    refetched = repo.upsert(make_item(needs_llm=True, content_hash="bbb"))
+    assert refetched.llm_tier is None  # the stale verdict is dropped
+    assert refetched.llm_attempted_at == NOW  # but it is not held -> still shown
+
+
+def test_the_db_backed_cache_reads_a_verdict_off_an_existing_row():
+    """H4: the classification cache is the feed table itself, so it survives a
+    restart and is shared across workers. A row already classified for one item
+    answers the cache for another item with the same content hash."""
+    from backend.repositories.supabase_feed_repository import (
+        SupabaseClassificationCache,
+    )
+
+    client = FakeSupabaseClient()
+    repo = SupabaseFeedRepository(client)
+    item = repo.upsert(make_item(content_hash="shared", needs_llm=True))
+    repo.apply_classification(
+        "me", item.id, tier=Tier.URGENT, summary="blocked", reason="direct ask", at=NOW
+    )
+
+    cache = SupabaseClassificationCache(client)
+    assert cache.get("shared") == (Tier.URGENT, "blocked", "direct ask")
+    assert cache.get("never-seen") is None
 
 
 def test_an_overdue_item_is_not_aged_out_of_the_feed():

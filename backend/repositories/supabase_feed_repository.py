@@ -171,7 +171,14 @@ class SupabaseFeedRepository:
         return _deserialize(rows[0]) if rows else None
 
     def apply_classification(
-        self, user_id: str, item_id: str, *, tier: Tier, summary: str, reason: str
+        self,
+        user_id: str,
+        item_id: str,
+        *,
+        tier: Tier,
+        summary: str,
+        reason: str,
+        at: datetime,
     ) -> FeedItem | None:
         rows = (
             self._db.table(_TABLE)
@@ -181,6 +188,7 @@ class SupabaseFeedRepository:
                     "tier_source": TierSource.LLM.value,
                     "summary": summary,
                     "reason": reason,
+                    "llm_attempted_at": at.isoformat(),
                 }
             )
             .eq("user_id", user_id)
@@ -190,16 +198,37 @@ class SupabaseFeedRepository:
         )
         return _deserialize(rows[0]) if rows else None
 
+    def mark_attempted(
+        self, user_id: str, item_ids: list[str], *, at: datetime
+    ) -> None:
+        if not item_ids:
+            return
+        # Only rows still lacking a verdict: a race that landed one in between
+        # must not be reset to "failed".
+        (
+            self._db.table(_TABLE)
+            .update({"llm_attempted_at": at.isoformat()})
+            .eq("user_id", user_id)
+            .in_("id", item_ids)
+            .is_("llm_tier", "null")
+            .execute()
+        )
+
     # ---------------------------------------------------------- retention
 
     def purge_expired(self, now: datetime | None = None) -> int:
         """Delete past the 30-day window. Later *holds* 30 days; it does not
-        merely hide older rows (plan 3.11)."""
+        merely hide older rows (plan 3.11).
+
+        Keyed on ``created_at`` (when we ingested), not ``occurred_at`` (when the
+        event happened): a mention email from 40 days ago that only just arrived
+        and is still being classified would otherwise be deleted before it was
+        ever shown (M3). Aging by ingest time gives every row its full window."""
         now = now or datetime.now(timezone.utc)
         rows = (
             self._db.table(_TABLE)
             .delete()
-            .lt("occurred_at", (now - RETENTION).isoformat())
+            .lt("created_at", (now - RETENTION).isoformat())
             .execute()
             .data
         )
@@ -218,6 +247,45 @@ class SupabaseFeedRepository:
             .data
         )
         return rows[0] if rows else None
+
+
+class SupabaseClassificationCache:
+    """The model cache, read through the feed table itself.
+
+    Every classified row already persists ``(content_hash, llm_tier, summary,
+    reason)``, so a second store is redundant and, worse, per-process: the
+    in-memory cache is cold on every restart and unshared across workers, so on
+    a synchronous refresh it re-hits the model for content it has already judged
+    (H4). Reading the existing rows makes the cache durable and shared for free.
+    ``put`` is a no-op: ``apply_classification`` has already written the row."""
+
+    def __init__(self, client: Client) -> None:
+        self._db = client
+
+    def get(self, content_hash: str) -> tuple[Tier, str, str] | None:
+        rows = (
+            self._db.table(_TABLE)
+            .select("llm_tier, summary, reason")
+            .eq("content_hash", content_hash)
+            .not_.is_("llm_tier", "null")
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        try:
+            tier = Tier(row["llm_tier"])
+        except (ValueError, KeyError):
+            return None
+        return tier, row.get("summary") or "", row.get("reason") or ""
+
+    def put(
+        self, content_hash: str, tier: Tier, summary: str, reason: str, *, model: str
+    ) -> None:
+        # Already persisted on the row by apply_classification.
+        return None
 
 
 def _serialize(item: FeedItem) -> dict[str, Any]:

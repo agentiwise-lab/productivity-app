@@ -48,6 +48,10 @@ class _Query:
         self._filters.append(lambda row: row.get(column) is None)
         return self
 
+    @property
+    def not_(self) -> "_Not":
+        return _Not(self)
+
     def gte(self, column: str, value: str) -> "_Query":
         self._filters.append(
             lambda row: row.get(column) is not None and row[column] >= value
@@ -138,6 +142,19 @@ class _Query:
 
     def _matches(self, row: dict) -> bool:
         return all(predicate(row) for predicate in self._filters)
+
+
+class _Not:
+    """The ``.not_.is_(col, "null")`` form: "column is not null"."""
+
+    def __init__(self, query: "_Query") -> None:
+        self._query = query
+
+    def is_(self, column: str, value: str) -> "_Query":
+        if value != "null":
+            raise NotImplementedError(f"not_.is_ only supports null, got {value!r}")
+        self._query._filters.append(lambda row: row.get(column) is not None)
+        return self._query
 
 
 class _Table:

@@ -73,7 +73,10 @@ def build_app() -> FastAPI:
     classifier = DefaultClassificationService(
         model=DefaultTriageModel(),
         repo=repo,
-        cache=InMemoryClassificationCache(),
+        # DB-backed when Supabase is configured, so the cache is durable across
+        # restarts and shared across workers (H4): the synchronous refresh path
+        # would otherwise re-hit the model for content already judged.
+        cache=_build_classification_cache(),
         daily_budget=int(os.environ.get("LLM_DAILY_BUDGET", "200")),
         model_name=os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash"),
     )
@@ -104,7 +107,10 @@ def build_app() -> FastAPI:
         integrations=integrations,
         classifier=classifier,
         identity_for=connections.identity_for,
-        classify_async=True,
+        # Synchronous (Decision C): items appear already in their tier on refresh,
+        # never as a placeholder. Bounded by classify_budget so a large first
+        # sync cannot block the response.
+        classify_async=False,
     )
 
     stats = SourceStatsService(
@@ -220,6 +226,21 @@ def _auth_config_ids() -> dict[Source, str]:
         for source, var in _AUTH_CONFIG_ENV.items()
         if os.environ.get(var)
     }
+
+
+def _build_classification_cache():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return InMemoryClassificationCache()
+
+    from supabase import create_client
+
+    from backend.repositories.supabase_feed_repository import (
+        SupabaseClassificationCache,
+    )
+
+    return SupabaseClassificationCache(create_client(url, key))
 
 
 def _build_connection_repository(composio, composio_user):

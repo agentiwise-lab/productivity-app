@@ -4,11 +4,22 @@ from fastapi.testclient import TestClient
 
 from backend.main import create_app
 from backend.models.feed import UserPreferences
+from backend.models.tiers import Tier
 from tests.fakes import FakeGitHubService, make_event
 
 prefs = UserPreferences(user_id="me")
 
 USER = "8f1c2c1e-0000-4000-8000-000000000001"
+
+NOW = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
+
+
+def _classify(app, item_id: str, tier: Tier = Tier.TODAY, user: str = "me") -> None:
+    """Land a model verdict on a held item so it reaches the feed. Banded items
+    are held off-screen until judged, which is what the endpoint tests then see."""
+    app.state.feed_service._repo.apply_classification(
+        user, item_id, tier=tier, summary="s", reason="r", at=NOW
+    )
 
 NOTIFICATION = {
     "id": "1",
@@ -32,10 +43,15 @@ def test_feed_endpoint_returns_ranked_items():
     svc = app.state.feed_service
     # "subscribed" is discarded at ingest now, so the low end of the ranking is
     # a comment: the lowest tier that still reaches the feed.
-    svc.ingest("me", make_event(source_ref="octo/repo#1", reason="comment"), prefs)
-    svc.ingest(
+    comment = svc.ingest(
+        "me", make_event(source_ref="octo/repo#1", reason="comment"), prefs
+    )
+    approval = svc.ingest(
         "me", make_event(source_ref="octo/repo#2", reason="approval_requested"), prefs
     )
+    # Both are held until the model rates them (comment Can wait, approval Today).
+    _classify(app, comment.id, Tier.CAN_WAIT)
+    _classify(app, approval.id, Tier.TODAY)
 
     client = TestClient(app)
     response = client.get("/feed", headers={"X-User-Id": "me"})
@@ -81,7 +97,8 @@ def test_action_on_missing_item_returns_404():
 
 def test_feed_is_isolated_per_user():
     app = dev_app()
-    app.state.feed_service.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
+    item = app.state.feed_service.ingest("me", make_event(source_ref="octo/repo#1"), prefs)
+    _classify(app, item.id)
 
     client = TestClient(app)
     assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1
@@ -174,6 +191,10 @@ def test_a_verified_webhook_creates_a_feed_item():
 
     assert response.status_code == 200
     assert response.json()["handled"] is True
+    # The item is held until classified (no classifier wired in this dev app);
+    # landing a verdict is what surfaces it, exactly as production's post-ack
+    # classify does.
+    _classify(app, response.json()["item_id"], Tier.TODAY, user=USER)
     assert len(app.state.feed_service.list_feed(USER)) == 1
 
 
@@ -239,6 +260,7 @@ def test_snooze_endpoint_hides_the_item_until_its_time():
     item = app.state.feed_service.ingest(
         "me", make_event(source_ref="octo/repo#7"), prefs
     )
+    _classify(app, item.id)
     client = TestClient(app)
 
     response = client.post(
@@ -371,7 +393,10 @@ def test_refresh_pulls_notifications_into_the_feed():
 
     assert response.status_code == 200
     assert response.json()["ingested"] == 1
-    # A review request defaults to Today under the bands; the model may lift it.
+    # No classifier is wired in this dev app, so the review request is held until
+    # a verdict lands; the model rates it Today (within its band floor..ceiling).
+    for stored in app.state.feed_service._repo.list_by_user("me"):
+        _classify(app, stored.id, Tier.TODAY)
     assert [row["tier"] for row in client.get("/feed", headers={"X-User-Id": "me"}).json()] == [
         "today"
     ]
@@ -386,6 +411,8 @@ def test_refresh_is_idempotent():
     client.post("/feed/refresh", headers={"X-User-Id": "me"})
     client.post("/feed/refresh", headers={"X-User-Id": "me"})
 
+    for stored in app.state.feed_service._repo.list_by_user("me"):
+        _classify(app, stored.id, Tier.TODAY)
     assert len(client.get("/feed", headers={"X-User-Id": "me"}).json()) == 1
 
 

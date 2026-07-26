@@ -38,11 +38,11 @@ class FakeClassifier:
         self.calls = 0
         self._error = error
 
-    def classify_pending(self, user_id):
+    def classify_pending(self, user_id, *, time_budget=None):
         self.calls += 1
         if self._error:
             raise self._error
-        return type("R", (), {"classified": 3})()
+        return type("R", (), {"classified": 3, "unclassified": 0})()
 
 
 class FakeIntegrations:

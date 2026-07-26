@@ -61,6 +61,12 @@ class FeedItem(BaseModel):
     # Set by the rules when urgency lives in prose. The classification queue is
     # exactly the rows where this is true and llm_tier is still None.
     needs_llm: bool = False
+    # When the model last *attempted* this item, success or failure. This is the
+    # marker that separates a held item (needs_llm, no llm_tier, never attempted
+    # -> hidden until classified) from a failed one (attempted, still no llm_tier
+    # -> shown at the band ceiling). Without it the two are byte-identical and a
+    # model outage would either hide every LLM item or defeat the hold entirely.
+    llm_attempted_at: datetime | None = None
 
     # --- card content (6.1: none of this is optional on the card) ---
     title: str

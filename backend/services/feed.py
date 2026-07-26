@@ -12,7 +12,7 @@ It depends only on the other services' contracts, never their implementations.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
@@ -22,7 +22,7 @@ from backend.models.feed import FeedItem, FeedRow, FeedStatus, UserPreferences
 from backend.models.identity import Identity
 from backend.repositories.feed_repository import FeedRepository
 from backend.services.hashing import content_hash
-from backend.services.ranking import effective_tier, score
+from backend.services.ranking import effective_tier, read_time_reason, score
 from backend.models.tiers import Tier
 from backend.services.rules import RuleClassifier, RuleVerdict
 
@@ -48,6 +48,22 @@ def _reaches_no_screen(verdict: RuleVerdict) -> bool:
     dropping. A non-ephemeral noise item is kept as a visible "later" row.
     """
     return verdict.tier is Tier.NOISE and not verdict.needs_llm and verdict.ephemeral
+
+
+def _is_held(item: FeedItem) -> bool:
+    """True while the model still owes this item a verdict.
+
+    An item the rules deferred (``needs_llm``) has no real tier until the model
+    lands one. Showing it meanwhile would mean a placeholder tier and a blank
+    reason, which is exactly what this redesign exists to prevent. The
+    ``llm_attempted_at`` marker is what keeps this from also hiding a *failed*
+    item: once the model has tried and given up, the item is no longer held —
+    it surfaces at its band ceiling instead."""
+    return (
+        item.needs_llm
+        and item.llm_tier is None
+        and item.llm_attempted_at is None
+    )
 
 
 def _meeting_has_passed(item: FeedItem, now: datetime) -> bool:
@@ -81,7 +97,10 @@ class FeedService(Protocol):
         ...
 
     def list_feed(
-        self, user_id: str, prefs: UserPreferences | None = None
+        self,
+        user_id: str,
+        prefs: UserPreferences | None = None,
+        tz: tzinfo = timezone.utc,
     ) -> list[FeedRow]:
         ...
 
@@ -144,19 +163,31 @@ class DefaultFeedService:
         return self._repo.upsert(item)
 
     def list_feed(
-        self, user_id: str, prefs: UserPreferences | None = None
+        self,
+        user_id: str,
+        prefs: UserPreferences | None = None,
+        tz: tzinfo = timezone.utc,
     ) -> list[FeedRow]:
         prefs = prefs or UserPreferences(user_id=user_id)
         now = self._now()
-        rows = [
-            FeedRow(
-                **item.model_dump(),
-                tier=effective_tier(item, now=now),
-                priority_score=score(item, prefs, now=now),
+        rows = []
+        for item in self._repo.list_by_user(user_id):
+            # Held items (deferred to the model, not yet judged) never reach a
+            # screen: a placeholder tier and a blank reason is the one thing this
+            # feed must not show. Passed meetings are equally over.
+            if _is_held(item) or _meeting_has_passed(item, now):
+                continue
+            data = item.model_dump()
+            reason = read_time_reason(item, now=now, tz=tz)
+            if reason is not None:
+                data["reason"] = reason
+            rows.append(
+                FeedRow(
+                    **data,
+                    tier=effective_tier(item, now=now, tz=tz),
+                    priority_score=score(item, prefs, now=now, tz=tz),
+                )
             )
-            for item in self._repo.list_by_user(user_id)
-            if not _meeting_has_passed(item, now)
-        ]
         rows.sort(key=lambda row: row.priority_score, reverse=True)
         return rows
 

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone, tzinfo
 from typing import Any, Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +46,18 @@ from backend.services.profile import UserNotFound
 from backend.services.rules import DefaultRuleClassifier
 
 log = logging.getLogger(__name__)
+
+
+def _parse_tz(name: str | None) -> tzinfo:
+    """A client-supplied IANA zone name, or UTC when absent or unrecognised.
+
+    Never raises: a bad zone from a client is a fall-back to UTC, not a 500."""
+    if not name:
+        return timezone.utc
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        return timezone.utc
 
 
 class _UnconfiguredGitHubService:
@@ -151,6 +165,9 @@ class NameBody(BaseModel):
 class RefreshResult(BaseModel):
     ingested: int
     classified: int
+    #: Ingested but not yet classified when the refresh returned. The app shows
+    #: "still classifying N" instead of reading an incomplete feed as finished.
+    held: int = 0
     per_source: dict[str, int] = {}
     failed: dict[str, str] = {}
 
@@ -205,7 +222,15 @@ def create_app(
     action_service = DefaultActionService(
         repo=repo, integrations=resolved_integrations
     )
-    ingest_service = WebhookIngestService(feed=feed_service, connections=connections)
+    # Classifies the single pushed item after the 200 ack (Decision C). A small
+    # pool keeps the webhook response off the model's latency.
+    webhook_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="webhook")
+    ingest_service = WebhookIngestService(
+        feed=feed_service,
+        connections=connections,
+        classifier=classifier,
+        background=lambda work: webhook_pool.submit(work),
+    )
     current_user = build_current_user(auth_mode, token_codec)
 
     app = FastAPI(title="Work feed")
@@ -235,8 +260,14 @@ def create_app(
         return {"status": "ok"}
 
     @app.get("/feed", response_model=list[FeedRow])
-    def get_feed(user_id: str = Depends(current_user)) -> list[FeedRow]:
-        return feed_service.list_feed(user_id, UserPreferences(user_id=user_id))
+    def get_feed(
+        tz: str | None = None, user_id: str = Depends(current_user)
+    ) -> list[FeedRow]:
+        # The client sends its IANA zone (e.g. "Asia/Kolkata"); "today" for a
+        # Linear due date is that calendar day, not UTC's. Unknown/absent -> UTC.
+        return feed_service.list_feed(
+            user_id, UserPreferences(user_id=user_id), tz=_parse_tz(tz)
+        )
 
     @app.post("/feed/refresh", response_model=RefreshResult)
     def refresh(user_id: str = Depends(current_user)) -> RefreshResult:
@@ -252,6 +283,7 @@ def create_app(
             return RefreshResult(
                 ingested=report.ingested,
                 classified=report.classified,
+                held=report.held,
                 per_source=report.per_source,
                 failed=report.failed,
             )

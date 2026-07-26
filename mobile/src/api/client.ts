@@ -127,7 +127,11 @@ export class ApiClient {
    */
   async getFeed(): Promise<FeedResult> {
     try {
-      const rows = await this.request<FeedRow[]>('/feed');
+      // The device knows its own zone; the server needs it so "today" for a
+      // Linear due date is the user's calendar day, not UTC's.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const query = tz ? `?tz=${encodeURIComponent(tz)}` : '';
+      const rows = await this.request<FeedRow[]>(`/feed${query}`);
       const now = new Date();
       await AsyncStorage.multiSet([
         [CACHE_KEY, JSON.stringify(rows)],

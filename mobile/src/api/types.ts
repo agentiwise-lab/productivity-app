@@ -63,6 +63,9 @@ export interface FeedRow {
 export interface RefreshResult {
   ingested: number;
   classified: number;
+  /** Ingested but not yet classified when the refresh returned. Non-zero means
+   *  more cards will appear as the model finishes: "still classifying N". */
+  held?: number;
 }
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'expired' | 'error';

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Protocol
 
 from pydantic import BaseModel
@@ -101,6 +101,10 @@ class ClassificationReport(BaseModel):
     classified: int = 0
     from_cache: int = 0
     failed_batches: int = 0
+    #: Items still without a verdict after this pass (held or failed). The
+    #: syncing pill reports this as "still classifying N" so a finished sync with
+    #: an incomplete feed does not read as "nothing else needs you".
+    unclassified: int = 0
     urgent_ratio: float = 0.0
     alarm: bool = False
 
@@ -142,23 +146,34 @@ class DefaultClassificationService:
         self._model_name = model_name
         self._now = clock or (lambda: datetime.now(timezone.utc))
 
-    def classify_pending(self, user_id: str) -> ClassificationReport:
+    def classify_pending(
+        self, user_id: str, *, time_budget: float | None = None
+    ) -> ClassificationReport:
+        """Classify this user's held items.
+
+        ``time_budget`` (seconds) bounds the synchronous refresh path: once it is
+        exceeded no new batch is *started*, and whatever is left stays held for
+        the next pass. Without a budget (the background path) it runs the whole
+        queue up to ``daily_budget``."""
         pending = self._repo.list_pending_classification(user_id, limit=self._budget)
         report = ClassificationReport(requested=len(pending))
         if not pending:
             return report
 
+        deadline = None
+        if time_budget is not None:
+            deadline = self._now() + timedelta(seconds=time_budget)
+
         uncached = [item for item in pending if not self._apply_cached(user_id, item, report)]
         tiers: list[Tier] = []
 
         for start in range(0, len(uncached), BATCH_SIZE):
+            if deadline is not None and self._now() >= deadline:
+                break
             batch = uncached[start : start + BATCH_SIZE]
-            verdicts = self._judge(batch)
-            if verdicts is None:
-                report.failed_batches += 1
-                continue
-            tiers.extend(self._apply(user_id, batch, verdicts, report))
+            tiers.extend(self._run_batch(user_id, batch, report))
 
+        report.unclassified = report.requested - report.classified
         if tiers:
             report.urgent_ratio = sum(t is Tier.URGENT for t in tiers) / len(tiers)
             report.alarm = report.urgent_ratio > ALARM_URGENT_RATIO
@@ -169,6 +184,43 @@ class DefaultClassificationService:
                     len(tiers),
                 )
         return report
+
+    def classify_item(self, user_id: str, item: FeedItem) -> ClassificationReport:
+        """Classify a single item now (the webhook path).
+
+        The webhook acks Composio's delivery first, then calls this on the one
+        pushed item, so the item appears already-classified about a second later
+        rather than as a placeholder — without coupling delivery to model
+        latency. Never the whole-user sweep: one DM must not re-run the backlog."""
+        report = ClassificationReport(requested=1)
+        if not (item.needs_llm and item.llm_tier is None):
+            return report
+        if not self._apply_cached(user_id, item, report):
+            self._run_batch(user_id, [item], report)
+        report.unclassified = report.requested - report.classified
+        return report
+
+    def _run_batch(
+        self, user_id: str, batch: list[FeedItem], report: ClassificationReport
+    ) -> list[Tier]:
+        """One model batch: judge, apply, and mark every item attempted.
+
+        Whatever the model does not return a usable verdict for — a failed batch
+        or an id it silently dropped — is still marked *attempted*, so it stops
+        being held and surfaces at its band ceiling instead of vanishing."""
+        verdicts = self._judge(batch)
+        if verdicts is None:
+            report.failed_batches += 1
+            self._repo.mark_attempted(
+                user_id, [item.id for item in batch], at=self._now()
+            )
+            return []
+        applied = self._apply(user_id, batch, verdicts, report)
+        judged_ids = {item.id for item, _ in applied}
+        missed = [item.id for item in batch if item.id not in judged_ids]
+        if missed:
+            self._repo.mark_attempted(user_id, missed, at=self._now())
+        return [tier for _, tier in applied]
 
     # ------------------------------------------------------------ internals
 
@@ -182,7 +234,7 @@ class DefaultClassificationService:
             return False
         tier, summary, reason = hit
         self._repo.apply_classification(
-            user_id, item.id, tier=tier, summary=summary, reason=reason
+            user_id, item.id, tier=tier, summary=summary, reason=reason, at=self._now()
         )
         report.from_cache += 1
         report.classified += 1
@@ -219,9 +271,9 @@ class DefaultClassificationService:
         batch: list[FeedItem],
         verdicts: list[dict],
         report: ClassificationReport,
-    ) -> list[Tier]:
+    ) -> list[tuple[FeedItem, Tier]]:
         by_id = {item.id: item for item in batch}
-        applied: list[Tier] = []
+        applied: list[tuple[FeedItem, Tier]] = []
 
         for verdict in verdicts:
             item = by_id.get(verdict.get("id"))
@@ -239,14 +291,19 @@ class DefaultClassificationService:
             reason = str(verdict.get("reason") or "")[:60]
 
             self._repo.apply_classification(
-                user_id, item.id, tier=tier, summary=summary, reason=reason
+                user_id,
+                item.id,
+                tier=tier,
+                summary=summary,
+                reason=reason,
+                at=self._now(),
             )
             if item.content_hash:
                 self._cache.put(
                     item.content_hash, tier, summary, reason, model=self._model_name
                 )
             report.classified += 1
-            applied.append(tier)
+            applied.append((item, tier))
 
         return applied
 

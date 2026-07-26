@@ -62,10 +62,28 @@ class FeedRepository(Protocol):
         ...
 
     def apply_classification(
-        self, user_id: str, item_id: str, *, tier: Tier, summary: str, reason: str
+        self,
+        user_id: str,
+        item_id: str,
+        *,
+        tier: Tier,
+        summary: str,
+        reason: str,
+        at: datetime,
     ) -> FeedItem | None:
         """Record the model's verdict. Returns None when the item is not this
-        user's, so a misrouted event cannot write across accounts."""
+        user's, so a misrouted event cannot write across accounts. ``at`` also
+        stamps ``llm_attempted_at`` so a re-run does not re-judge it."""
+        ...
+
+    def mark_attempted(
+        self, user_id: str, item_ids: list[str], *, at: datetime
+    ) -> None:
+        """Record that the model tried these items and produced no verdict (a
+        failed batch, or an id it silently dropped). They stop being *held* and
+        surface at their band ceiling; a later pass may still succeed. Only rows
+        still lacking an ``llm_tier`` are touched, so this never clobbers a
+        verdict that landed in between."""
         ...
 
 
@@ -98,16 +116,28 @@ class InMemoryFeedRepository:
     def _carried_classification(existing: FeedItem, incoming: FeedItem) -> dict:
         """Carry the model's verdict across a refetch, but only while it still
         describes the item. A thread that gained replies is a different thing,
-        so its old summary is worse than none at all."""
+        so its old summary is worse than none at all.
+
+        The attempt marker is carried in every case except a never-attempted
+        item: a classified card whose content moved on must keep its marker so
+        it stays visible at the ceiling and gets re-judged, rather than dropping
+        back into the held state and vanishing mid-session (H1)."""
         if existing.llm_tier is None:
+            # Held or failed: carry only a real attempt marker, so a failed item
+            # stays visible; a truly-held one stays held.
+            if existing.llm_attempted_at is not None:
+                return {"llm_attempted_at": existing.llm_attempted_at}
             return {}
         if existing.content_hash != incoming.content_hash:
-            return {}
+            # Stale verdict: re-queue (llm_tier drops to None via the fresh row)
+            # but keep the marker so the card does not disappear until re-judged.
+            return {"llm_attempted_at": existing.llm_attempted_at}
         return {
             "llm_tier": existing.llm_tier,
             "tier_source": existing.tier_source,
             "summary": existing.summary,
             "reason": existing.reason,
+            "llm_attempted_at": existing.llm_attempted_at,
         }
 
     def mark_handled(
@@ -170,7 +200,14 @@ class InMemoryFeedRepository:
         return pending[:limit]
 
     def apply_classification(
-        self, user_id: str, item_id: str, *, tier: Tier, summary: str, reason: str
+        self,
+        user_id: str,
+        item_id: str,
+        *,
+        tier: Tier,
+        summary: str,
+        reason: str,
+        at: datetime,
     ) -> FeedItem | None:
         item = self.get(user_id, item_id)
         if item is None:
@@ -181,7 +218,22 @@ class InMemoryFeedRepository:
                 "tier_source": TierSource.LLM,
                 "summary": summary,
                 "reason": reason,
+                "llm_attempted_at": at,
             }
         )
         self._by_key[(item.user_id, item.source_ref)] = updated
         return updated
+
+    def mark_attempted(
+        self, user_id: str, item_ids: list[str], *, at: datetime
+    ) -> None:
+        wanted = set(item_ids)
+        for key, item in list(self._by_key.items()):
+            if (
+                item.user_id == user_id
+                and item.id in wanted
+                and item.llm_tier is None
+            ):
+                self._by_key[key] = item.model_copy(
+                    update={"llm_attempted_at": at}
+                )
