@@ -128,6 +128,24 @@ def test_a_newsletter_is_not_stored_because_no_screen_reads_it_from_here():
     assert svc.list_feed("me", prefs) == []
 
 
+def test_a_passed_meeting_is_dropped_from_the_feed():
+    """A calendar item whose meeting has ended is gone from the feed at any tier.
+    This also clears stale calendar rows left over from before a refresh."""
+    svc = build()
+    svc.ingest(
+        "me",
+        make_event(
+            source="calendar",
+            source_ref="calendar:1",
+            reason="calendar_meeting",
+            occurred_at=datetime(2026, 7, 23, 9, tzinfo=timezone.utc),
+            deadline=datetime(2026, 7, 23, 10, tzinfo=timezone.utc),  # ended before NOW (12:00)
+        ),
+        prefs,
+    )
+    assert svc.list_feed("me", prefs) == []
+
+
 def test_a_backlog_issue_is_kept_as_a_later_row_not_dropped():
     """A backlog issue with no priority and no date settles as noise (its "later"
     tier), but it is the user's own task, so it is kept and stays in the feed

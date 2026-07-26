@@ -50,6 +50,17 @@ def _reaches_no_screen(verdict: RuleVerdict) -> bool:
     return verdict.tier is Tier.NOISE and not verdict.needs_llm and verdict.ephemeral
 
 
+def _meeting_has_passed(item: FeedItem, now: datetime) -> bool:
+    """A calendar item whose meeting has ended is over and does not belong on the
+    feed at any tier. ``deadline`` carries the meeting's end. This also clears any
+    stale calendar rows left from before a refresh, whose end is already past."""
+    return (
+        item.source == "calendar"
+        and item.deadline is not None
+        and item.deadline <= now
+    )
+
+
 def _pr_ref_from_source_ref(source_ref: str) -> PRRef:
     """Parse "owner/name#number" into a PRRef."""
     repo, _, number = source_ref.partition("#")
@@ -144,6 +155,7 @@ class DefaultFeedService:
                 priority_score=score(item, prefs, now=now),
             )
             for item in self._repo.list_by_user(user_id)
+            if not _meeting_has_passed(item, now)
         ]
         rows.sort(key=lambda row: row.priority_score, reverse=True)
         return rows

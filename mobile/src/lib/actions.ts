@@ -129,7 +129,10 @@ function candidates(row: FeedRow): Action[] {
       // the item and the reason it reached you rather than Later.
       return [REPLY, OPEN, SNOOZE];
     case 'calendar':
-      return [ACCEPT, DECLINE, OPEN];
+      // Accept/Decline only make sense for an invitation awaiting a response.
+      // A meeting already on your day (not an RSVP) just opens to join.
+      if (row.type_tag === 'rsvp') return [ACCEPT, DECLINE, OPEN];
+      return [OPEN];
     case 'google_docs':
       return [REPLY, OPEN, SNOOZE];
     case 'linear':

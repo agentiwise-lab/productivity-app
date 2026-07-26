@@ -44,6 +44,9 @@ _SUPPRESSED = -1_000_000.0
 
 _URGENT_STALE_AFTER = timedelta(hours=24)
 
+# A meeting is urgent within this window before it starts (and while it runs).
+STARTING_SOON = timedelta(hours=1)
+
 
 def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
     """What tier this item is *right now*.
@@ -55,6 +58,13 @@ def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
     — the "review requested, filed as can_wait" bug — without a per-case branch.
     A deadline can still lift within the band; it cannot break the ceiling.
     """
+    # A meeting is not a deadline task: its urgency is purely how close its start
+    # is, so it is judged from that rather than from the generic deadline rule
+    # (which would pin a passed meeting to Urgent forever). Passed meetings are
+    # dropped before display in ``feed.list_feed``.
+    if item.source == "calendar":
+        return _calendar_tier(item, now)
+
     band = band_for(item.signal)
     tier = clamp(item.llm_tier or item.rule_tier, band.floor, band.ceiling)
 
@@ -72,6 +82,17 @@ def effective_tier(item: FeedItem, *, now: datetime) -> Tier:
             return Tier.TODAY
 
     return tier
+
+
+def _calendar_tier(item: FeedItem, now: datetime) -> Tier:
+    """Urgent within the hour before it starts (and while it runs); by-EOD if it
+    is on the day but further out. ``occurred_at`` is the meeting start."""
+    start = item.occurred_at
+    if start is None:
+        return Tier.TODAY
+    if start - now <= STARTING_SOON:
+        return Tier.URGENT
+    return Tier.TODAY
 
 
 def score(item: FeedItem, prefs: UserPreferences, *, now: datetime) -> float:

@@ -78,10 +78,13 @@ TIER_BANDS: dict[str, Band] = {
     # dropped like a newsletter.
     "linear_assigned": Band(N, N, C, TypeTag.ASSIGNED, runs_llm=False, ephemeral=False),
     "linear_backlog": Band(N, N, C, TypeTag.ASSIGNED, runs_llm=False, ephemeral=False),
-    # --- Calendar ---------------------------------------------------------
-    "calendar_starting": Band(U, T, U, TypeTag.FYI, runs_llm=False),
-    "calendar_invite": Band(T, C, U, TypeTag.RSVP, runs_llm=True),
-    "calendar_changed": Band(T, C, U, TypeTag.FYI, runs_llm=False),
+    # --- Calendar: tier is set at read time from how close the start is
+    #     (ranking._calendar_tier), so these band tiers are only the instant
+    #     pre-read value; the model never runs on a meeting. ------------------
+    "calendar_starting": Band(U, N, U, TypeTag.FYI, runs_llm=False),
+    "calendar_meeting": Band(T, N, U, TypeTag.FYI, runs_llm=False),
+    "calendar_invite": Band(T, N, U, TypeTag.RSVP, runs_llm=False),
+    "calendar_changed": Band(T, N, U, TypeTag.FYI, runs_llm=False),
     "calendar_cancelled": Band(N, N, N, TypeTag.FYI, runs_llm=False),
     # --- Google Docs (delivered via Gmail notifications) ------------------
     "docs_mention": Band(C, C, U, TypeTag.COMMENT, runs_llm=True),

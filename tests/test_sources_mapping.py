@@ -51,26 +51,41 @@ def event(**overrides):
     return base
 
 
-def test_a_meeting_starting_within_fifteen_minutes_is_urgent():
-    """The only thing in the feed that genuinely cannot be done later."""
+def test_a_meeting_on_your_day_becomes_a_feed_item():
+    """Today's meetings belong on the feed; the read-time tier (ranking) decides
+    urgent-within-the-hour vs by-EOD. The mapper carries the end as the deadline
+    (so a passed meeting can be dropped) and the start as occurred_at."""
     soon = event(start={"dateTime": at(10, 10)}, end={"dateTime": at(11)})
-    verdict = classify(event_to_raw_event(soon, now=NOW))
-    assert verdict.tier is Tier.URGENT
+    raw = event_to_raw_event(soon, now=NOW)
+    assert raw is not None
+    assert raw.reason == "calendar_meeting"
+    assert raw.deadline.hour == 11  # end
+    assert raw.occurred_at.hour == 10  # start
 
 
-def test_an_invite_awaiting_your_answer_is_today_and_tagged_rsvp():
+def test_an_invite_awaiting_your_answer_is_tagged_rsvp():
     invite = event(attendees=[{"self": True, "responseStatus": "needsAction"}])
     raw = event_to_raw_event(invite, now=NOW)
     verdict = classify(raw)
-    assert verdict.tier is Tier.TODAY
+    assert raw.reason == "calendar_invite"
     assert verdict.type_tag is TypeTag.RSVP
     assert raw.is_blocking is True
 
 
-def test_an_accepted_meeting_hours_away_is_not_a_feed_item():
-    """It is context, not an action, and it belongs on the ruler. Putting every
-    meeting in the feed is how the feed stops meaning "needs you"."""
-    assert event_to_raw_event(event(), now=NOW) is None
+def test_a_meeting_that_has_already_ended_is_not_a_feed_item():
+    """A passed meeting is over: nothing to do about it, so it never reaches the
+    feed. NOW is 10:00; this one ran 08:00-09:00."""
+    over = event(start={"dateTime": at(8)}, end={"dateTime": at(9)})
+    assert event_to_raw_event(over, now=NOW) is None
+
+
+def test_a_meeting_more_than_a_day_out_is_not_a_feed_item():
+    """It is context on the ruler, not an action, until the day of."""
+    far = event(
+        start={"dateTime": (NOW + timedelta(days=2)).isoformat()},
+        end={"dateTime": (NOW + timedelta(days=2, hours=1)).isoformat()},
+    )
+    assert event_to_raw_event(far, now=NOW) is None
 
 
 def test_a_cancelled_event_never_reaches_the_feed():

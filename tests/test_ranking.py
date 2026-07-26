@@ -62,6 +62,35 @@ def test_the_band_lets_the_model_lift_within_it():
     assert effective_tier(item, now=NOW) is Tier.URGENT
 
 
+def test_a_meeting_within_the_hour_is_urgent():
+    item = make_item(
+        source="calendar",
+        occurred_at=NOW + timedelta(minutes=30),
+        deadline=NOW + timedelta(minutes=90),
+    )
+    assert effective_tier(item, now=NOW) is Tier.URGENT
+
+
+def test_an_in_progress_meeting_is_still_urgent():
+    item = make_item(
+        source="calendar",
+        occurred_at=NOW - timedelta(minutes=10),
+        deadline=NOW + timedelta(minutes=50),
+    )
+    assert effective_tier(item, now=NOW) is Tier.URGENT
+
+
+def test_a_meeting_later_today_is_by_eod_not_urgent():
+    """A passed-deadline promotion must never make a meeting on the day urgent
+    hours ahead; only the last hour before it starts does."""
+    item = make_item(
+        source="calendar",
+        occurred_at=NOW + timedelta(hours=5),
+        deadline=NOW + timedelta(hours=6),
+    )
+    assert effective_tier(item, now=NOW) is Tier.TODAY
+
+
 def test_gmail_may_sink_to_later_because_its_floor_is_noise():
     """Gmail is the one source whose floor is noise: a newsletter-ish message
     the model rates as noise stays noise rather than being propped up."""

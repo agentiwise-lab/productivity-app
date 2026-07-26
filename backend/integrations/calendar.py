@@ -25,6 +25,11 @@ CALENDAR_TOOLKIT_VERSION = "20260721_00"
 #: being told is no longer useful.
 STARTING_SOON = timedelta(hours=1)
 
+#: How far ahead a scheduled (already-accepted) meeting is worth putting on the
+#: feed. Meetings inside this window are "your day"; ones further out are context
+#: on the ruler, not an action, so they are left off the feed until the day of.
+DAY_AHEAD = timedelta(hours=18)
+
 
 class Meeting(BaseModel):
     title: str
@@ -72,25 +77,34 @@ def _my_response(event: dict[str, Any], email: str | None) -> str | None:
 def event_to_raw_event(
     event: dict[str, Any], *, email: str | None = None, now: datetime | None = None
 ) -> RawEvent | None:
-    """An event becomes a feed item only when it wants something from you.
+    """An event becomes a feed item when it is on your day or wants an answer.
 
-    Two cases: an invitation you have not answered, and a meeting about to
-    start. A meeting you already accepted and that is hours away is not an
-    action, it is context, and it belongs on the ruler rather than in the feed.
+    A meeting that has already ended is gone: nothing is left to do about it, so
+    it never reaches the feed. What remains is an invitation you have not
+    answered (any time), or a meeting on your day (within the next 18 hours). The
+    *tier* is not decided here — read-time ranking places it from how close the
+    start is (within the hour is Urgent, otherwise by-EOD), so the same stored
+    row moves as the clock does. ``deadline`` carries the *end* so a passed
+    meeting can be dropped, and ``occurred_at`` carries the *start* so the tier
+    can be judged from it.
     """
     now = now or datetime.now(timezone.utc)
     meeting = event_to_meeting(event)
     if meeting is None or event.get("status") == "cancelled":
         return None
 
-    response = _my_response(event, email)
-    starting_soon = timedelta(0) <= meeting.start - now <= STARTING_SOON
+    # Over and done: not an action, not shown.
+    if now >= meeting.end:
+        return None
 
+    response = _my_response(event, email)
+    on_my_day = meeting.start - now <= DAY_AHEAD
     if response == "needsAction":
         reason = "calendar_invite"
-    elif starting_soon:
-        reason = "calendar_starting"
+    elif on_my_day:
+        reason = "calendar_meeting"
     else:
+        # Accepted and more than a day out: context on the ruler, not the feed.
         return None
 
     organizer = (event.get("organizer") or {}).get("email") or ""
@@ -116,7 +130,7 @@ def event_to_raw_event(
             if part
         ),
         actor=Actor(login=organizer, display_name=organizer.split("@")[0] or None),
-        deadline=meeting.start,
+        deadline=meeting.end,
         occurred_at=meeting.start,
         is_blocking=reason == "calendar_invite",
         raw=event,
@@ -152,6 +166,12 @@ def starting_soon_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
         if part
     )
     organizer = data.get("organizer_email") or data.get("creator_email") or ""
+    # The starting-soon payload carries no end time, so estimate one hour out.
+    # ``deadline`` is the meeting's end (used to drop it once it is over), and
+    # ``occurred_at`` is the start (used to judge the tier).
+    end = _parse(data.get("end_timestamp") or data.get("end_time")) or (
+        start + STARTING_SOON
+    )
     return RawEvent(
         source="calendar",
         source_ref=f"calendar:{event_id}",
@@ -165,7 +185,7 @@ def starting_soon_to_raw_event(data: dict[str, Any]) -> RawEvent | None:
         actor=Actor(login=organizer, display_name=organizer.split("@")[0] or None)
         if organizer
         else None,
-        deadline=start,
+        deadline=end,
         occurred_at=start,
         is_blocking=False,
         raw=data,
