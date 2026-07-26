@@ -46,11 +46,21 @@ Implementation: `TIER_BANDS` table (single source of truth) → `rules.py` becom
 - Real-time push (trigger + ingest mapper) exists **only for GitHub + Slack**. Linear/Gmail/Calendar have **no trigger and no ingest mapper** — they reach the feed *only* via the backfill poll in `SourceSync.refresh` (`sync.py`: polls github `list_notifications`, linear `assigned_to_me`, gmail `actionable`, calendar `pending`, slack `unread`). Google Docs is polled by nothing.
 - My round-2 connect fix added `void refresh()` in `connectSource` on `status==='connected'`, which *should* run the backfill for the newly connected source.
 
-**🔬 RCA questions to answer against the live box (logs + code):**
-1. When Linear is connected, does the app actually call `POST /feed/refresh`? Does `SourceSync` poll Linear? Does `linear.assigned_to_me()` succeed, fail, or return empty? (Check box journal + the SyncReport `failed`/`per_source`.) Is "no data" a real pull failure or genuinely zero assigned issues?
-2. Is there a **timing race** — does `refresh()` fire before the Linear account is usable (Composio still finalizing), so the backfill runs against a not-yet-active account and silently returns empty/fails?
-3. Does the backfill need the `connections` row / identity that finalize now writes *asynchronously* (P0 fix backgrounded provisioning)? Could backgrounding have made the on-connect backfill race the row write?
-4. Which sources SHOULD get real-time **triggers** vs be **poll-only**, and **which trigger slugs** per source map to our task categories? 🔬 Research Composio trigger slugs per toolkit (LINEAR_*, GMAIL_*, GOOGLECALENDAR_*, GOOGLEDOCS_*) via `composio search`; only provision the ones that produce items we tier (e.g. Linear issue-assigned; Gmail new/important message; Docs comment/mention/share). Every provisioned slug needs a matching ingest `_MAPPER`.
+**✅ RCA DONE — root cause is permanent caching of a FAILED identity resolution (NOT the async-finalize race).**
+
+`SourceSync` → `linear.assigned_to_me()` → `current_user_id()` (`linear.py:219-230`) guards on `if self._me is _UNSET`; on any exception it sets `self._me = None`. `None` is not `_UNSET`, so Composio is **never re-queried for the life of the service instance.** The factory (`factory.py:67-71`) memoises that instance per `(toolkit, user_id)` for the whole process with no invalidation. The app fires `refresh()` on every mount (`App.tsx:274-276`) — so the FIRST refresh runs *before* Linear is connected, Composio throws `ConnectedAccountNotFound`, `self._me` freezes to `None`, and Linear is dead until the process restarts. Manual refresh reuses the poisoned instance → also empty. Live proof: process uv[57144], `could not resolve the Linear user` at 04:41:45 (first/only real Composio call), Linear connected 04:56, then every later refresh logs only `skipping Linear: no assignee id` with no re-resolve; `feed_items`: gmail 13, github 1, slack 1, calendar 1, **linear 0**.
+
+**The async-finalize race is REFUTED:** `finalize` writes the `connections` row **synchronously** via `mark_active` (`connections.py:191-197`) *before* backgrounding only the trigger-provision/prune half (`:203-205`). And the Linear poll doesn't consult `identity_for` at all — it resolves the assignee from Composio directly. So the P0 backgrounding is not the cause.
+
+**Fix (minimal):** in `current_user_id()`, memoise **only a successful** id; on exception leave `self._me` as `_UNSET` (or a distinct "retry" sentinel) so the next refresh re-queries once the account is executable → self-healing. **Audit the sibling services memoised through the same factory for the identical failure-caching pattern** — Slack channel-map, Calendar own-email (`factory.py` cache is shared by sync/stats/later). This one fix likely also explains the "connect → nothing, refresh later → still nothing" for other sources whenever the app refreshed before that source was connected.
+
+**Trigger slugs per source: RESEARCH DONE (2026-07-26).** Exact Composio findings:
+- **Gmail — clean win:** `GMAIL_NEW_GMAIL_MESSAGE` (poll, empty-config-safe; optional `query:"is:important is:unread"`). Payload: `sender, subject, preview, message_text, thread_id, label_ids`. Provision + one mapper.
+- **Calendar — clean win:** `GOOGLECALENDAR_EVENT_STARTING_SOON_TRIGGER` (poll, empty-config-safe; defaults: 10 min before start, 60-min window, 2-min poll). Payload: `event_id, summary, start_timestamp, html_link, attendees`. Provision + one mapper. (Note: this is the real-time "meeting starting" push; distinct from the `/day` ring pull — see Part D.)
+- **Linear — BLOCKED:** there is **no `LINEAR_ISSUE_ASSIGNED*` trigger.** The proxy is `LINEAR_ISSUE_UPDATED_TRIGGER`, but **every Linear trigger requires a `team_id` in config, unknown at connect time** — same blocker class as the excluded GitHub repo-notification trigger. So Linear **cannot be auto-provisioned** without first resolving the user's teams (extra "list my teams" call → one trigger per team). **Decision:** keep Linear **poll-only** for now (backfill via `SourceSync`), defer team-resolved triggers. Also note Linear nests the issue under `data.data` (envelope has `action/type/url/data`), and `_SLUG_PROVIDER`/`_PROVIDERS` in `ingest.py` need a `LINEAR`→`linear` entry if ever mapped.
+- **Google Docs — no trigger (see Part C):** deliver via Gmail notifications.
+
+So the trigger plan is: **add Gmail + Calendar triggers** (both empty-config, both need a new ingest `_MAPPER` + `_SLUG_PROVIDER`/`_PROVIDERS` prefix entries in `ingest.py`). Linear + Docs stay poll-only. Every mapper must populate `RawEvent` (required: `source, source_ref, reason, subject_type, title, url, repo` — `repo` is required even for non-GitHub, pass `""` or a synthetic context).
 
 **Fixes (design after RCA):**
 - **Reliable data-on-connect:** guarantee that connecting a source pulls and shows its data (fix the race / ensure `refresh()` targets the new source after it is truly active; consider a per-source targeted sync rather than a full refresh).
@@ -59,32 +69,25 @@ Implementation: `TIER_BANDS` table (single source of truth) → `rules.py` becom
 
 ---
 
-## Part C — Google Docs integration (NOT implemented today; build fully) 🔬
+## Part C — Google Docs: no trigger path exists (RESEARCH DONE — decision needed) ⚠️
 
-Confirmed not wired: Google Docs has an auth-config slot (connectable) and 3 **dead** rules entries (`docs_mention`, `docs_comment`, `docs_edited`), but **no integration client** (`factory.py` has no `google_docs`), **no poller, no trigger, no ingest mapper**. User connected it, commented in a doc, refreshed — nothing appeared, and no trigger was created.
+**Composio trigger research (done 2026-07-26):** Google Docs has **NO comment / mention / share trigger.** The only GOOGLEDOCS triggers are document-lifecycle polls (`GOOGLEDOCS_DOCUMENT_UPDATED_TRIGGER` etc.) whose payload is doc metadata (`id, name, modifiedTime, lastModifyingUser, shared`) with **no per-user comment/mention data**. So the feature the user asked for (someone comments-mentions-me / requests access) **cannot be built from a Docs trigger.**
 
-Build it end to end:
-- Integration client (`ComposioGoogleDocsService`) + factory method. 🔬 Research the Composio Google Docs read/trigger actions.
-- Trigger slugs for mention / comment-mentioning-me / share-or-access-request → add to `_TRIGGERS[GOOGLE_DOCS]` + ingest `_MAPPERS` → `RawEvent(source="google_docs", reason=..., url, title, body=comment text, deadline parsed from content)`.
-- Triage: matrix rows above (mentions/comments/share → floor `can_wait`, never `later`; LLM lifts on deadline).
-- Later tab: include Google Docs once it emits.
-- RGR for mappers + bands.
+**The real delivery path is Gmail.** Google itself sends these as emails: a comment-mention arrives from `comments-noreply@docs.google.com` ("X mentioned you in a comment in <doc>"), a share/access request from `drive-shares-noreply@google.com`. So Google Docs mentions/comments/shares ride in on the **Gmail source** (`GMAIL_NEW_GMAIL_MESSAGE`, which IS provisionable). 🔬 Confirm the exact sender addresses live, then either (a) tag those Gmail items with a `google_docs` reason via a sender-sniffing branch in the Gmail mapper, or (b) leave them as Gmail items tiered by the matrix. Recommend (a) so the card reads as a Docs mention, not a generic email.
+
+**Decision for the user:** drop the standalone Google Docs client/trigger build (there's nothing to build against) and deliver Docs mentions/comments/shares through Gmail-notification sniffing. This removes Part C's `ComposioGoogleDocsService` + Docs-trigger work entirely and folds it into the Gmail mapper. Matrix rows 11-13 still apply — just sourced from Gmail.
 
 ---
 
-## Part D — Calendar / Day tab 🔬 **RCA REQUIRED**
+## Part D — Calendar / Day tab ✅ **RCA DONE — one-line wiring bug**
 
-**Symptoms (live testing):**
-- User has **4 meetings scheduled**, but the Day tab shows **"no meetings today"**, nothing highlighted on the day-ring outer circle. So the **calendar day pull is not working / not displaying**. (The feed side partly works: a `calendar_starting` meeting shows under Urgent when Urgent is tapped — so `/day` vs the feed are diverging.)
-- When a meeting is **in progress**, the default Day view (nothing selected) shows "no meetings today" instead of the current meeting. Only tapping Urgent reveals "wiki testing meeting is going on".
+**Root cause (confirmed, code + live box):** `GET /day` (`main.py:415-432`) reads a **`calendar=` closure param** that `composition.py` **never passes** → it's always `None` → `get_day` short-circuits to `return []` at `main.py:418-419` and never makes a single Composio call. The feed works because it reads the **per-user integrations factory** (`self._integrations.calendar(user_id)` in `sync.py:91-93`), which composition DOES wire (`integrations=`). Pure wiring divergence — not timezone, not display, not identity. Live journal confirms every `GET /day` returns 200 with zero calendar activity.
 
-**🔬 RCA questions:**
-1. Does `GET /day` (`calendar.day` read) return the 4 meetings? Is the Calendar account connected + the day read succeeding? Why does the day-ring get nothing while the feed has a calendar item?
-2. Is it a pull failure, an identity/account issue, or a display bug in `YourDayScreen` (meetings present but not rendered)?
+**Fix (minimal, one place):** make `get_day` read from the per-user factory like the feed does — `cal = resolved_integrations.calendar(user_id)` — and delete the dead standalone `calendar` param + its `_StaticIntegrations` shim so the two paths can't diverge again. `day_window()` already returns a wide UTC window (−18h/+30h) and the client filters to the device day.
 
-**Fixes (design after RCA):**
-- Make the calendar day pull work (meetings populate the ring + the meetings section).
-- Day default view: when a meeting is in progress, show **"in progress" + the next one**; when none is in progress, show the **next** meeting. Never show "no meetings today" when meetings exist.
+**In-progress / next display:** **no client change needed.** `YourDayScreen` logic is already correct — `ahead` includes in-progress meetings (`end > now`), index 0 renders highlighted, `daySummary` says "next now" when `gap <= 0`. It shows "No meetings today" today *only* because `meetings` is `[]` from the empty `/day`. Fixing the pull fixes the display automatically.
+
+**RGR:** failing test first — `FakeIntegrations.calendar(user_id)` returns a fake whose `day_window()` yields meetings; assert `GET /day` returns them. Add a composition-level wiring assertion so the gap can't regress (current tests inject `calendar=` directly, which masked it).
 
 ---
 
