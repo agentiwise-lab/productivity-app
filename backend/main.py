@@ -31,7 +31,6 @@ from backend.models.events import RawEvent
 from backend.models.feed import FeedItem, FeedRow, UserPreferences
 from backend.models.profile import Profile
 from backend.models.sources import CATALOGUE, Source, SourceInfo
-from backend.models.tiers import Tier
 from backend.services.stats import SourceDashboard
 from backend.repositories.feed_repository import FeedRepository, InMemoryFeedRepository
 from backend.services.actions import (
@@ -62,18 +61,15 @@ def _parse_tz(name: str | None) -> tzinfo:
 
 
 def _on_home_refs(repo: FeedRepository, user_id: str) -> set[str]:
-    """The source_refs Later must exclude: everything stored except what the
-    model settled as noise.
+    """The source_refs Later must exclude: everything currently stored for the
+    feed.
 
-    A held item (``llm_tier`` None, still pending) stays excluded so it does not
-    flicker into Later mid-classification. But an item the model judged noise
-    belongs in Later's live view (bible 7.1), so it is dropped from the exclusion
-    set and surfaces there rather than lingering hidden on neither screen."""
-    return {
-        item.source_ref
-        for item in repo.list_by_user(user_id)
-        if item.llm_tier is not Tier.NOISE
-    }
+    Noise-tier items now render in To-dos (at the bottom), so they are on Home and
+    must be excluded from Later too — otherwise a model-rated-noise item would show
+    in both places. Later stays the residual: the live provider set minus whatever
+    the refresh already pulled into the feed (deterministic noise, never stored, is
+    the bulk of it)."""
+    return {item.source_ref for item in repo.list_by_user(user_id)}
 
 
 class _UnconfiguredGitHubService:

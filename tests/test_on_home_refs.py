@@ -1,8 +1,8 @@
 """Contract for main._on_home_refs (the Later exclusion set).
 
-Held items stay excluded from Later (they must not flicker in mid-classification);
-an item the model settled as noise is dropped from the exclusion set so it
-surfaces in Later's live view (bible 7.1).
+Everything stored for the feed is on Home now — including noise-tier items, which
+render at the bottom of To-dos — so all of it is excluded from Later. Later stays
+the residual: the live provider set minus what the refresh already pulled in.
 """
 
 from __future__ import annotations
@@ -35,14 +35,14 @@ def _item(source_ref: str, **overrides) -> FeedItem:
     return FeedItem(**defaults)
 
 
-def test_model_noise_is_excluded_so_later_can_show_it():
+def test_everything_stored_is_excluded_from_later():
     repo = InMemoryFeedRepository()
     repo.upsert(_item("gmail:held"))  # llm_tier None -> still held
-    repo.upsert(_item("gmail:noise", llm_tier=Tier.NOISE))  # model said noise
+    repo.upsert(_item("gmail:noise", llm_tier=Tier.NOISE))  # shown at bottom of To-dos
     repo.upsert(_item("gmail:kept", llm_tier=Tier.TODAY))  # elevated to Home
 
     refs = _on_home_refs(repo, "me")
 
-    assert "gmail:noise" not in refs  # surfaces in Later
-    assert "gmail:held" in refs  # excluded from Later while pending
-    assert "gmail:kept" in refs  # on Home, excluded from Later
+    # All three are on Home (noise renders at the bottom), so none double-shows
+    # in Later; Later is the live provider residual minus these.
+    assert refs == {"gmail:held", "gmail:noise", "gmail:kept"}

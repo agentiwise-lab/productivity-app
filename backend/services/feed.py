@@ -199,12 +199,11 @@ class DefaultFeedService:
             if _calendar_off_day(item, now, tz):
                 continue
             tier = effective_tier(item, now=now, tz=tz)
-            # Home is the three elevated buckets. An item the model settled as
-            # noise belongs in Later (which reads it live), not lingering on Home
-            # at a noise tier (bible 7.1). Deterministic noise never reaches here
-            # — it is dropped at ingest — so this only catches model-rated noise.
-            if tier is Tier.NOISE:
-                continue
+            # Noise-tier items are kept and returned: To-dos renders them at the
+            # bottom (below can_wait), so the Later material the refresh already
+            # identified is visible in the feed (Vicky's call 2026-07-27). The Day
+            # ring ignores noise client-side, and Later (a separate live mirror)
+            # excludes anything on Home, so each item still appears in one place.
             data = item.model_dump()
             reason = read_time_reason(item, now=now, tz=tz)
             if reason is not None:
