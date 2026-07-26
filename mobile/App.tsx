@@ -29,6 +29,7 @@ import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { AppearanceProvider, haptics, useTheme } from './src/theme';
 import { API_URL, AUTH_MODE, DEV_USER_ID } from './src/config';
 import { ApiClient, ApiError } from './src/api/client';
+import { streamEvents, type StreamHandle } from './src/api/stream';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { AuthGate } from './src/screens/auth/AuthGate';
 import type {
@@ -349,6 +350,42 @@ function Shell() {
     });
     return () => sub.remove();
   }, [loadSources, load, loadDay]);
+
+  // Live feed stream: while the app is open, a webhook item landing on the
+  // backend publishes a "changed" signal over this SSE connection, and we do one
+  // cheap GET /feed to append it — event-driven, no polling, no provider sweep.
+  // Self-reconnecting: a dropped connection reopens, and a cheap load on reconnect
+  // catches anything missed while briefly disconnected.
+  useEffect(() => {
+    let handle: StreamHandle | null = null;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const open = () => {
+      if (cancelled) return;
+      const { url, headers } = api.feedStream();
+      handle = streamEvents({
+        url,
+        headers,
+        onBatch: () => {},
+        onEvent: (name) => {
+          if (name === 'changed') void load();
+        },
+        onDone: () => {
+          if (!cancelled) retry = setTimeout(open, 3000);
+        },
+        onError: () => {
+          if (!cancelled) retry = setTimeout(open, 5000);
+        },
+        onUnauthorized: () => api.reauth(),
+      });
+    };
+    open();
+    return () => {
+      cancelled = true;
+      if (retry) clearTimeout(retry);
+      handle?.cancel();
+    };
+  }, [load]);
 
   // Open the sheet to read (compose=false) or straight into the composer.
   const openRow = useCallback((row: FeedRow, compose = false) => {

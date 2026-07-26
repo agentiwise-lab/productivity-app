@@ -105,6 +105,24 @@ class RedisFeedRepository:
         self._r.hset(key, item.source_ref, self._serialize(item))
         self._r.expire(key, TTL_SECONDS)
 
+    # ------------------------------------------------------- live pub/sub
+
+    def events_channel(self, user_id: str) -> str:
+        return f"feed:{user_id}:events"
+
+    def publish_change(self, user_id: str) -> None:
+        """Signal open clients that this user's feed changed (a webhook item
+        landed). The SSE endpoint forwards it and the client does one cheap
+        GET /feed — event-driven, never a poll."""
+        try:
+            self._r.publish(self.events_channel(user_id), "1")
+        except Exception:  # pragma: no cover - best effort
+            pass
+
+    def pubsub(self):
+        """A fresh pub/sub connection for the SSE endpoint to subscribe with."""
+        return self._r.pubsub()
+
     # ------------------------------------------------------------- ingest
 
     def upsert(self, item: FeedItem) -> FeedItem:

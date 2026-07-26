@@ -212,6 +212,12 @@ export class ApiClient {
     return { url: `${this.baseUrl}/later?limit=${limit}`, headers: this.auth() };
   }
 
+  /** The live feed-change stream: emits a "changed" event when a webhook item
+   *  lands, so an open screen can re-read cheaply instead of polling. */
+  feedStream(): { url: string; headers: Record<string, string> } {
+    return { url: `${this.baseUrl}/feed/stream`, headers: this.auth() };
+  }
+
   refresh(): Promise<RefreshResult> {
     return this.request<RefreshResult>(
       '/feed/refresh',

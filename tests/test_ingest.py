@@ -75,6 +75,36 @@ def test_an_event_lands_in_the_feed_of_the_user_it_names(ingest):
     assert items[0].type_tag is TypeTag.REVIEW
 
 
+def test_a_stored_event_publishes_a_live_change_signal():
+    """A deterministic webhook item signals open screens to re-read (Cluster 6),
+    keyed on the user it belongs to."""
+    repo = InMemoryFeedRepository()
+    published: list[str] = []
+    service = WebhookIngestService(
+        feed=build_feed_service(repo=repo, github=FakeGitHubService()),
+        connections=FakeConnectionRepository(),
+        publish=published.append,
+    )
+    service.handle(
+        envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION)
+    )
+    assert published == [USER]
+
+
+def test_an_event_that_reaches_no_screen_does_not_signal():
+    """Nothing stored, nothing to append: a dropped event publishes no signal."""
+    published: list[str] = []
+    service = WebhookIngestService(
+        feed=build_feed_service(
+            repo=InMemoryFeedRepository(), github=FakeGitHubService()
+        ),
+        connections=FakeConnectionRepository(),
+        publish=published.append,
+    )
+    service.handle(envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION, user_id=None))
+    assert published == []
+
+
 def test_an_event_with_no_user_is_dropped(ingest):
     """The user id lives in metadata, never in data: `data` is the provider's
     payload, whose own `user` field is the *sender*. Falling back to it would

@@ -22,12 +22,16 @@ export function streamEvents<T>({
   onDone,
   onError,
   onUnauthorized,
+  onEvent,
 }: {
   url: string;
   headers: Record<string, string>;
   onBatch: (rows: T[]) => void;
   onDone: () => void;
   onError: (message: string) => void;
+  /** Fired for every frame with its event name (e.g. "changed"), for streams
+   *  that signal rather than carry rows. Independent of onBatch. */
+  onEvent?: (name: string) => void;
   /**
    * Called when the stream completes with a 401. A stale access token is the
    * common cause (the token was minted before the screen mounted). The handler
@@ -67,6 +71,8 @@ export function streamEvents<T>({
         else if (line.startsWith('data:')) data.push(line.slice(5).trim());
       }
       if (!data.length) continue;
+
+      onEvent?.(name);
 
       if (name === 'done') {
         finish();

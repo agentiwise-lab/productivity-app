@@ -246,6 +246,9 @@ def create_app(
         connections=connections,
         classifier=classifier,
         background=lambda work: webhook_pool.submit(work),
+        # Redis stores publish a change signal so open screens append live; the
+        # in-memory/Supabase stores have no pub/sub and this is simply absent.
+        publish=getattr(repo, "publish_change", None),
     )
     current_user = build_current_user(auth_mode, token_codec)
 
@@ -283,6 +286,49 @@ def create_app(
         # Linear due date is that calendar day, not UTC's. Unknown/absent -> UTC.
         return feed_service.list_feed(
             user_id, UserPreferences(user_id=user_id), tz=_parse_tz(tz)
+        )
+
+    @app.get("/feed/stream")
+    def feed_stream(user_id: str = Depends(current_user)) -> StreamingResponse:
+        """A live signal that this user's feed changed.
+
+        When a trigger lands while the app is open, the webhook publishes to the
+        user's Redis channel and this stream forwards a lightweight ``changed``
+        event; the client then does one cheap GET /feed (a single Redis read),
+        so the item appears without a manual refresh and without any polling.
+        Only the Redis store has pub/sub; other stores answer 503.
+        """
+        pubsub_factory = getattr(repo, "pubsub", None)
+        channel_for = getattr(repo, "events_channel", None)
+        if pubsub_factory is None or channel_for is None:
+            raise HTTPException(status_code=503, detail="stream not available")
+
+        def events():
+            ps = pubsub_factory()
+            ps.subscribe(channel_for(user_id))
+            try:
+                # An initial event so the client knows the stream is open.
+                yield "event: ready\ndata: {}\n\n"
+                while True:
+                    # Blocks up to 20s, then a heartbeat keeps the connection
+                    # alive through the proxy. No busy-polling.
+                    message = ps.get_message(
+                        ignore_subscribe_messages=True, timeout=20.0
+                    )
+                    if message and message.get("type") == "message":
+                        yield "event: changed\ndata: {}\n\n"
+                    else:
+                        yield ": keepalive\n\n"
+            finally:
+                try:
+                    ps.close()
+                except Exception:
+                    pass
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     @app.post("/feed/refresh", response_model=RefreshResult)

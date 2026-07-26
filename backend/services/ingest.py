@@ -205,9 +205,13 @@ class WebhookIngestService:
         threads_for: Callable[[str], set[str]] | None = None,
         classifier: Any | None = None,
         background: Callable[[Callable[[], Any]], Any] | None = None,
+        publish: Callable[[str], None] | None = None,
     ) -> None:
         self._feed = feed
         self._connections = connections
+        # Signals open clients (via the SSE stream) that this user's feed changed,
+        # so a trigger landing while the app is open appends without a poll.
+        self._publish = publish or (lambda user_id: None)
         self._prefs_for = prefs_for or (lambda user_id: UserPreferences(user_id=user_id))
         # Threads the user has posted in. Plan 3.10 accepts the limitation:
         # threads joined before installing are invisible until someone mentions
@@ -268,11 +272,21 @@ class WebhookIngestService:
         return IngestResult(handled=True, reason="ingested", item_id=item.id)
 
     def _classify_soon(self, user_id: str, item) -> None:
-        """Classify this one item just after the ack, if it needs the model."""
+        """Classify this one item just after the ack, if it needs the model.
+
+        Publishes a change signal once the item is renderable: immediately for a
+        deterministic item, or after the model lands for a banded one — so an open
+        screen appends it only when it has a real tier, never as a placeholder."""
         if self._classifier is None or not item.needs_llm or item.llm_tier is not None:
+            self._publish(user_id)  # deterministic / already-judged: ready now
             return
         try:
-            self._background(lambda: self._classifier.classify_item(user_id, item))
+            self._background(
+                lambda: (
+                    self._classifier.classify_item(user_id, item),
+                    self._publish(user_id),
+                )
+            )
         except Exception:
             # A classify that could not even be scheduled must not fail the
             # webhook: the item is still ingested and the next refresh sweeps it.
