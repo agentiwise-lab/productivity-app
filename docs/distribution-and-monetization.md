@@ -51,6 +51,20 @@ build (Stage 2).
    - **Or type the URL manually** in Expo Go > "Enter URL manually":
      `exp://<mac-lan-ip>:8081`.
 
+### Expo Go SDK version must match the project (common gotcha)
+Expo Go only runs projects whose SDK it supports. This project is **SDK 57**, so
+Expo Go must be a build that supports SDK 57. If Expo Go says **"incompatible SDK
+version"** (e.g. your Expo Go is 54.x supporting SDK 50–54), the Play Store may not
+yet offer a newer Expo Go to your device. Options:
+- Install the latest Expo Go **APK directly** from `https://expo.dev/go` (pick the
+  build for the project's SDK), bypassing the Play Store. Only if a matching build
+  exists there.
+- **Better: skip Expo Go and build a `preview` APK (Stage 2A).** It bundles the
+  correct runtime, does not depend on Expo Go, and is the only way to exercise the
+  full source-connect flow anyway.
+- Do NOT downgrade the project SDK just to fit an old Expo Go; that is backwards and
+  risks breaking dependencies.
+
 ### If the QR does not show / cannot connect
 - A backgrounded `expo start` (started by a script or tool) does **not** draw the
   QR. The QR only renders in an interactive terminal. Run `npx expo start` yourself
