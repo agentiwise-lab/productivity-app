@@ -16,6 +16,19 @@
 
 import type { FeedRow, TypeTag } from '../api/types';
 import { decodeEntities, oneLine } from './subtext';
+import { ago, deadlineLabel, meetingLabel } from './time';
+
+/**
+ * The short time label on a row. A calendar row reads to its START ("now" once
+ * it has begun); everything else counts down to its deadline, falling back to
+ * how long it has been waiting.
+ */
+export function rowMeta(row: FeedRow, now: Date = new Date()): string {
+  if (row.source === 'calendar') {
+    return meetingLabel(row.occurred_at, row.deadline, now) ?? '';
+  }
+  return deadlineLabel(row.deadline, now) ?? ago(row.occurred_at, now);
+}
 
 const SOURCE_NAME: Record<FeedRow['source'], string> = {
   github: 'GitHub',

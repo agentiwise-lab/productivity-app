@@ -37,9 +37,8 @@ import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
 import { BigButton, Chip, T, Wash } from './ui';
 import { needsComposer, overflowFor, railFor } from '../lib/actions';
-import { headerSubline, primaryLine } from '../lib/rowText';
+import { headerSubline, primaryLine, rowMeta } from '../lib/rowText';
 import { readable } from '../lib/subtext';
-import { ago, deadlineLabel } from '../lib/time';
 import type { FeedRow } from '../api/types';
 
 interface Props {
@@ -81,9 +80,21 @@ export function DetailSheet({
   // deduped so the primary and the overflow never draw the same button twice.
   const buttons = dedupe([...rail, ...overflow]).filter((a) => a.id !== 'open');
   const canOpen = !!row.url;
-  const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
+  const when = rowMeta(row);
   const above = headerSubline(row) ?? 'Unknown sender';
   const body = readable(row.body) || primaryLine(row);
+  // Slack has no subject line: its message is the content, so it belongs in the
+  // highlighted body panel, not repeated as the big title. For every other
+  // source the title (subject / issue name) and the body (its content) differ,
+  // so both are shown.
+  const isSlack = row.source === 'slack';
+  const showTitle = !isSlack;
+  const readBody = readable(row.body) || null;
+  const panelText = isSlack
+    ? body
+    : readBody && readBody !== primaryLine(row)
+      ? readBody
+      : null;
 
   const send = (action: string) => {
     onAction(row, action, draft.trim() || undefined);
@@ -158,22 +169,18 @@ export function DetailSheet({
                 accessibilityLabel="Open"
                 style={({ pressed }) => [
                   {
-                    flexDirection: 'row',
+                    width: 30,
+                    height: 30,
                     alignItems: 'center',
-                    gap: space.xxs,
-                    paddingVertical: space.xxs,
-                    paddingHorizontal: space.xs,
+                    justifyContent: 'center',
                     borderRadius: radius.sm,
                     borderWidth: 1,
-                    borderColor: c.border,
+                    borderColor: pressed ? c.high : c.border,
                   },
                   pressed ? { opacity: 0.6 } : null,
                 ]}
               >
-                <T role="label" tone="mid">
-                  Open
-                </T>
-                <Icon name="external" size={13} color={c.mid} />
+                <Icon name="external" size={15} color={c.mid} />
               </Pressable>
             ) : null}
             {CATEGORY_LABEL[category] ? (
@@ -185,10 +192,12 @@ export function DetailSheet({
             ) : null}
           </View>
 
-          {/* Subject. */}
-          <T role="title" lines={2} style={{ marginTop: space.md }}>
-            {primaryLine(row)}
-          </T>
+          {/* Subject (skipped for Slack, whose message is the body panel). */}
+          {showTitle ? (
+            <T role="title" lines={2} style={{ marginTop: space.md }}>
+              {primaryLine(row)}
+            </T>
+          ) : null}
 
           {/* Why this category. */}
           {row.reason ? (
@@ -209,19 +218,32 @@ export function DetailSheet({
             </View>
           ) : null}
 
-          {/* The only region that scrolls. Empty when the body would only
-              repeat the title, which is the case for a mail whose subject was
-              its message. */}
-          <ScrollView
-            style={{ flex: 1, marginTop: space.md }}
-            contentContainerStyle={{ paddingBottom: space.md }}
-          >
-            {body && body !== primaryLine(row) ? (
-              <T role="body" tone="mid">
-                {body}
-              </T>
-            ) : null}
-          </ScrollView>
+          {/* The message/email body, in its own highlighted card so it reads as
+              the content and not another metadata line. The only region that
+              scrolls; absent when there is no distinct body (e.g. a subject-only
+              mail). */}
+          {panelText ? (
+            <ScrollView
+              style={{ flex: 1, marginTop: space.md }}
+              contentContainerStyle={{ paddingBottom: space.md }}
+            >
+              <View
+                style={{
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  backgroundColor: c.surface,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                }}
+              >
+                <T role="body" tone="mid">
+                  {panelText}
+                </T>
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
 
           {/* Footer. */}
           <View style={{ gap: space.sm }}>

@@ -25,7 +25,7 @@ import { clockTime } from '../lib/time';
 
 /** A slow pulse, so a loading screen is visibly alive rather than merely empty. */
 function usePulse() {
-  const value = useSharedValue(0.4);
+  const value = useSharedValue(0.65);
   useEffect(() => {
     value.value = withRepeat(
       withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
@@ -50,7 +50,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
               marginHorizontal: space.md,
               marginBottom: space.xs,
               borderRadius: radius.md,
-              backgroundColor: c.surface,
+              backgroundColor: c.overlay,
             },
             pulse,
           ]}
@@ -74,7 +74,7 @@ export function RingSkeleton() {
             height: 232,
             borderRadius: 116,
             borderWidth: 22,
-            borderColor: c.surface,
+            borderColor: c.overlay,
           },
           pulse,
         ]}
@@ -93,7 +93,7 @@ export function TilesSkeleton() {
         <Animated.View
           key={i}
           style={[
-            { flex: 1, height: 64, borderRadius: radius.md, backgroundColor: c.surface },
+            { flex: 1, height: 64, borderRadius: radius.md, backgroundColor: c.overlay },
             pulse,
           ]}
         />

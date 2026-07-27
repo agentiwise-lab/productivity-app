@@ -32,11 +32,11 @@ import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
 import { Chip, T, Wash } from './ui';
 import { needsComposer, railFor, type RailAction } from '../lib/actions';
-import { ago, deadlineLabel } from '../lib/time';
 import {
   cardSubtitle,
   headerSubline,
   primaryLine,
+  rowMeta,
   sourceName,
 } from '../lib/rowText';
 import type { FeedRow } from '../api/types';
@@ -57,7 +57,7 @@ export function FeedCard({
   const heading = primaryLine(row);
   const subline = headerSubline(row);
   const body = cardSubtitle(row);
-  const when = deadlineLabel(row.deadline) ?? ago(row.occurred_at);
+  const when = rowMeta(row);
   // The grounds for the decision, shown inline only on the strongest tier; on
   // every other card it stays in the sheet, which keeps the feed scannable.
   // Gmail and Slack already carry the reason as their subtitle, so the boxed

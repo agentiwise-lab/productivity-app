@@ -41,8 +41,7 @@ export const inset = { top: 54, bottom: 34 } as const;
  * status bar to avoid but there is a preview to judge the design in, so the
  * fallback keeps the browser honest about what the phone will show.
  */
-export const topInset = (safeAreaTop: number) =>
-  (safeAreaTop || inset.top) + space.xs;
+export const topInset = (safeAreaTop: number) => safeAreaTop || inset.top;
 
 /** Nested radii follow `inner = outer - padding`, never a second guess. */
 export const radius = { xs: 4, sm: 8, md: 12, lg: 16, pill: 999 } as const;
