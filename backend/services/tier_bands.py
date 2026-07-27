@@ -87,27 +87,30 @@ Policy = Union[Deterministic, Banded]
 
 
 def _calendar_tier(item: "FeedItem", now: datetime, tz: tzinfo) -> Tier:
-    """Where a calendar item lands, by how close its start is and, for invites,
-    which day it falls on in the user's own zone. ``occurred_at`` is the start.
+    """Where a calendar item lands, by its start in the user's own zone.
+    ``occurred_at`` is the start.
 
-    Within the hour before the start (and while it runs) it is Urgent. Accepted
-    meetings reaching here are already same-day (off-day filtered in
-    ``feed.list_feed``), so otherwise they are By EOD. An unanswered invite is
-    kept regardless of day, so it is placed by its start date: today or tomorrow
-    is By EOD (answer it soon), the day after tomorrow onward is Later (noise), so
-    a recurring series does not flood By EOD with instances days out (Vicky's call
-    2026-07-27)."""
+    Anything within the hour before the start (or while it runs) is Urgent, and
+    so is anything on the user's local today whatever its RSVP state: a meeting
+    today needs you today. An unanswered invite for a later day is placed by that
+    day: tomorrow is By EOD (answer it soon), the day after tomorrow onward is
+    Later (noise), so a recurring series does not flood By EOD with instances days
+    out. Accepted meetings that are not today are dropped before display (off-day
+    filtered in ``feed.list_feed``), so they never reach the last line (Vicky's
+    call 2026-07-27)."""
     start = item.occurred_at
     if start is None:
         return T
     if start - now <= STARTING_SOON:
         return U
+    today = now.astimezone(tz).date()
+    start_day = start.astimezone(tz).date()
+    if start_day == today:
+        return U
     if item.signal == "calendar_invite":
-        start_day = start.astimezone(tz).date()
-        today = now.astimezone(tz).date()
-        if start_day > today + timedelta(days=1):
-            return N
-        return T
+        if start_day == today + timedelta(days=1):
+            return T
+        return N
     return T
 
 

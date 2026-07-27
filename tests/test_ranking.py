@@ -113,16 +113,16 @@ def test_an_in_progress_meeting_is_still_urgent():
     assert effective_tier(item, now=NOW) is Tier.URGENT
 
 
-def test_a_meeting_later_today_is_by_eod_not_urgent():
-    """A passed-deadline promotion must never make a meeting on the day urgent
-    hours ahead; only the last hour before it starts does."""
+def test_a_meeting_later_today_is_urgent():
+    """Anything on the user's local today is Urgent, whatever its RSVP state: a
+    meeting today needs you today (Vicky's call 2026-07-27)."""
     item = make_item(
         source="calendar",
         signal="calendar_meeting",
         occurred_at=NOW + timedelta(hours=5),
         deadline=NOW + timedelta(hours=6),
     )
-    assert effective_tier(item, now=NOW) is Tier.TODAY
+    assert effective_tier(item, now=NOW) is Tier.URGENT
 
 
 def _invite(start):
@@ -134,8 +134,9 @@ def _invite(start):
     )
 
 
-def test_unaccepted_invite_today_is_by_eod():
-    assert effective_tier(_invite(NOW + timedelta(hours=5)), now=NOW) is Tier.TODAY
+def test_unaccepted_invite_today_is_urgent():
+    """Today is Urgent regardless of RSVP, invites included."""
+    assert effective_tier(_invite(NOW + timedelta(hours=5)), now=NOW) is Tier.URGENT
 
 
 def test_unaccepted_invite_tomorrow_is_by_eod():
