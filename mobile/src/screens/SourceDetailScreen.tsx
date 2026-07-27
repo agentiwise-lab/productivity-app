@@ -71,7 +71,10 @@ export function SourceDetailScreen({
       </BoardBar>
 
       {loading || !dashboard ? (
-        <ScrollView contentContainerStyle={{ paddingTop: space.lg }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: space.lg }}
+        >
           <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
             <T role="secondary" tone="mid">
               {(dashboard?.source && LOADING_NOTE[dashboard.source]) ??
@@ -81,7 +84,10 @@ export function SourceDetailScreen({
           <Skeleton rows={5} />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: space.xl }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: space.xl }}
+        >
           {/* The hero, on one compact line: the number as a title beside its
               own label, not a 34pt figure stacked over 24pt of padding. It was
               spending a third of the screen to say one number. */}

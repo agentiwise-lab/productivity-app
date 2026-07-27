@@ -163,6 +163,12 @@ function Shell() {
   // and a per-row cue both read this set. Promise-driven: a source clears when its
   // refresh resolves, no countdown, no held-gating (the reviews rejected those).
   const [syncingSources, setSyncingSources] = useState<Set<Source>>(new Set());
+  // True while a refresh sweep is running (TTL-expiry cold rebuild, pull-to-
+  // refresh, or the sweep a connect kicks off). Drives the global "Updating…"
+  // pill so the user knows the feed is being rebuilt no matter which screen
+  // they are on. Set from inside refresh() so the single-flight guard cannot
+  // leave it stuck true.
+  const [updating, setUpdating] = useState(false);
 
   const [sources, setSources] = useState<SourceInfo[]>(SOURCE_SKELETON);
   const [sourcesFailed, setSourcesFailed] = useState(false);
@@ -275,6 +281,7 @@ function Shell() {
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
     refreshing.current = true;
+    setUpdating(true);
     try {
       await Promise.all([load(), loadSources(), loadDay(), loadProfile()]);
       try {
@@ -286,6 +293,7 @@ function Shell() {
       await Promise.all([load(), loadSources()]);
     } finally {
       refreshing.current = false;
+      setUpdating(false);
     }
   }, [load, loadSources, loadDay, loadProfile]);
 
@@ -480,52 +488,73 @@ function Shell() {
   const connectSource = useCallback(
     async (provider: Source) => {
       const label = SOURCE_LABELS[provider];
+      const clearSyncing = () =>
+        setSyncingSources((s) => {
+          const next = new Set(s);
+          next.delete(provider);
+          return next;
+        });
+
+      let url: string;
       try {
-        const { url } = await api.connectUrl(provider);
+        ({ url } = await api.connectUrl(provider));
         if (!url) throw new Error('no url');
-
-        // The in-app browser returns to us when the OAuth flow reaches our
-        // scheme, or when the user closes it. Either way we then ask the backend
-        // whether the account went active, because Composio does the token
-        // exchange server-side and the redirect alone does not prove success.
-        // Matches the "scheme" in app.json. When the OAuth flow lands here the
-        // in-app browser closes and returns control to us.
-        const returnUrl = 'productivityapp://composio-callback';
-        await WebBrowser.openAuthSessionAsync(url, returnUrl);
-
-        for (let attempt = 0; attempt < 15; attempt++) {
-          try {
-            const info = await api.connectionStatus(provider);
-            if (info.status === 'connected') {
-              await loadSources();
-              haptics.commit();
-              // Pull the just-connected source's existing items into the feed
-              // now, rather than leaving it empty until a manual pull-to-refresh.
-              // The pill shows until the backfill resolves — the completion signal
-              // is the promise, not a countdown.
-              setSyncingSources((s) => new Set(s).add(provider));
-              void refresh().finally(() =>
-                setSyncingSources((s) => {
-                  const next = new Set(s);
-                  next.delete(provider);
-                  return next;
-                }),
-              );
-              return;
-            }
-          } catch {
-            // keep polling; a transient read is not a failed connection
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-        await loadSources();
-        Alert.alert(
-          `Connect ${label}`,
-          "We couldn't confirm the connection yet. It may just need a moment; pull to refresh.",
-        );
       } catch {
         Alert.alert(`Connect ${label}`, 'Could not start the connection. Please try again.');
+        return;
       }
+
+      // Show the pill immediately — before the browser even opens — so the user
+      // sees we are working the instant they tap, on web and native alike.
+      setSyncingSources((s) => new Set(s).add(provider));
+
+      // Open the OAuth flow, but do NOT gate anything on it resolving. On native
+      // the OS follows our "productivityapp://" scheme back into the app and this
+      // resolves; in a web browser that scheme is not navigable, so the popup
+      // can never return and this promise may never settle. Completion is instead
+      // detected by polling Composio's status below, which works on both. The
+      // only thing we take from the auth session is a native cancel, so the pill
+      // does not linger for the whole budget when the user backs out on a device.
+      const returnUrl = 'productivityapp://composio-callback';
+      let cancelled = false;
+      void WebBrowser.openAuthSessionAsync(url, returnUrl)
+        .then((result) => {
+          if (Platform.OS !== 'web' && result?.type !== 'success') cancelled = true;
+        })
+        .catch(() => {});
+
+      // Poll until Composio reports the account active, or the budget elapses.
+      // ~90s (45 x 2s) leaves a human time to click through consent; the old 15s
+      // budget timed out on any slow OAuth, which read as a failed connect.
+      for (let attempt = 0; attempt < 45; attempt++) {
+        if (cancelled) {
+          clearSyncing();
+          await loadSources();
+          return;
+        }
+        try {
+          const info = await api.connectionStatus(provider);
+          if (info.status === 'connected') {
+            await loadSources();
+            haptics.commit();
+            // Pull the just-connected source's existing items into the feed now,
+            // rather than leaving it empty until a manual pull-to-refresh. The
+            // pill shows until the backfill resolves — the signal is the promise,
+            // not a countdown.
+            void refresh().finally(clearSyncing);
+            return;
+          }
+        } catch {
+          // keep polling; a transient read is not a failed connection
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      clearSyncing();
+      await loadSources();
+      Alert.alert(
+        `Connect ${label}`,
+        "We couldn't confirm the connection yet. It may just need a moment; pull to refresh.",
+      );
     },
     [loadSources, refresh],
   );
@@ -669,8 +698,9 @@ function Shell() {
         />
         <Grain />
         {/* Global sync indicator: one pill above the footer while any connected
-            source is backfilling, on whatever tab the user is looking at. */}
-        <SyncPill sources={syncingSources} />
+            source is backfilling or a refresh sweep is rebuilding the feed, on
+            whatever tab the user is looking at. */}
+        <SyncPill sources={syncingSources} updating={updating} />
       </NavigationContainer>
     </>
   );

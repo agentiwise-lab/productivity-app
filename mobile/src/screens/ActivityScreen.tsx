@@ -97,6 +97,7 @@ export function ActivityScreen({
       <AnimatedScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
         {/* No 34pt "N sources connected" hero: this tab is a list of boards, not

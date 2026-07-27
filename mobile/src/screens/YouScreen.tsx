@@ -90,10 +90,10 @@ export function YouScreen({
   // is not rendered at all, so it falls back to whatever was last chosen
   // rather than to a level the user never picked.
   const level: Exclude<NotifyLevel, 'off'> = on ? notifyLevel : lastLevel;
-  // Dev builds authenticate with a bare user id, and a UUID rendered at 34pt
-  // as though it were a person's name is the screen showing its plumbing.
-  const local = email.includes('@') ? email.split('@')[0] : '';
-  const title = name || local || 'You';
+  // With no name set the header reads "You", not the email's local-part: an
+  // email prefix rendered at 34pt looks like a name is set while the button
+  // still says "Add your name", which is the contradiction that showed up.
+  const title = name || 'You';
   const needsAction = connections.filter(
     (info) => info.status === 'expired' || info.status === 'error',
   ).length;
@@ -103,6 +103,7 @@ export function YouScreen({
       <AnimatedScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: topInset(insets.top), paddingBottom: space.xl }}
       >
         {/* The name is the title; editing it is an inline chip on the same row,
@@ -112,13 +113,13 @@ export function YouScreen({
           right={
             <Chip
               label={name ? 'Edit' : 'Add your name'}
+              glyph={name ? 'pencil' : undefined}
               variant="outline"
               onPress={onEditName}
             />
           }
         />
 
-        <Separator inset={0} />
 
         {/* No "Notifications" label over a row that opens "Notify me": the
             heading and the control were saying the same word twice. */}

@@ -35,6 +35,7 @@ import {
   Clock,
   DotsThree,
   PaperPlaneTilt,
+  PencilSimple,
   Plus,
   Sun,
   User,
@@ -50,6 +51,7 @@ export type GlyphName =
   | 'user'
   | 'external'
   | 'refresh'
+  | 'pencil'
   | 'plus'
   | 'chevron'
   | 'check'
