@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://52-64-67-235.sslip.io",
+        "EXPO_PUBLIC_AUTH_MODE": "own"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://52-64-67-235.sslip.io",
+        "EXPO_PUBLIC_AUTH_MODE": "own"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://52-64-67-235.sslip.io",
+        "EXPO_PUBLIC_AUTH_MODE": "own"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
