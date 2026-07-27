@@ -146,6 +146,7 @@ class LaterService:
                 Source.LINEAR,
                 Source.GITHUB,
                 Source.GOOGLE_DOCS,
+                Source.CALENDAR,
             )
             if self._pages(user_id, source, limit) is not None
         ]
@@ -213,6 +214,21 @@ class LaterService:
                 docs = docs_factory(user_id)
                 if docs is not None:
                     return self._one_page(docs.mentions)
+        if source is Source.CALENDAR:
+            calendar = self._integrations.calendar(user_id)
+            if calendar is not None:
+                # Only unanswered invites, never accepted meetings: an invite
+                # for today or tomorrow is already on Home (Urgent / By EOD) and
+                # the on_home filter drops it, so what remains here is exactly the
+                # after-tomorrow invites that sit in Later. Meetings would flood
+                # this with every upcoming event, so they are left out.
+                return self._one_page(
+                    lambda: [
+                        event
+                        for event in calendar.pending()
+                        if event.reason == "calendar_invite"
+                    ]
+                )
         return None
 
     @staticmethod
