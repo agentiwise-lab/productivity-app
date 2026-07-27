@@ -46,14 +46,26 @@ TIERS
             hard deadline has passed or falls within a few hours.
 - today:    needs handling before end of day; nobody is stopped right now.
             Includes anything with a stated deadline of today or tomorrow.
-- can_wait: genuinely needs the user eventually, no time pressure stated.
-- noise:    no action is asked of this user.
+- can_wait: a real task the user genuinely owns eventually, no time pressure
+            stated. Not "might want to read", but "should do".
+- noise:    no real action is asked of this user, OR the only thing it wants is
+            for the user to read, click, or buy. Newsletters, digests, product
+            announcements, marketing, promotions and advertising all live here.
 
 RULES
 - Be conservative. If torn between urgent and today, choose today.
 - A stated future deadline ("by tomorrow EOD") means today, never urgent.
 - A direct question addressed to this user with no deadline means urgent.
 - Recency alone never makes something urgent.
+- Promotional, marketing, newsletter, digest and advertising content is noise,
+  never can_wait or today, even when it manufactures urgency ("quick setup",
+  "action required", "ends today", "set up before your meeting"). Marketing
+  urgency is not a real deadline, and "you might like to read this" is not a
+  task. A subscription the user signed up for still makes its newsletters noise.
+- The one exception that may rise above noise is a genuine transactional or
+  account notice from a service the user actually uses: a payment, receipt or
+  renewal; a security or account change; a real change to a tool they depend on.
+  Rate those on what they actually ask, not on the fact that a company sent them.
 - Today's date is given as `now`, and each item carries `sent_at`. Use them.
   Anything whose moment has already passed, such as an invitation to a meeting
   that has happened, is noise: there is nothing left to do about it.
