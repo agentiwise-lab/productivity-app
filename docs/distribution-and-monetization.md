@@ -30,6 +30,40 @@ There are three stages. Do them in order; each unlocks the next.
 
 ---
 
+## 0.5. Accounts: personal vs organization (decide this first)
+
+Researched against official expo.dev / Apple / Google docs, current 2026.
+
+**Expo:** create an **Organization** for commercial/client work; keep hobby projects
+on your personal account. One login can own a personal account and belong to orgs at
+once. Start commercial work as an org from day one: Expo documents converting a
+personal account to an org and changing an org owner, but there is **no clean
+per-project transfer between two existing accounts**, so starting as an org avoids a
+migration. Name it after the company (e.g. `agentiwise`).
+
+- **Commercial use is allowed on the Free tier.** Expo's terms only forbid reselling
+  EAS itself, not shipping paid apps. "Personal account" is an account-type label,
+  not a license limit.
+- **Free tier quotas:** 15 Android + 15 iOS builds/month, 1 concurrent build,
+  low-priority queue, 45-min build timeout, 1,000 EAS Update MAU. Paid tiers:
+  Starter $19/mo, Production $199/mo, Enterprise custom. Pay only when you exceed
+  build count, need concurrency/faster queue, or pass 1,000 update users.
+- Project ownership is the `owner` field under `expo` in `app.json`. Set it to the
+  org. Run `eas init` while the org is selected.
+
+**Store accounts (this is where "commercial" really matters):** both stores cost the
+same regardless of type (**Apple $99/yr**, **Google $25 one-time**), but the type
+sets the seller name shown to users:
+- **Individual:** your personal legal name is shown. No paperwork.
+- **Organization/Company:** business name is shown, but requires a free **D-U-N-S
+  number** (takes a few days), a business website + email, and (Apple) someone with
+  authority to enroll. Only org accounts allow multiple team members with roles.
+
+For a real product under Agentiwise: enroll both stores as **Organization**, and
+**request the D-U-N-S early** since it gates enrollment and is slow.
+
+---
+
 ## 1. STAGE 1: Dev preview (Expo Go) — free, instant, limited
 
 Use this to eyeball UI changes in seconds. **Limitation: connecting a new source
