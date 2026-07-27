@@ -60,7 +60,10 @@ sets the seller name shown to users:
   authority to enroll. Only org accounts allow multiple team members with roles.
 
 For a real product under Agentiwise: enroll both stores as **Organization**, and
-**request the D-U-N-S early** since it gates enrollment and is slow.
+**request the D-U-N-S early** since it gates enrollment and is slow. Bonus for going
+org on Google Play: **organization accounts skip the 12-tester / 14-day closed-testing
+gate** that personal accounts (created after Nov 2023) must pass before production
+(see §3A). That alone can save 2 to 3 weeks on a first launch.
 
 ---
 
@@ -148,6 +151,30 @@ Ways to deliver the APK:
 Cost: **free** (EAS free tier covers occasional builds; heavy use may need a paid
 EAS plan or local builds).
 
+**Reach, sharing, and limits (Android APK):**
+- **Shareable to anyone. No Expo org membership needed.** Org membership is only for
+  people who build/manage the project; testers just need the APK link. Do NOT add
+  testers to the Expo org.
+- **No install cap.** Unlimited people can install and run the APK. Running the app
+  uses YOUR backend, not Expo, so it consumes no EAS quota. EAS free-tier limits are
+  on builds (15 Android/month) and EAS Update users (1,000), not on installs.
+- **The real limits are on your side, not Expo:** one EC2 backend + Redis + the
+  classifier (Gemini) + Composio. A handful of testers is fine; dozens all connecting
+  Gmail and refreshing can hit Gemini/Composio rate limits or plan caps and stress
+  one box. Watch those as it grows.
+- **Link expiry (free tier, ~30 days):** the EAS build download link expires after
+  ~30 days. IMPORTANT: this affects **new downloads only**. Anyone who already
+  installed is **unaffected** — the app stays on their phone and keeps working. For a
+  permanent link, download the `.apk` once and host it yourself (Google Drive /
+  Firebase App Distribution), or just rebuild (each build counts against the
+  15/month free quota; there is no separate "link" limit or cost).
+- **Android only.** iPhone testers need TestFlight (Stage 2B, $99/yr Apple account).
+
+**Updating installed testers:**
+- Native change (new dependency, scheme, icon, etc.): rebuild the APK and reshare.
+- JS-only change: `npx eas-cli update --branch preview` pushes an OTA update to
+  installed apps with no reinstall (free up to 1,000 monthly users).
+
 ### 2B. iOS — you CANNOT just send a file
 
 Apple blocks arbitrary `.ipa` sideloading for normal users. There is no free
@@ -184,11 +211,13 @@ Bottom line: **any real iPhone testing costs $99/year.** There is no way around 
 
 **Requirements (all mandatory before approval):**
 - Google Play Console account ($25). Personal accounts need ID verification.
-- **Closed testing gate (new accounts):** personal developer accounts created after
-  Nov 2023 must run a **closed test with at least 20 testers opted in for 14
-  continuous days** before they can apply for production access. Your friends beta
-  (Stage 2A, via a Play closed-testing track) can satisfy this. Plan for it: it adds
-  ~2+ weeks to first launch.
+- **Closed testing gate (personal accounts only):** Play developer accounts
+  registered as **personal** and created after Nov 13, 2023 must run a closed test
+  with **at least 12 testers opted in for 14 CONTINUOUS days** before they can apply
+  for production access (Google lowered the number from 20 to 12 around Dec 2024).
+  **Organization accounts are exempt** — the rule is scoped to personal accounts; the
+  trade for an org account is the D-U-N-S business verification. See "How to run the
+  closed test" below. This adds ~2 to 3 weeks to a personal-account first launch.
 - **Privacy Policy URL** (hosted, public).
 - **Data safety form** (declare data collected: email, connected-account data, etc.).
 - **Content rating** questionnaire (IARC).
@@ -203,8 +232,29 @@ Bottom line: **any real iPhone testing costs $99/year.** There is no way around 
 npx eas-cli build --profile production --platform android   # produces an .aab
 npx eas-cli submit --platform android                       # uploads to Play Console
 ```
-Then in Play Console: fill the listing, run closed testing (20 testers / 14 days if
-required), then promote to production. Review is usually hours to a few days.
+Then in Play Console: fill the listing, run closed testing if required (see below),
+then apply for production access.
+
+**How to run the closed test (personal accounts only):**
+1. Upload the app as an **AAB** (`eas build --profile production --platform android`
+   produces one).
+2. Play Console > **Testing > Closed testing > Create track**, attach the release.
+3. Add **>= 12 testers** by email list or a Google Group. Each tester opens the
+   generated **opt-in web link**, accepts, and installs **through the Play Store**.
+4. Keep at least 12 opted-in for **14 consecutive days**. If testers drop below 12,
+   continuity breaks and the 14-day clock resets.
+5. Apply for production access from the Dashboard. Google reviews testing engagement
+   + app quality; review is usually within 7 days.
+
+Tester rules that bite:
+- A **direct APK does NOT count.** Testers must join via the opt-in link and install
+  via Google Play; sideloading registers nothing toward the 12/14 counter. (So the
+  Stage 2A APK beta and this closed test are separate exercises unless your friends
+  also opt in through Play.)
+- Each tester needs a real **Android device + Google account**.
+- Realistic wall-clock: **~2 to 3 weeks** (14 continuous days + up to ~7 days review),
+  assuming no tester attrition.
+- **Organization accounts skip this entirely** and can go straight toward production.
 
 ### 3B. Apple App Store
 
@@ -269,13 +319,31 @@ tens of thousands per year) and slow. It is the real gate to a large public laun
 bigger than any app-store step.
 
 **Where we stand today:** OAuth runs through **Composio's** Google app (the consent
-screen says "Composio wants to access your Google Account"). That means the
-verification/CASA burden sits with **Composio, not us**. So:
-- A **friends beta works with no Google verification on our side.**
-- The wall only appears if/when we migrate to our **own branded** Google OAuth
-  client (so the consent shows our app name instead of "Composio"). At that point
-  the verification + CASA + 100-user-unverified-cap become ours. Plan and budget for
-  this before a branded public launch.
+screen says "Composio wants to access your Google Account"). Composio is the verified
+OAuth application; they hold the Google verification and the CASA security assessment
+for these restricted scopes. Our app just asks Composio to broker the connection.
+That means:
+- **The verification/CASA burden sits with Composio, not us.** We do not run, submit,
+  pay for, or maintain the Google security assessment. Our only cost here is our
+  **Composio plan** (per their pricing / connected-account limits), not Google's
+  assessors. This is the whole reason a broker like Composio is worth it early: it
+  turns a slow, expensive compliance project into a line item on a SaaS bill.
+- A **friends beta and even a public launch can run without us doing any Google
+  verification**, as long as we stay on Composio's managed auth and within their plan
+  limits.
+
+**The trade-offs to be aware of (why you might still move off it later):**
+- **Branding:** the consent screen says "Composio," not our app name. Fine for a
+  beta; less ideal for a polished branded product.
+- **Data path & dependency:** account access is brokered through Composio, so we
+  depend on their uptime, pricing, and terms, and user data flows through them.
+- **If we ever switch to our OWN Google OAuth client** (to get our name on the consent
+  screen and own the relationship), the full burden becomes ours: OAuth app
+  verification + annual CASA assessment + the 100-user cap while unverified. That is a
+  deliberate, budgeted decision for later, not something forced on us now.
+
+Net: **run it through Composio for now** (pay Composio, skip Google verification).
+Revisit only when branding/independence justifies taking on the CASA cost yourself.
 
 ---
 
