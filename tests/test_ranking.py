@@ -125,6 +125,34 @@ def test_a_meeting_later_today_is_by_eod_not_urgent():
     assert effective_tier(item, now=NOW) is Tier.TODAY
 
 
+def _invite(start):
+    return make_item(
+        source="calendar",
+        signal="calendar_invite",
+        occurred_at=start,
+        deadline=start + timedelta(hours=1),
+    )
+
+
+def test_unaccepted_invite_today_is_by_eod():
+    assert effective_tier(_invite(NOW + timedelta(hours=5)), now=NOW) is Tier.TODAY
+
+
+def test_unaccepted_invite_tomorrow_is_by_eod():
+    assert effective_tier(_invite(NOW + timedelta(days=1)), now=NOW) is Tier.TODAY
+
+
+def test_unaccepted_invite_after_tomorrow_is_later():
+    """A recurring series must not flood By EOD with instances days out: the day
+    after tomorrow onward drops to Later (Vicky's call 2026-07-27)."""
+    assert effective_tier(_invite(NOW + timedelta(days=2)), now=NOW) is Tier.NOISE
+    assert effective_tier(_invite(NOW + timedelta(days=9)), now=NOW) is Tier.NOISE
+
+
+def test_unaccepted_invite_within_the_hour_is_still_urgent():
+    assert effective_tier(_invite(NOW + timedelta(minutes=30)), now=NOW) is Tier.URGENT
+
+
 def test_gmail_may_sink_to_later_because_its_floor_is_noise():
     """Gmail is the one source whose floor is noise: a newsletter-ish message
     the model rates as noise stays noise rather than being propped up."""
