@@ -87,17 +87,30 @@ Policy = Union[Deterministic, Banded]
 
 
 def _calendar_tier(item: "FeedItem", now: datetime, tz: tzinfo) -> Tier:
-    """A meeting is urgent within the hour before it starts (and while it runs);
-    by-EOD if it is on the day but further out. ``occurred_at`` is the start.
+    """Where a calendar item lands, by its start in the user's own zone.
+    ``occurred_at`` is the start.
 
-    Purely a function of how close the start is, so it is timezone-independent
-    (a duration, not a wall-clock date). Passed meetings are dropped before
-    display in ``feed.list_feed``, so this never has to represent "over"."""
+    Anything within the hour before the start (or while it runs) is Urgent, and
+    so is anything on the user's local today whatever its RSVP state: a meeting
+    today needs you today. An unanswered invite for a later day is placed by that
+    day: tomorrow is By EOD (answer it soon), the day after tomorrow onward is
+    Later (noise), so a recurring series does not flood By EOD with instances days
+    out. Accepted meetings that are not today are dropped before display (off-day
+    filtered in ``feed.list_feed``), so they never reach the last line (Vicky's
+    call 2026-07-27)."""
     start = item.occurred_at
     if start is None:
         return T
     if start - now <= STARTING_SOON:
         return U
+    today = now.astimezone(tz).date()
+    start_day = start.astimezone(tz).date()
+    if start_day == today:
+        return U
+    if item.signal == "calendar_invite":
+        if start_day == today + timedelta(days=1):
+            return T
+        return N
     return T
 
 

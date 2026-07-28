@@ -35,8 +35,7 @@ import {
   StaleBanner,
   TilesSkeleton,
 } from '../components/states';
-import { ago, deadlineLabel } from '../lib/time';
-import { listSubtitle, primaryLine } from '../lib/rowText';
+import { listSubtitle, primaryLine, rowMeta } from '../lib/rowText';
 import type { FeedRow } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
@@ -196,7 +195,7 @@ export function YourDayScreen({
                       leading={<BrandMark source={row.source} size={32} />}
                       title={primaryLine(row)}
                       subtitle={listSubtitle(row)}
-                      meta={deadlineLabel(row.deadline) ?? ago(row.occurred_at)}
+                      meta={rowMeta(row)}
                       onPress={() => onOpen(row)}
                     />
                   ))

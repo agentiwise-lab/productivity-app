@@ -28,7 +28,7 @@ STARTING_SOON = timedelta(hours=1)
 #: How far ahead a scheduled (already-accepted) meeting is worth putting on the
 #: feed. Meetings inside this window are "your day"; ones further out are context
 #: on the ruler, not an action, so they are left off the feed until the day of.
-DAY_AHEAD = timedelta(hours=18)
+DAY_AHEAD = timedelta(hours=24)
 
 
 class Meeting(BaseModel):

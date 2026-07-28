@@ -29,6 +29,26 @@ export function deadlineLabel(iso: string | null, now: Date = new Date()): strin
   return days === 1 ? 'tomorrow' : `in ${days}d`;
 }
 
+/**
+ * A calendar row's time reads to its START, not its end: a meeting that has
+ * begun says "now", one still ahead counts down to when it starts. Counting to
+ * the end (the old behaviour) made a 30-minute meeting starting now read "in
+ * 30m", as if it had not started.
+ */
+export function meetingLabel(
+  startIso: string | null,
+  endIso: string | null,
+  now: Date = new Date(),
+): string | null {
+  if (!startIso) return null;
+  const start = new Date(startIso).getTime();
+  const end = endIso ? new Date(endIso).getTime() : start;
+  const t = now.getTime();
+  if (t >= end) return 'ended';
+  if (t >= start) return 'now';
+  return deadlineLabel(startIso, now);
+}
+
 export function clockTime(date: Date | null): string {
   if (!date) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

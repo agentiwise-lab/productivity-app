@@ -96,14 +96,12 @@ export function LaterScreen({
   const c = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Only sources the user has actually connected, and never Calendar: a meeting
-  // is not a "did not need you" pile. This replaces the old hardcoded strip that
-  // showed Linear even when it was never integrated.
+  // Sources the user has actually connected. Calendar is included now that
+  // after-tomorrow invites (unanswered and not yet due) belong in Later; the
+  // server streams only those invites, never accepted meetings, so this is not a
+  // pile of every upcoming event.
   const available = useMemo(
-    () =>
-      sources.filter(
-        (info) => info.status === 'connected' && info.source !== 'calendar',
-      ),
+    () => sources.filter((info) => info.status === 'connected'),
     [sources],
   );
 

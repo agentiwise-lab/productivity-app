@@ -84,6 +84,60 @@ def test_anything_already_on_home_is_not_repeated_in_later():
     assert titles == ["Newsletter one", "Newsletter three"]
 
 
+def _cal_event(ref, reason):
+    from backend.models.events import RawEvent
+
+    return RawEvent(
+        source="calendar",
+        source_ref=f"calendar:{ref}",
+        reason=reason,
+        subject_type="Event",
+        title=ref,
+        url="",
+        repo="",
+        occurred_at=NOW,
+    )
+
+
+class _FakeCalendar:
+    def __init__(self, events):
+        self._events = events
+
+    def pending(self, email=None, now=None):
+        return list(self._events)
+
+
+def test_later_streams_calendar_invites_not_meetings():
+    """Later carries unanswered invites but never accepted meetings, which would
+    flood it with every upcoming event."""
+    cal = _FakeCalendar(
+        [_cal_event("inv1", "calendar_invite"), _cal_event("mtg1", "calendar_meeting")]
+    )
+    service = _service(calendar=cal)
+    refs = {
+        row.source_ref
+        for batch in service.stream("u", Source.CALENDAR, on_home=set())
+        for row in batch
+    }
+    assert "calendar:inv1" in refs
+    assert "calendar:mtg1" not in refs
+
+
+def test_calendar_invites_on_home_are_excluded_leaving_after_tomorrow_ones():
+    """Today/tomorrow invites sit on Home (Urgent / By EOD); the on_home filter
+    drops them, so what Later shows is exactly the after-tomorrow invites."""
+    cal = _FakeCalendar(
+        [_cal_event("inv1", "calendar_invite"), _cal_event("inv2", "calendar_invite")]
+    )
+    service = _service(calendar=cal)
+    refs = {
+        row.source_ref
+        for batch in service.stream("u", Source.CALENDAR, on_home={"calendar:inv1"})
+        for row in batch
+    }
+    assert refs == {"calendar:inv2"}
+
+
 def test_the_limit_stops_the_fetch_rather_than_trimming_the_result():
     """A cap that only trims at the end still pays for every page."""
     gmail = _FakeGmail()

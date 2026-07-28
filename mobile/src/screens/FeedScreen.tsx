@@ -164,7 +164,8 @@ export function FeedScreen({
           flexDirection: 'row',
           justifyContent: 'space-between',
           paddingHorizontal: space.md,
-          paddingVertical: space.sm,
+          paddingTop: space.xxs,
+          paddingBottom: space.sm,
         }}
       >
         {selectorBox(

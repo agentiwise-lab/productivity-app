@@ -107,7 +107,10 @@ export function Chip({
   const fill = solid ? c.hue[category ?? 'none'] : undefined;
   const text = solid ? c.onSolid : variant === 'ghost' ? c.low : c.mid;
 
-  const body = (
+  // Pressed state: an outline chip lights its border and both dim slightly, so a
+  // tap reads as registered even before the app reacts (the "Connect" chip had
+  // no feedback at all).
+  const renderBody = (pressed: boolean) => (
     <View
       style={[
         {
@@ -121,8 +124,9 @@ export function Chip({
         },
         solid ? { backgroundColor: fill } : null,
         variant === 'outline'
-          ? { borderWidth: 1, borderColor: c.border }
+          ? { borderWidth: 1, borderColor: pressed ? c.high : c.border }
           : null,
+        pressed ? { opacity: 0.7 } : null,
         style,
       ]}
     >
@@ -133,12 +137,12 @@ export function Chip({
     </View>
   );
 
-  if (!onPress) return body;
+  if (!onPress) return renderBody(false);
   return (
     // 28 is legible but under the 44 minimum for a target, so the difference
     // is made up in hitSlop rather than by growing the shape.
     <Pressable onPress={onPress} hitSlop={8}>
-      {body}
+      {({ pressed }) => renderBody(pressed)}
     </Pressable>
   );
 }

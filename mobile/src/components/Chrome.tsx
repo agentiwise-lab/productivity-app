@@ -152,7 +152,7 @@ export function BoardBar({
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: space.md, paddingTop: space.xs },
+  header: { paddingHorizontal: space.md, paddingTop: space.xxs },
   collapsed: {
     position: 'absolute',
     left: 0,
