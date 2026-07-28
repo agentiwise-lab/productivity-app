@@ -25,6 +25,10 @@ class UserRecord(BaseModel):
     password_hash: str | None = None
     # Optional display name, set after signup. Null until the user provides one.
     name: str | None = None
+    # Kept as a plain string rather than the enum: this record mirrors a database
+    # row, and the column's check constraint is what makes the value legal. The
+    # profile service is where it becomes a NotifyLevel.
+    notify_level: str = "urgent"
     created_at: datetime | None = None
 
 

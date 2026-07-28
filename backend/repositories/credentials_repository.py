@@ -48,6 +48,11 @@ class CredentialsRepository(Protocol):
         """The one profile write. ``None`` clears the name back to no-name."""
         ...
 
+    def set_notify_level(self, user_id: str, level: str) -> None:
+        """The other profile write. Validated by the caller and again by the
+        column's check constraint; this only stores it."""
+        ...
+
     # --- otp -----------------------------------------------------------
     def upsert_otp(
         self,
@@ -133,6 +138,11 @@ class InMemoryCredentialsRepository:
         user = self._users.get(user_id)
         if user is not None:
             self._users[user_id] = user.model_copy(update={"name": name})
+
+    def set_notify_level(self, user_id: str, level: str) -> None:
+        user = self._users.get(user_id)
+        if user is not None:
+            self._users[user_id] = user.model_copy(update={"notify_level": level})
 
     # --- otp -----------------------------------------------------------
     def upsert_otp(

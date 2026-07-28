@@ -23,7 +23,7 @@ import { BrandMark } from '../components/BrandMark';
 import { Icon } from '../components/Icon';
 import { Row } from '../components/ListRow';
 import { Chip, Segmented, Separator, T, Toggle } from '../components/ui';
-import type { Source, SourceInfo } from '../api/types';
+import type { NotifyLevel, Source, SourceInfo } from '../api/types';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
@@ -31,10 +31,10 @@ const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
  * Four levels on the wire, three controls on the screen: the toggle expresses
  * `off`, so the segmented control never has to offer it.
  *
- * `urgent_today` keeps its wire value. Renaming a persisted enum because its
- * label changed is a migration that buys nothing.
+ * Defined in `api/types` now that the value is persisted rather than local
+ * component state, and re-exported here so existing importers are unaffected.
  */
-export type NotifyLevel = 'urgent' | 'urgent_today' | 'all' | 'off';
+export type { NotifyLevel };
 
 const LEVELS: { value: Exclude<NotifyLevel, 'off'>; label: string }[] = [
   { value: 'urgent', label: 'Urgent' },
@@ -52,6 +52,13 @@ interface Props {
   email: string;
   name?: string | null;
   notifyLevel: NotifyLevel;
+  /**
+   * The OS is holding notifications back even though the setting is on. Its own
+   * state because it is not the user's preference: it is the phone overruling
+   * it, and the two must not be conflated.
+   */
+  pushBlocked?: boolean;
+  onOpenSettings?: () => void;
   connections: SourceInfo[];
   /** The source currently pulling its first data after a connect, if any. */
   syncingSources?: Set<Source>;
@@ -66,6 +73,8 @@ export function YouScreen({
   email,
   name,
   notifyLevel,
+  pushBlocked = false,
+  onOpenSettings,
   connections,
   syncingSources,
   onSetNotifyLevel,
@@ -146,6 +155,32 @@ export function YouScreen({
             onChange={(next) => onSetNotifyLevel(next ? lastLevel : 'off')}
           />
         </View>
+
+        {/* On in the app, blocked by the phone. The preference stays on and is
+            never silently reset behind the user's back: this explains why
+            nothing is arriving and points at the only place that can fix it.
+            Asking the OS again here would do nothing, because on iOS the prompt
+            has already been spent. */}
+        {on && pushBlocked ? (
+          <Pressable
+            onPress={onOpenSettings}
+            style={{
+              marginHorizontal: space.md,
+              marginBottom: space.md,
+              padding: space.md,
+              borderRadius: radius.lg,
+              backgroundColor: c.overlay,
+              borderWidth: 1,
+              borderColor: c.border,
+            }}
+          >
+            <T role="body">Blocked on this phone</T>
+            <T role="secondary" tone="mid" style={{ marginTop: space.xxs }}>
+              Your phone is holding these back. Open Settings to let them
+              through.
+            </T>
+          </Pressable>
+        ) : null}
 
         {/* The level appears only when notifications are on. A disabled row of
             three options is three controls explaining they do nothing. */}

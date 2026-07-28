@@ -37,7 +37,7 @@ class SupabaseCredentialsRepository:
     def get_user_by_email(self, email: str) -> UserRecord | None:
         rows = (
             self._db.table(_USERS)
-            .select("id, email, password_hash, name, created_at")
+            .select("id, email, password_hash, name, notify_level, created_at")
             .eq("email", email)
             .limit(1)
             .execute()
@@ -48,7 +48,7 @@ class SupabaseCredentialsRepository:
     def get_user_by_id(self, user_id: str) -> UserRecord | None:
         rows = (
             self._db.table(_USERS)
-            .select("id, email, password_hash, name, created_at")
+            .select("id, email, password_hash, name, notify_level, created_at")
             .eq("id", user_id)
             .limit(1)
             .execute()
@@ -72,6 +72,11 @@ class SupabaseCredentialsRepository:
 
     def set_name(self, user_id: str, name: str | None) -> None:
         self._db.table(_USERS).update({"name": name}).eq("id", user_id).execute()
+
+    def set_notify_level(self, user_id: str, level: str) -> None:
+        self._db.table(_USERS).update({"notify_level": level}).eq(
+            "id", user_id
+        ).execute()
 
     # --- otp -----------------------------------------------------------
     def upsert_otp(

@@ -26,13 +26,23 @@ from backend.repositories.credentials_repository import (
     CredentialsRepository,
     InMemoryCredentialsRepository,
 )
+from backend.repositories.device_token_repository import (
+    DeviceTokenRepository,
+    InMemoryDeviceTokenRepository,
+)
 from backend.repositories.feed_repository import InMemoryFeedRepository
 from backend.repositories.supabase_client import SupabaseClientProvider
 from backend.services.auth_service import DefaultAuthService
 from backend.services.connections import DefaultConnectionService
 from backend.services.later import LaterService
 from backend.services.passwords import Argon2PasswordHasher
+from backend.services.notifications import (
+    DefaultNotificationService,
+    ExpoPushTransport,
+    NotifyLevel,
+)
 from backend.services.profile import DefaultProfileService
+from backend.services.push import DefaultPushService, RedisSeenStore
 from backend.services.stats import SourceStatsService
 from backend.services.sync import SourceSync
 from backend.services.triggers import DefaultTriggerProvisioner
@@ -183,6 +193,10 @@ def build_app() -> FastAPI:
         max_attempts=int(os.environ.get("OTP_MAX_ATTEMPTS", "5")),
     )
     profile_service = DefaultProfileService(repo=credentials)
+    device_tokens = _build_device_token_repository()
+    push_service = _build_push_service(
+        repo=repo, device_tokens=device_tokens, profile_service=profile_service
+    )
 
     return create_app(
         repo=repo,
@@ -194,6 +208,8 @@ def build_app() -> FastAPI:
         classifier=classifier,
         connection_service=connection_service,
         profile_service=profile_service,
+        device_tokens=device_tokens,
+        on_item_ready=push_service.push_for_item,
         stats=stats,
         later=later,
         sync=sync,
@@ -332,6 +348,68 @@ def _build_credentials_repository() -> CredentialsRepository:
     )
 
     return SupabaseCredentialsRepository(provider)
+
+
+def _build_device_token_repository() -> DeviceTokenRepository:
+    """Where each of a user's phones can be reached. Falls back to memory only
+    when Supabase is absent, which is the same local/dev path every other
+    repository takes."""
+    provider = _supabase_provider()
+    if provider is None:
+        log.warning("Supabase is not configured; device tokens are in-memory")
+        return InMemoryDeviceTokenRepository()
+
+    from backend.repositories.supabase_device_token_repository import (
+        SupabaseDeviceTokenRepository,
+    )
+
+    return SupabaseDeviceTokenRepository(provider)
+
+
+def _build_push_service(repo, device_tokens, profile_service) -> DefaultPushService:
+    """The push stack, assembled.
+
+    Two things here are worth reading twice.
+
+    The seen store opens **its own** Redis connection rather than borrowing the
+    feed repository's: that client is created inside `_build_repository` and
+    never returned, and widening that function's return type for one caller
+    would be worse than a second connection, which is cheap.
+
+    `item_for` and `level_for` are bound to the feed repository and the profile
+    service rather than passed as objects, so the push service depends on two
+    small callables instead of on two whole contracts it would use one method
+    of each from.
+    """
+    seen = None
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        import redis
+
+        seen = RedisSeenStore(redis.from_url(redis_url))
+        log.info("push dedupe: Redis")
+    else:
+        # In-process, which forgets on restart. Correct for local work and
+        # wrong for production, hence the warning rather than silence.
+        log.warning("REDIS_URL unset; push dedupe will not survive a restart")
+
+    def level_for(user_id: str) -> NotifyLevel:
+        try:
+            return profile_service.get(user_id).notify_level
+        except Exception:
+            # Not knowing the setting is not a licence to guess wider than the
+            # narrowest one the product ships with.
+            log.warning("could not read notify level for %s", user_id, exc_info=True)
+            return NotifyLevel.URGENT
+
+    return DefaultPushService(
+        notifications=DefaultNotificationService(
+            push=ExpoPushTransport(), seen=seen
+        ),
+        tokens=device_tokens,
+        item_for=lambda user_id, item_id: repo.get(user_id, item_id),
+        level_for=level_for,
+    )
 
 
 app = build_app() if os.environ.get("APP_EAGER_START") else None

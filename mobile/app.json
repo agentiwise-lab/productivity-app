@@ -27,7 +27,15 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF6B5F",
+          "defaultChannel": "urgent"
+        }
+      ]
     ]
   }
 }

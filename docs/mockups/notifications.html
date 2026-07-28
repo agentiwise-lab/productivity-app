@@ -1,0 +1,917 @@
+<title>Push notifications · OS surfaces, permission priming, You tab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Push notifications. 393x852, 1 CSS px = 1 iOS pt, same as v4/v5.
+
+   Two things are being drawn here and they obey different rules:
+
+   1. The OS surfaces (lock screen, banner, drawer). These are NOT ours. iOS
+      and Android each own their layout, type and material, and the only things
+      we choose are the app icon, the title string, the body string and, on
+      Android, the channel. Drawing them in our own palette would be a lie
+      about what the user sees, so they are drawn in Apple's and Google's.
+
+   2. Our own screens (priming modal, You tab). These are v5 palette and the
+      seven type roles, unchanged.
+
+   The title and body strings below are exactly what backend/services/
+   notifications.py build_message() produces, not invented copy.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pg{
+  --canvas:#0C0B0A; --surface:#151311; --raised:#1D1A17; --overlay:#26221E;
+  --hairline:#2E2A26; --border:#3B352F;
+  --faint:#57504A; --low:#918A81; --mid:#A79F97; --high:#F5F1EC;
+  --accent:#63E4C2; --alarm:#FF6B5F; --wait:#AB7FF8; --later:#F2B366; --none:#7FA6D9; --stat:#C9B79A;
+  --onSolid:#0C0B0A; --tabbg:rgba(12,11,10,.74);
+  --page:#151412; --pagefg:#EDEAE5; --pagedim:#8E8880; --pageln:#2E2A26; --phedge:#332E29;
+  background:var(--page); color:var(--pagefg); margin:0; padding:56px 32px 140px;
+  font-family:"Geist",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.lightmode{
+  --canvas:#DCE6E5; --surface:#EAF1F0; --raised:#F2F7F6; --overlay:#CBDAD9;
+  --hairline:#BFD0CF; --border:#A8BEBD;
+  --faint:#86A09F; --low:#566E6D; --mid:#3E5453; --high:#12201F;
+  --accent:#0D8167; --alarm:#CC4432; --wait:#7144CC; --later:#96631F; --none:#3E6EA8; --stat:#6E5A40;
+  --onSolid:#FFFDF9; --tabbg:rgba(220,230,229,.80); --phedge:#BFD0CF;
+}
+.pg *{box-sizing:border-box;}
+
+/* ── page chrome ─────────────────────────────────────────────────── */
+.pg h1{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;margin:0 0 12px;}
+.pg h2{font-family:"Archivo";font-size:22px;line-height:28px;letter-spacing:-.4px;font-weight:600;margin:0 0 10px;}
+.pg .lede{font-size:15px;line-height:24px;color:var(--pagedim);max-width:84ch;margin:0 0 8px;}
+.pg .lede b{color:var(--pagefg);font-weight:600;}
+.pg .note{font-size:13px;line-height:20px;color:var(--pagedim);max-width:84ch;margin:10px 0 0;}
+.pg code{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;
+  background:#0C0B0A;border:1px solid var(--pageln);border-radius:5px;padding:1px 5px;color:#C9B79A;}
+.pgsec{padding:64px 0 0;border-top:1px solid var(--pageln);margin-top:64px;}
+.pgsec:first-of-type{border-top:0;margin-top:0;padding-top:0;}
+.eyebrow{font-family:"Archivo";font-size:11px;line-height:16px;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--pagedim);font-weight:600;margin:0 0 10px;}
+.rail{display:flex;gap:32px;overflow-x:auto;padding:32px 4px 24px;align-items:flex-start;}
+.rail::-webkit-scrollbar{height:10px;}
+.rail::-webkit-scrollbar-thumb{background:var(--pageln);border-radius:5px;}
+.cell{flex:none;width:393px;}
+.cell.wide{width:412px;}
+.cap{font-size:13px;line-height:20px;color:var(--pagedim);margin:16px 0 0;}
+.cap b{display:block;color:var(--pagefg);font-size:15px;line-height:22px;font-weight:600;margin-bottom:4px;}
+.cap .rec{color:#63E4C2;}
+.cap .warn{color:#F2B366;}
+
+/* ═══ DEVICE ═════════════════════════════════════════════════════ */
+.ph{width:393px;height:852px;border-radius:48px;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;background:var(--canvas);color:var(--high);
+  border:1px solid var(--phedge);}
+.ph.droid{width:412px;height:892px;border-radius:36px;}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.055;mix-blend-mode:overlay;z-index:30;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+.sb{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 24px 8px;position:relative;z-index:24;}
+.sb .clock{font-size:15px;font-weight:600;letter-spacing:-.1px;font-variant-numeric:tabular-nums;}
+.sb .isl{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:125px;height:36px;border-radius:999px;background:#000;}
+.lightmode .sb .isl{background:#12201F;}
+.sb .glyphs{display:flex;align-items:center;gap:4px;}
+.bd{flex:1;overflow:hidden;position:relative;}
+
+/* ═══ TYPE: seven roles ══════════════════════════════════════════ */
+.t-hero{font-family:"Archivo";font-size:56px;line-height:56px;letter-spacing:-1.4px;font-weight:600;font-variant-numeric:tabular-nums;}
+.t-display{font-family:"Archivo";font-size:34px;line-height:40px;letter-spacing:-.7px;font-weight:600;}
+.t-title{font-size:22px;line-height:28px;letter-spacing:-.4px;font-weight:600;}
+.t-heading{font-size:17px;line-height:24px;letter-spacing:-.1px;font-weight:600;}
+.t-body{font-size:15px;line-height:20px;font-weight:400;}
+.t-body.w500{font-weight:500;}
+.t-secondary{font-size:13px;line-height:20px;letter-spacing:.1px;font-weight:400;}
+.t-label{font-family:"Archivo";font-stretch:88%;font-size:11px;line-height:16px;
+  letter-spacing:.8px;text-transform:uppercase;font-weight:600;}
+.mono{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.c-high{color:var(--high);}.c-mid{color:var(--mid);}.c-low{color:var(--low);}.c-faint{color:var(--faint);}
+.stack{display:flex;flex-direction:column;min-width:0;}
+.grow{flex:1;min-width:0;}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* ═══ THE MARK ═══════════════════════════════════════════════════
+   Two offset rounded cards. This is `AuthGraphic` from
+   mobile/src/screens/auth/AuthKit.tsx, transcribed rect for rect (72x72 box,
+   32x44 cards at rx 8, 2px stroke, back card at 25% opacity, two content
+   lines at 55% and 30%). The auth flow, the app icon and the priming card all
+   show the same glyph, so the thing that asks for the permission is visibly
+   the thing that signed you in.
+
+   No hue. This app keeps colour for tiers only, and an icon in the urgent red
+   would claim a tier the app itself does not have.                          */
+.mark-d{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect x='26' y='13' width='32' height='44' rx='8' fill='none' stroke='%23F5F1EC' stroke-opacity='.25' stroke-width='2'/%3E%3Crect x='14' y='19' width='32' height='44' rx='8' fill='%230C0B0A' stroke='%23F5F1EC' stroke-width='2'/%3E%3Crect x='21' y='30' width='18' height='2.5' rx='1.25' fill='%23F5F1EC' opacity='.55'/%3E%3Crect x='21' y='38' width='12' height='2.5' rx='1.25' fill='%23F5F1EC' opacity='.3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:center;background-size:contain;}
+.mark-l{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect x='26' y='13' width='32' height='44' rx='8' fill='none' stroke='%2312201F' stroke-opacity='.25' stroke-width='2'/%3E%3Crect x='14' y='19' width='32' height='44' rx='8' fill='%23EAF1F0' stroke='%2312201F' stroke-width='2'/%3E%3Crect x='21' y='30' width='18' height='2.5' rx='1.25' fill='%2312201F' opacity='.55'/%3E%3Crect x='21' y='38' width='12' height='2.5' rx='1.25' fill='%2312201F' opacity='.3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:center;background-size:contain;}
+
+/* The launcher tile: the mark inset on the warm near-black, which is the icon
+   the OS composites into every notification row. 20px is what Android renders
+   in the collapsed row, so the glyph is checked at that size, not at 48. */
+.appicon{flex:none;border-radius:6px;background:#0C0B0A;
+  background-image:inherit;position:relative;overflow:hidden;}
+.appicon::after{content:"";position:absolute;inset:15%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'%3E%3Crect x='26' y='13' width='32' height='44' rx='8' fill='none' stroke='%23F5F1EC' stroke-opacity='.25' stroke-width='2.6'/%3E%3Crect x='14' y='19' width='32' height='44' rx='8' fill='%230C0B0A' stroke='%23F5F1EC' stroke-width='2.6'/%3E%3Crect x='21' y='30' width='18' height='3' rx='1.5' fill='%23F5F1EC' opacity='.55'/%3E%3Crect x='21' y='38' width='12' height='3' rx='1.5' fill='%23F5F1EC' opacity='.3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:center;background-size:contain;}
+.appicon.sm{width:20px;height:20px;border-radius:50%;}
+
+/* ═══ iOS LOCK SCREEN ════════════════════════════════════════════ */
+.ios-lock{position:absolute;inset:0;
+  background:linear-gradient(165deg,#1b2733 0%,#2c3a46 42%,#3c2f33 100%);}
+.ios-lock .lockclock{position:absolute;top:96px;left:0;right:0;text-align:center;color:#fff;
+  font-family:-apple-system,"SF Pro Display","Geist",sans-serif;font-weight:300;
+  font-size:88px;line-height:88px;letter-spacing:-2px;font-variant-numeric:tabular-nums;
+  text-shadow:0 2px 24px rgba(0,0,0,.25);}
+.ios-lock .lockdate{position:absolute;top:64px;left:0;right:0;text-align:center;color:rgba(255,255,255,.9);
+  font-family:-apple-system,"SF Pro Text","Geist",sans-serif;font-size:17px;font-weight:500;}
+.ios-lock .lockfoot{position:absolute;bottom:34px;left:0;right:0;display:flex;
+  justify-content:space-between;padding:0 40px;}
+.ios-lock .lockfoot i{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.16);
+  backdrop-filter:blur(20px);display:block;}
+.ios-lock .bar{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);
+  width:139px;height:5px;border-radius:3px;background:rgba(255,255,255,.55);}
+
+/* the notification itself: iOS 17+ material, 14px radius, 4pt gutters */
+.ios-note{position:absolute;left:12px;right:12px;border-radius:22px;padding:12px 16px 14px;
+  background:rgba(238,238,240,.30);backdrop-filter:blur(40px) saturate(180%);
+  border:.5px solid rgba(255,255,255,.20);color:#fff;
+  font-family:-apple-system,"SF Pro Text","Geist",sans-serif;
+  box-shadow:0 8px 30px rgba(0,0,0,.22);}
+.ios-note .row1{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
+.ios-note .appname{font-size:13px;font-weight:400;letter-spacing:.2px;
+  color:rgba(255,255,255,.86);text-transform:uppercase;flex:1;}
+.ios-note .when{font-size:13px;color:rgba(255,255,255,.72);}
+.ios-note .ntitle{font-size:15px;line-height:20px;font-weight:600;letter-spacing:-.2px;margin:0 0 1px;}
+.ios-note .nbody{font-size:15px;line-height:20px;font-weight:400;color:rgba(255,255,255,.92);}
+.ios-note .appicon{width:22px;height:22px;border-radius:6px;}
+
+/* banner variant: app open or unlocked, sits under the status bar */
+.ios-banner{position:absolute;top:14px;left:8px;right:8px;border-radius:24px;padding:12px 16px 14px;
+  background:rgba(44,44,46,.72);backdrop-filter:blur(40px) saturate(180%);
+  border:.5px solid rgba(255,255,255,.14);color:#fff;
+  font-family:-apple-system,"SF Pro Text","Geist",sans-serif;
+  box-shadow:0 12px 40px rgba(0,0,0,.42);z-index:40;}
+.ios-banner .grab{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);
+  width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.28);}
+
+/* ═══ iOS PERMISSION ALERT ═══════════════════════════════════════ */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.42);backdrop-filter:blur(1px);z-index:50;}
+.ios-alert{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:270px;
+  border-radius:14px;overflow:hidden;background:rgba(249,249,249,.94);backdrop-filter:blur(30px);
+  font-family:-apple-system,"SF Pro Text","Geist",sans-serif;color:#000;z-index:60;
+  box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.ios-alert .top{padding:19px 16px 15px;text-align:center;}
+.ios-alert .at{font-size:17px;line-height:22px;font-weight:600;letter-spacing:-.3px;margin-bottom:3px;}
+.ios-alert .ab{font-size:13px;line-height:17px;color:#000;opacity:.92;}
+.ios-alert .btns{display:flex;border-top:.5px solid rgba(60,60,67,.29);}
+.ios-alert .btn{flex:1;height:44px;display:grid;place-items:center;font-size:17px;color:#007AFF;}
+.ios-alert .btn+.btn{border-left:.5px solid rgba(60,60,67,.29);font-weight:600;}
+
+/* ═══ ANDROID ════════════════════════════════════════════════════ */
+.and{position:absolute;inset:0;font-family:"Roboto",-apple-system,sans-serif;}
+.and-lock{background:linear-gradient(160deg,#101418 0%,#1b232a 55%,#241d1f 100%);}
+.and .sb2{height:36px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;color:#fff;font-size:14px;font-weight:500;}
+.and-lock .lockclock{text-align:center;color:#fff;font-weight:300;font-size:72px;line-height:76px;
+  margin-top:36px;font-variant-numeric:tabular-nums;}
+.and-lock .lockdate{text-align:center;color:rgba(255,255,255,.8);font-size:15px;margin-top:2px;}
+.and .bar{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,.6);}
+
+/* Material 3 notification card. Fully rounded, 28px radius, surface container. */
+.and-note{margin:8px 12px;border-radius:28px;padding:14px 16px;background:#1F1B18;color:#E8E2DB;
+  box-shadow:0 2px 10px rgba(0,0,0,.3);}
+.and-note .row1{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.and-note .appname{font-size:12px;color:#B9B1A8;letter-spacing:.1px;}
+.and-note .dot{color:#8A827A;font-size:12px;}
+.and-note .when{font-size:12px;color:#B9B1A8;flex:1;}
+.and-note .chev{width:20px;height:20px;border-radius:50%;background:#2C2724;display:grid;place-items:center;}
+.and-note .ntitle{font-size:14px;line-height:20px;font-weight:500;color:#F2ECE5;margin-bottom:1px;}
+.and-note .nbody{font-size:14px;line-height:20px;color:#C3BBB2;}
+.and-note .acts{display:flex;gap:8px;margin-top:12px;}
+.and-note .act{height:32px;padding:0 14px;border-radius:16px;border:1px solid #453E38;
+  display:grid;place-items:center;font-size:13px;font-weight:500;color:#E8E2DB;}
+.and-note.heads{position:absolute;top:40px;left:0;right:0;z-index:40;
+  box-shadow:0 14px 40px rgba(0,0,0,.5);}
+
+/* Android 13 POST_NOTIFICATIONS runtime dialog */
+.and-perm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:312px;
+  border-radius:28px;padding:24px;background:#211D1A;color:#E8E2DB;z-index:60;
+  font-family:"Roboto",sans-serif;box-shadow:0 24px 64px rgba(0,0,0,.55);}
+.and-perm .pic{width:48px;height:48px;margin:0 auto 16px;}
+.and-perm .pt{font-size:20px;line-height:26px;text-align:center;margin-bottom:24px;color:#F2ECE5;}
+.and-perm .pb{display:flex;flex-direction:column;gap:8px;}
+.and-perm .pbtn{height:48px;border-radius:24px;display:grid;place-items:center;
+  font-size:14px;font-weight:500;}
+/* Material's own filled/text pair, not our palette: this dialog is Google's
+   and its accent comes from the device theme, not from us. */
+.and-perm .pbtn.pri{background:#D0BCFF;color:#381E72;}
+.and-perm .pbtn.sec{color:#D0BCFF;}
+
+/* ═══ OUR SCREENS: priming modal ═════════════════════════════════
+   Geometry transcribed from mobile/src/components/NamePrompt.tsx, which is
+   the closest sibling: the other modal this app shows once, right after
+   signup. Scrim, 24pt page padding, `raised` card at radius 16 with 24pt
+   padding and a 16pt gap, left-aligned text, actions right-aligned on one
+   row. Nothing here is a new shape.                                         */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.58);z-index:20;}
+.lightmode .dim{background:rgba(18,32,31,.34);}
+.card{position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);z-index:30;
+  background:var(--raised);border-radius:16px;padding:24px;
+  display:flex;flex-direction:column;gap:16px;
+  box-shadow:0 24px 64px rgba(0,0,0,.45);}
+.lightmode .card{box-shadow:0 24px 64px rgba(18,32,31,.18);}
+.card .mk{width:52px;height:52px;}
+.card p{margin:0;color:var(--mid);}
+.card h3{margin:0;}
+/* The action row. "Save" in NamePrompt is a pill at 8pt vertical and 16pt
+   horizontal padding around 11pt label type, which lands at 32 tall. That is
+   the house primary button inside a modal, and it is deliberately small: a
+   52-tall full-bleed button in a 345-wide card reads as a landing page. */
+.acts-r{display:flex;justify-content:flex-end;align-items:center;gap:16px;margin-top:4px;}
+.textbtn{padding:8px;color:var(--mid);}
+.pillbtn{padding:8px 16px;border-radius:999px;background:var(--high);color:var(--canvas);}
+/* The full-width 48pt button, used on screens rather than in modals:
+   size.bigButton with radius.md, body type at weight 500. */
+.bigbtn{height:48px;border-radius:12px;background:var(--high);color:var(--canvas);
+  display:grid;place-items:center;}
+.bigbtn.sec{background:transparent;border:1px solid var(--border);color:var(--high);}
+/* The detail sheet, for the tap-target frame only: bottom sheet at 82% with a
+   5pt grab pill, per DetailSheet.tsx. */
+.dsheet{position:absolute;left:0;right:0;bottom:0;height:82%;z-index:30;background:var(--surface);
+  border-radius:24px 24px 0 0;border-top:1px solid var(--hairline);padding:12px 20px 40px;}
+.dsheet .grab{width:36px;height:5px;border-radius:999px;background:var(--border);margin:0 auto 20px;}
+
+/* ═══ OUR SCREENS: You tab rows ══════════════════════════════════ */
+.hdr{padding:12px 16px 0;}
+.you-row{display:flex;align-items:center;gap:12px;padding:0 16px;min-height:72px;margin-top:8px;}
+/* Toggle: 44x26, knob 22, `high` fill when on and never a category hue.
+   Slimmer than the iOS default so it sits inside the two-line row rather than
+   standing taller than it. Transcribed from ui.tsx. */
+.toggle{flex:none;width:44px;height:26px;border-radius:999px;background:var(--overlay);
+  border:1px solid var(--hairline);padding:2px;display:flex;}
+.toggle.on{background:var(--high);border-color:transparent;justify-content:flex-end;}
+.toggle i{width:22px;height:22px;border-radius:50%;background:var(--faint);display:block;}
+.toggle.on i{background:var(--canvas);}
+/* Segmented: 32 tall, pill inside and out, selected sits on `raised` with a
+   1px border. Labels are the 11pt uppercase label role, not body. */
+.seg{display:flex;height:32px;border-radius:999px;background:var(--overlay);padding:2px;margin:0 16px 16px;}
+.seg div{flex:1;border-radius:999px;display:grid;place-items:center;color:var(--low);}
+.seg div.on{background:var(--raised);border:1px solid var(--border);color:var(--high);}
+.sep{height:1px;background:var(--hairline);margin:8px 0;}
+.sectlab{padding:14px 16px 0;color:var(--high);}
+.banner{margin:8px 16px 0;padding:14px 16px;border-radius:16px;background:var(--overlay);
+  border:1px solid var(--border);}
+.banner .lk{color:var(--accent);}
+
+/* ═══ FLOW STRIP ═════════════════════════════════════════════════ */
+.flow{display:flex;gap:0;align-items:stretch;margin-top:28px;flex-wrap:wrap;}
+.flow .st{flex:1;min-width:150px;padding:16px 18px;background:#0C0B0A;border:1px solid var(--pageln);
+  border-right:0;}
+.flow .st:last-child{border-right:1px solid var(--pageln);}
+.flow .st:first-child{border-radius:14px 0 0 14px;}
+.flow .st:last-child{border-radius:0 14px 14px 0;}
+.flow .st .n{font-family:"Archivo";font-size:11px;letter-spacing:.8px;text-transform:uppercase;
+  color:#63E4C2;font-weight:600;margin-bottom:6px;}
+.flow .st .h{font-size:14px;font-weight:600;line-height:20px;margin-bottom:4px;}
+.flow .st .d{font-size:12px;line-height:18px;color:var(--pagedim);}
+</style>
+
+<div class="pg">
+
+<h1>Push notifications</h1>
+<p class="lede">What a buzz looks like on each OS, how we ask for the permission, and what the
+<b>Notify me</b> row does once it is real. The two OS surfaces are drawn in Apple's and Google's own
+design languages rather than ours, because that is what the user actually sees: on a lock screen we
+control four things only, the icon, the title, the body, and on Android the channel.</p>
+<p class="note">Title and body strings below are exactly what <code>build_message()</code> in
+<code>backend/services/notifications.py</code> emits today. Nothing here is invented copy.</p>
+
+<div class="flow">
+  <div class="st"><div class="n">1</div><div class="h">Event ingested</div>
+    <div class="d">Composio webhook lands, the item is stored and classified.</div></div>
+  <div class="st"><div class="n">2</div><div class="h">Tier is final</div>
+    <div class="d">Push fires after classification, never on a placeholder tier.</div></div>
+  <div class="st"><div class="n">3</div><div class="h">Level filter</div>
+    <div class="d">Urgent / By EOD / All / Off, read from the user's row.</div></div>
+  <div class="st"><div class="n">4</div><div class="h">Expo Push API</div>
+    <div class="d">One POST, both platforms. Expo brokers to FCM and APNs.</div></div>
+  <div class="st"><div class="n">5</div><div class="h">Tap</div>
+    <div class="d"><code>data.item_id</code> opens that item's sheet.</div></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">One · iOS</p>
+<h2>Lock screen and banner</h2>
+<p class="lede">iOS gives us a title line and a body line inside its own material. The app name is
+forced uppercase by the system and the timestamp is the system's. Everything expressive we might want
+to do, tier colour, the source mark, the ring, is unavailable here, which is the argument for the
+message being a sentence rather than a label: <b>"Priya Menon needs you"</b> carries more than a
+coloured dot ever could on a surface we do not own.</p>
+
+<div class="rail">
+
+  <!-- iOS lock, single item -->
+  <div class="cell">
+    <div class="ph">
+      <div class="ios-lock">
+        <div class="lockdate">Monday, 27 July</div>
+        <div class="lockclock">9:41</div>
+        <div class="ios-note" style="top:392px;">
+          <div class="row1">
+            <div class="appicon" style="width:22px;height:22px;border-radius:6px;"></div>
+            <div class="appname">Productivity</div>
+            <div class="when">now</div>
+          </div>
+          <div class="ntitle">Priya Menon needs you</div>
+          <div class="nbody">Can you approve the Q3 budget before the 2pm review? Blocked without it.</div>
+        </div>
+        <div class="lockfoot"><i></i><i></i></div>
+        <div class="bar"></div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Single item, locked</b>
+      One item gets named. <code>title</code> is who wants something, <code>body</code> is the item's
+      summary. This is the shape the user sees the overwhelming majority of the time, because urgent
+      items arrive one at a time.</p>
+  </div>
+
+  <!-- iOS lock, batch -->
+  <div class="cell">
+    <div class="ph">
+      <div class="ios-lock">
+        <div class="lockdate">Monday, 27 July</div>
+        <div class="lockclock">9:41</div>
+        <div class="ios-note" style="top:392px;">
+          <div class="row1">
+            <div class="appicon" style="width:22px;height:22px;border-radius:6px;"></div>
+            <div class="appname">Productivity</div>
+            <div class="when">now</div>
+          </div>
+          <div class="ntitle">3 things need you</div>
+          <div class="nbody">Priya Menon, Dan Whitfield, Aarav Shah</div>
+        </div>
+        <div class="lockfoot"><i></i><i></i></div>
+        <div class="bar"></div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Batch, locked</b>
+      Several at once are counted, not listed. Three names fit; five do not, and a truncated list of
+      names on a lock screen is worse than a number. <span class="rec">One notification per batch,
+      never one per item.</span> Five buzzes for five items is the pile this product exists to
+      replace.</p>
+  </div>
+
+  <!-- iOS banner over the app -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+        <div style="padding:24px 16px;">
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);"></div>
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);margin-top:14px;"></div>
+        </div>
+      </div>
+      <div class="ios-banner">
+        <div class="row1" style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">
+          <div class="appicon" style="width:22px;height:22px;border-radius:6px;"></div>
+          <div class="appname" style="font-size:13px;color:rgba(255,255,255,.86);text-transform:uppercase;flex:1;">Productivity</div>
+          <div class="when" style="font-size:13px;color:rgba(255,255,255,.72);">now</div>
+        </div>
+        <div class="ntitle" style="font-size:15px;line-height:20px;font-weight:600;letter-spacing:-.2px;">Dan Whitfield needs you</div>
+        <div class="nbody" style="font-size:15px;line-height:20px;color:rgba(255,255,255,.92);">Left a review on your PR: two changes requested on the auth path.</div>
+        <div class="grab"></div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Banner, app in foreground</b>
+      <span class="warn">This one does not happen for free.</span> Without a
+      <code>setNotificationHandler</code> returning <code>shouldShowBanner</code>, a notification that
+      arrives while the app is open is silently swallowed. It is the single most common "push is
+      broken" report and it is a client bug, not a credentials one.</p>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">Two · Android</p>
+<h2>Heads-up, lock screen, drawer</h2>
+<p class="lede">Android renders the same two strings inside a Material 3 card, and adds one thing iOS
+does not have: <b>the channel</b>. A channel is a user-facing bucket with its own importance, sound
+and vibration, and once created its importance belongs to the user forever. We create exactly one,
+<code>urgent</code>, at <code>IMPORTANCE_HIGH</code>, so the notification arrives as a heads-up rather
+than a silent drawer entry. Shipping without a channel files us under the system "Default" channel,
+which the Expo docs explicitly warn against.</p>
+
+<div class="rail">
+
+  <!-- Android heads-up -->
+  <div class="cell wide">
+    <div class="ph droid">
+      <div class="and" style="background:var(--canvas);">
+        <div class="sb2" style="color:var(--high);"><span>9:41</span><span>▮ ▮ ▮</span></div>
+        <div style="padding:12px 16px;">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+        <div style="padding:20px 16px;">
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);"></div>
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);margin-top:14px;"></div>
+        </div>
+      </div>
+      <div class="and-note heads">
+        <div class="row1">
+          <div class="appicon sm"></div>
+          <div class="appname">Productivity</div>
+          <div class="dot">·</div>
+          <div class="when">now</div>
+          <div class="chev">⌄</div>
+        </div>
+        <div class="ntitle">Priya Menon needs you</div>
+        <div class="nbody">Can you approve the Q3 budget before the 2pm review? Blocked without it.</div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:var(--faint);"></div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Heads-up, app in foreground</b>
+      Peeks in over whatever is on screen and slides away. This requires the channel to be
+      <code>IMPORTANCE_HIGH</code> <b>and</b> the message to carry <code>priority: 'high'</code>.
+      Normal priority gets batched by Doze and can land an hour late, which for an urgent item is the
+      same as not landing.</p>
+  </div>
+
+  <!-- Android lock screen, two stacked -->
+  <div class="cell wide">
+    <div class="ph droid">
+      <div class="and and-lock">
+        <div class="sb2"><span>9:41</span><span>▮ ▮ ▮</span></div>
+        <div class="lockclock">9:41</div>
+        <div class="lockdate">Mon, 27 July</div>
+        <div style="margin-top:60px;">
+          <div class="and-note">
+            <div class="row1">
+              <div class="appicon sm"></div>
+              <div class="appname">Productivity</div>
+              <div class="dot">·</div>
+              <div class="when">now</div>
+              <div class="chev">⌄</div>
+            </div>
+            <div class="ntitle">Priya Menon needs you</div>
+            <div class="nbody">Can you approve the Q3 budget before the 2pm review?</div>
+          </div>
+          <div class="and-note" style="opacity:.9;">
+            <div class="row1">
+              <div class="appicon sm"></div>
+              <div class="appname">Productivity</div>
+              <div class="dot">·</div>
+              <div class="when">42m</div>
+              <div class="chev">⌄</div>
+            </div>
+            <div class="ntitle">2 things need you</div>
+            <div class="nbody">Dan Whitfield, Aarav Shah</div>
+          </div>
+        </div>
+        <div class="bar"></div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Locked, two batches apart in time</b>
+      What restraint buys, seen at a glance: a whole morning of work produced two entries. The
+      dedupe guarantees the 9:41 item is never re-announced by a later refresh sweep, so this stack
+      grows only when something genuinely new arrives.</p>
+  </div>
+
+  <!-- Android expanded with actions -->
+  <div class="cell wide">
+    <div class="ph droid">
+      <div class="and" style="background:#141110;">
+        <div class="sb2" style="color:#E8E2DB;"><span>9:41</span><span>▮ ▮ ▮</span></div>
+        <div style="padding:16px 20px 8px;color:#B9B1A8;font-size:13px;">Notifications</div>
+        <div class="and-note">
+          <div class="row1">
+            <div class="appicon sm"></div>
+            <div class="appname">Productivity</div>
+            <div class="dot">·</div>
+            <div class="when">now</div>
+            <div class="chev">⌃</div>
+          </div>
+          <div class="ntitle">Priya Menon needs you</div>
+          <div class="nbody">Can you approve the Q3 budget before the 2pm review? Blocked without it,
+            and the deck is due to the board Thursday.</div>
+          <div class="acts">
+            <div class="act">Open</div>
+            <div class="act">Snooze 1h</div>
+          </div>
+        </div>
+        <div style="padding:16px 20px 8px;color:#B9B1A8;font-size:13px;">Earlier</div>
+        <div class="and-note" style="opacity:.75;">
+          <div class="row1">
+            <div class="appicon sm"></div>
+            <div class="appname">Productivity</div>
+            <div class="dot">·</div>
+            <div class="when">42m</div>
+            <div class="chev">⌄</div>
+          </div>
+          <div class="ntitle">2 things need you</div>
+          <div class="nbody">Dan Whitfield, Aarav Shah</div>
+        </div>
+        <div class="bar"></div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Drawer, expanded</b>
+      Android shows the full body when pulled open and can carry action buttons.
+      <span class="warn">Snooze from the notification is drawn here but is not in scope:</span> it
+      needs a background task registration and a signed action route. Noted as a follow-on, not part
+      of the first slice.</p>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">Three · Asking</p>
+<h2>Priming first, OS prompt second</h2>
+<p class="lede">The OS prompt is a one-shot resource. On iOS a denial is close to permanent: the user
+has to find Settings, scroll to the app, and flip a switch they have no reason to look for. So the OS
+prompt is never the user's first contact with the idea. Our own screen goes first, and
+<b>only "Turn them on" fires the system dialog</b>. "Not now" costs nothing, because it leaves the OS
+permission unasked and we can offer it again from the You tab.</p>
+<p class="lede"><b>Placement: the first time a source finishes connecting, not at signup.</b> Asking
+before there is a feed is asking somebody to consent to notifications about nothing. Straight after a
+connect, the user has just watched the product read their actual work, and the promise below is a
+claim they can evaluate. It follows the pattern the name modal already uses, fired once and never
+re-nagged.</p>
+
+<div class="rail">
+
+  <!-- priming modal, dark -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+        <div style="padding:24px 16px;">
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);"></div>
+        </div>
+      </div>
+      <div class="dim"></div>
+      <div class="card">
+        <div class="mk mark-d"></div>
+        <h3 class="t-heading c-high">We'll only buzz for what's urgent</h3>
+        <p class="t-secondary">Not every email. Not every Slack message. Just the things that need
+          you before end of day. And never twice for the same thing.</p>
+        <div class="acts-r">
+          <div class="textbtn t-label">Not now</div>
+          <div class="pillbtn t-label">Turn them on</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Priming, dark</b>
+      Three claims, each of which the code actually keeps: the tier filter, the end-of-day bound, and
+      the once-ever dedupe. <span class="rec">No screenshot of a fake notification, no "enable to get
+      the most out of the app".</span> The promise is specific because a specific promise is the only
+      kind worth granting a permission for.</p>
+  </div>
+
+  <!-- priming modal, light -->
+  <div class="cell">
+    <div class="ph lightmode">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+        <div style="padding:24px 16px;">
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);"></div>
+        </div>
+      </div>
+      <div class="dim"></div>
+      <div class="card">
+        <div class="mk mark-l"></div>
+        <h3 class="t-heading c-high">We'll only buzz for what's urgent</h3>
+        <p class="t-secondary">Not every email. Not every Slack message. Just the things that need
+          you before end of day. And never twice for the same thing.</p>
+        <div class="acts-r">
+          <div class="textbtn t-label">Not now</div>
+          <div class="pillbtn t-label">Turn them on</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Priming, light</b>
+      Same card on the sage ladder. <span class="rec">No colour anywhere on it.</span> The mark is the
+      neutral two-card glyph, because a hue on this card would claim a tier, and the one tier it
+      talks about is named in words instead.</p>
+  </div>
+
+  <!-- iOS OS prompt -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+        <div style="padding:24px 16px;">
+          <div style="height:150px;border-radius:20px;background:var(--surface);border:1px solid var(--hairline);"></div>
+        </div>
+      </div>
+      <div class="scrim"></div>
+      <div class="ios-alert">
+        <div class="top">
+          <div class="at">"Productivity" Would Like to Send You Notifications</div>
+          <div class="ab">Notifications may include alerts, sounds and icon badges. These can be
+            configured in Settings.</div>
+        </div>
+        <div class="btns">
+          <div class="btn">Don't Allow</div>
+          <div class="btn">Allow</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>iOS system prompt</b>
+      Fires only after "Turn them on". The wording is Apple's and cannot be changed; the app name is
+      the only variable. This is why the priming screen has to carry the argument: by the time this
+      appears, the user has already decided.</p>
+  </div>
+
+  <!-- Android 13 OS prompt -->
+  <div class="cell wide">
+    <div class="ph droid">
+      <div class="and" style="background:var(--canvas);">
+        <div class="sb2" style="color:var(--high);"><span>9:41</span><span>▮ ▮ ▮</span></div>
+        <div style="padding:12px 16px;">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+      </div>
+      <div class="scrim"></div>
+      <div class="and-perm">
+        <div class="pic"><div class="appicon" style="width:48px;height:48px;border-radius:12px;"></div></div>
+        <div class="pt">Allow Productivity to send you notifications?</div>
+        <div class="pb">
+          <div class="pbtn pri">Allow</div>
+          <div class="pbtn sec">Don't allow</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Android 13+ system prompt</b>
+      <code>POST_NOTIFICATIONS</code> became a runtime permission in API 33.
+      <span class="rec">Our code does not branch:</span> the same
+      <code>requestPermissionsAsync()</code> raises this on Android and the alert on iOS. Android 12
+      and below grant it at install, so the priming screen still shows but the OS dialog never
+      appears.</p>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">Four · You tab</p>
+<h2>Making the stub real</h2>
+<p class="lede">The row is already drawn and already toggles. What changes is only that it now reads
+from and writes to the user's row instead of a <code>useState</code> that resets on every launch. One
+new state has to be designed, though, and it is the one the current stub cannot represent: the user
+turned it on in our UI but the OS says no.</p>
+
+<div class="rail">
+
+  <!-- You, urgent -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr" style="padding-bottom:8px;">
+          <div class="t-display c-high">Vicky</div>
+        </div>
+        <div class="you-row">
+          <div class="grow stack">
+            <div class="t-heading c-high">Notify me</div>
+            <div class="t-secondary c-mid">Urgent only</div>
+          </div>
+          <div class="toggle on"><i></i></div>
+        </div>
+        <div class="seg">
+          <div class="t-label on">Urgent</div>
+          <div class="t-label">By EOD</div>
+          <div class="t-label">All</div>
+        </div>
+        <div class="sep"></div>
+        <div class="sectlab t-heading">Appearance</div>
+        <div class="seg" style="margin-top:12px;">
+          <div class="t-label">Light</div>
+          <div class="t-label on">Dark</div>
+          <div class="t-label">Auto</div>
+        </div>
+        <div class="sep"></div>
+        <div class="sectlab t-heading">Connections</div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>On, Urgent</b>
+      The default, and the value <code>users.notify_level</code> ships with. The subtitle restates the
+      segment so the row is readable without expanding anything.</p>
+  </div>
+
+  <!-- You, by eod -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr" style="padding-bottom:8px;">
+          <div class="t-display c-high">Vicky</div>
+        </div>
+        <div class="you-row">
+          <div class="grow stack">
+            <div class="t-heading c-high">Notify me</div>
+            <div class="t-secondary c-mid">By EOD only</div>
+          </div>
+          <div class="toggle on"><i></i></div>
+        </div>
+        <div class="seg">
+          <div class="t-label">Urgent</div>
+          <div class="t-label on">By EOD</div>
+          <div class="t-label">All</div>
+        </div>
+        <div class="sep"></div>
+        <div class="sectlab t-heading">Appearance</div>
+        <div class="seg" style="margin-top:12px;">
+          <div class="t-label">Light</div>
+          <div class="t-label on">Dark</div>
+          <div class="t-label">Auto</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>On, By EOD</b>
+      Wire value stays <code>urgent_today</code>. The label says "By EOD" everywhere a person can see
+      it; renaming a persisted enum because its label changed is a migration that buys nothing.</p>
+  </div>
+
+  <!-- You, off -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr" style="padding-bottom:8px;">
+          <div class="t-display c-high">Vicky</div>
+        </div>
+        <div class="you-row">
+          <div class="grow stack">
+            <div class="t-heading c-high">Notify me</div>
+            <div class="t-secondary c-mid">Off</div>
+          </div>
+          <div class="toggle"><i></i></div>
+        </div>
+        <div class="sep" style="margin-top:16px;"></div>
+        <div class="sectlab t-heading">Appearance</div>
+        <div class="seg" style="margin-top:12px;">
+          <div class="t-label">Light</div>
+          <div class="t-label on">Dark</div>
+          <div class="t-label">Auto</div>
+        </div>
+        <div class="sep"></div>
+        <div class="sectlab t-heading">Connections</div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Off</b>
+      The segmented control disappears rather than greying out: three disabled options are three
+      controls explaining that they do nothing. Turning off also deletes this device's token, so the
+      server stops trying rather than sending into a void.</p>
+  </div>
+
+  <!-- You, OS-denied -->
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr" style="padding-bottom:8px;">
+          <div class="t-display c-high">Vicky</div>
+        </div>
+        <div class="you-row">
+          <div class="grow stack">
+            <div class="t-heading c-high">Notify me</div>
+            <div class="t-secondary c-mid">Urgent only</div>
+          </div>
+          <div class="toggle on"><i></i></div>
+        </div>
+        <div class="banner">
+          <div class="t-body c-high" style="margin-bottom:4px;">Blocked on this phone</div>
+          <div class="t-secondary c-mid">iOS is holding these back. <span class="lk">Open Settings</span>
+            to let them through.</div>
+        </div>
+        <div class="seg" style="margin-top:16px;">
+          <div class="t-label on">Urgent</div>
+          <div class="t-label">By EOD</div>
+          <div class="t-label">All</div>
+        </div>
+        <div class="sep"></div>
+        <div class="sectlab t-heading">Appearance</div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b><span class="warn">New state:</span> on in the app, denied by the OS</b>
+      The stub cannot express this and it is the state that makes users file bugs. The preference is
+      genuinely on and stays on, so nothing is silently reset behind their back; the banner explains
+      why nothing is arriving and deep-links to Settings. Firing another OS prompt here would do
+      nothing at all, because the prompt has already been spent.</p>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">Five · Tap</p>
+<h2>Where a tap lands</h2>
+<p class="lede">Every message carries <code>data.item_id</code>. A tap opens that item's detail sheet
+directly, not the feed with the item somewhere in it. A batch carries
+<code>data.item_ids</code> and opens the feed scrolled to the top, because there is no single right
+item to open.</p>
+
+<div class="rail">
+  <div class="cell">
+    <div class="ph">
+      <div class="sb"><div class="clock">9:41</div><div class="isl"></div><div class="glyphs"></div></div>
+      <div class="bd">
+        <div class="hdr">
+          <div class="t-label c-low" style="margin-bottom:6px;">MONDAY · 9:41</div>
+          <div class="t-display c-high">Good morning</div>
+        </div>
+      </div>
+      <div class="dim"></div>
+      <div class="dsheet">
+        <div class="grab"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--overlay);"></div>
+          <div class="stack grow">
+            <div class="t-body w500 c-high">Priya Menon</div>
+            <div class="t-secondary c-low">Slack · #budget-q3 · 2m ago</div>
+          </div>
+          <div style="height:24px;padding:0 10px;border-radius:8px;background:var(--alarm);
+                      color:var(--onSolid);display:grid;place-items:center;"
+               class="t-label">URGENT</div>
+        </div>
+        <div class="t-body c-high" style="text-align:left;line-height:22px;">Can you approve the Q3
+          budget before the 2pm review? Blocked without it, and the deck is due to the board
+          Thursday.</div>
+        <div style="display:flex;gap:10px;margin-top:24px;">
+          <div class="bigbtn t-body w500" style="flex:1;">Reply</div>
+          <div class="bigbtn sec t-body w500" style="flex:1;">Snooze</div>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </div>
+    <p class="cap"><b>Tap opens the item</b>
+      The same detail sheet a tap on the feed card opens, reached through the existing row-open path.
+      Cold start is the case to get right: the app was killed, so the tap has to be read from
+      <code>getLastNotificationResponseAsync()</code> after the feed has loaded, not from the live
+      listener, which never fired.</p>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="pgsec">
+<p class="eyebrow">Six · What is not drawn</p>
+<h2>Out of scope, deliberately</h2>
+<p class="lede">
+<b>Notification actions (Reply, Snooze from the shade).</b> Drawn once above to show what Android
+allows, but they need a background task and a signed action route. Follow-on.<br>
+<b>Badges.</b> An unread count on the icon is a different promise from "this needs you", and a badge
+that never clears is its own kind of noise.<br>
+<b>Rich content, images, custom sounds.</b> Nothing here needs them.<br>
+<b>Quiet hours and per-source rules.</b> The four levels are the whole surface for now.<br>
+<b>iOS delivery verification.</b> The code ships iOS-ready, but APNs needs the paid Apple Developer
+account. Until then, every real-device check happens on an Android preview build.</p>
+</div>
+
+</div>

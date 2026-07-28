@@ -15,7 +15,7 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, tzinfo
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -169,9 +169,38 @@ class SnoozeBody(BaseModel):
     until: datetime
 
 
-class NameBody(BaseModel):
-    # Optional so PATCH /me with null clears the name; the service trims and caps.
+class ProfileBody(BaseModel):
+    """PATCH /me. Both fields optional, and `None` means different things.
+
+    For `name`, `None` is a value: it clears the name back to no-name, which is
+    what the You tab's blank-and-save does. For `notify_level` there is no such
+    thing as "no level", so `None` can only mean "not part of this request".
+
+    The asymmetry is why a sentinel is needed rather than a shared rule: without
+    it, editing your display name would silently reset your notification
+    setting. `model_fields_set` is what tells the two apart.
+    """
+
     name: str | None = None
+    notify_level: str | None = None
+
+
+class DeviceBody(BaseModel):
+    token: str
+    #: Constrained here as well as by the column's check constraint, so a typo
+    #: is a 422 naming the field rather than a 500 out of Postgres.
+    platform: Literal["ios", "android"]
+
+
+class DeviceTokenBody(BaseModel):
+    """Unregister takes the token in the body rather than the path.
+
+    An Expo token is literally `ExponentPushToken[...]`, and square brackets are
+    reserved characters RFC 3986 does not allow unencoded in a path segment. In
+    a body the value needs no encoding, and nothing has to agree about it.
+    """
+
+    token: str
 
 
 class RefreshResult(BaseModel):
@@ -204,6 +233,8 @@ def create_app(
     classifier: DefaultClassificationService | None = None,
     connection_service: Any | None = None,
     profile_service: Any | None = None,
+    device_tokens: Any | None = None,
+    on_item_ready: Callable[[str, Any], None] | None = None,
     stats: Any | None = None,
     later: Any | None = None,
     calendar: Any | None = None,
@@ -245,6 +276,9 @@ def create_app(
         # Redis stores publish a change signal so open screens append live; the
         # in-memory/Supabase stores have no pub/sub and this is simply absent.
         publish=getattr(repo, "publish_change", None),
+        # The same "this item is renderable" moment, for a phone rather than an
+        # open screen. A plain callable, so ingest never imports the push stack.
+        on_item_ready=on_item_ready,
     )
     current_user = build_current_user(auth_mode, token_codec)
 
@@ -410,14 +444,52 @@ def create_app(
 
     @app.patch("/me", response_model=Profile)
     def patch_me(
-        body: NameBody, user_id: str = Depends(current_user)
+        body: ProfileBody, user_id: str = Depends(current_user)
     ) -> Profile:
         if profile_service is None:
             raise HTTPException(status_code=503, detail="profile not configured")
+        # Only the fields the client actually sent. A name edit must not carry
+        # a null notify_level along with it and reset the setting.
+        sent = body.model_fields_set
         try:
-            return profile_service.set_name(user_id, body.name)
+            profile = profile_service.get(user_id)
+            if "name" in sent:
+                profile = profile_service.set_name(user_id, body.name)
+            if "notify_level" in sent and body.notify_level is not None:
+                profile = profile_service.set_notify_level(user_id, body.notify_level)
+            return profile
         except UserNotFound:
             raise HTTPException(status_code=404, detail="user not found")
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
+
+    @app.post("/devices", status_code=204)
+    def register_device(
+        body: DeviceBody, user_id: str = Depends(current_user)
+    ) -> None:
+        """Point this device at this account.
+
+        Called on every app launch rather than once at signup, because an Expo
+        token rotates on reinstall and on some restores, so the write has to be
+        idempotent by design instead of by luck.
+        """
+        if device_tokens is None:
+            raise HTTPException(status_code=503, detail="devices not configured")
+        device_tokens.upsert(user_id, body.token, body.platform)
+
+    @app.post("/devices/unregister", status_code=204)
+    def unregister_device(
+        body: DeviceTokenBody, user_id: str = Depends(current_user)
+    ) -> None:
+        """Stop sending here: sign-out, or notifications switched off.
+
+        Deleting a token that is already gone is deliberately not an error. Both
+        callers race by nature, and so does the sweep that reacts to Expo
+        reporting a device as dead.
+        """
+        if device_tokens is None:
+            raise HTTPException(status_code=503, detail="devices not configured")
+        device_tokens.delete(body.token)
 
     @app.get("/sources/{provider}", response_model=SourceDashboard)
     def get_source_dashboard(

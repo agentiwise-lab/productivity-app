@@ -41,19 +41,50 @@ import type {
   SourceInfo,
 } from './src/api/types';
 import { NamePrompt } from './src/components/NamePrompt';
+import { NotificationPrompt } from './src/components/NotificationPrompt';
+import {
+  currentPermission,
+  registerForPush,
+  requestPermission,
+  type PushPermission,
+} from './src/push/register';
 import { YourDayScreen } from './src/screens/YourDayScreen';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { SourceDetailScreen } from './src/screens/SourceDetailScreen';
 import { LaterScreen } from './src/screens/LaterScreen';
-import { YouScreen, type NotifyLevel } from './src/screens/YouScreen';
+import { YouScreen } from './src/screens/YouScreen';
+import type { NotifyLevel } from './src/api/types';
 import { DetailSheet } from './src/components/DetailSheet';
 import { SnoozeSheet } from './src/components/SnoozeSheet';
 import { TabBar } from './src/components/TabBar';
 import { Grain } from './src/components/Grain';
 import type { Meeting } from './src/components/YourDayCard';
 
+import * as Notifications from 'expo-notifications';
+
 const Tab = createBottomTabNavigator();
+
+/**
+ * How a notification behaves while the app is open.
+ *
+ * Without this, one arriving in the foreground is silently swallowed: no
+ * banner, no sound, nothing. It is the single most common "push is broken"
+ * report and it is a client bug rather than a credentials one, so it is set at
+ * module scope where it cannot be missed by a render path.
+ *
+ * The list is suppressed because the app itself is the list. Stacking our own
+ * notifications in the shade while the user is looking at the feed would be the
+ * pile this product exists to replace.
+ */
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowList: false,
+  }),
+});
 
 const api = new ApiClient(API_URL, (): Record<string, string> =>
   AUTH_MODE === 'dev' ? { 'X-User-Id': DEV_USER_ID } : {},
@@ -158,7 +189,17 @@ function Shell() {
   const [composeOnOpen, setComposeOnOpen] = useState(false);
   const [snoozing, setSnoozing] = useState<FeedRow | null>(null);
   const [busy, setBusy] = useState(false);
+  // Seeded from GET /me rather than defaulted here. It used to be local state,
+  // which meant the control reset on every launch and drove nothing at all.
   const [notifyLevel, setNotifyLevel] = useState<NotifyLevel>('urgent');
+  // What the OS says, which is a different fact from what the user chose. Both
+  // are needed to tell "off" apart from "on but the phone is refusing".
+  const [pushPermission, setPushPermission] = useState<PushPermission>('undetermined');
+  // Held so sign-out and switching to Off can unregister without re-deriving a
+  // token at the worst possible moment.
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [primingOpen, setPrimingOpen] = useState(false);
+  const primedOnce = useRef(false);
   // Sources whose connect-backfill is in flight. A global pill above the footer
   // and a per-row cue both read this set. Promise-driven: a source clears when its
   // refresh resolves, no countdown, no held-gating (the reviews rejected those).
@@ -237,6 +278,17 @@ function Shell() {
     try {
       const profile = await api.me();
       setName(profile.name);
+      setNotifyLevel(profile.notify_level);
+      // Re-register on every launch, not once at signup: an Expo token rotates
+      // on reinstall and on some restores, and a stale one leaves the phone
+      // silently unreachable with nothing in the UI to explain it.
+      if (profile.notify_level !== 'off') {
+        const { permission, token } = await registerForPush(api);
+        setPushPermission(permission);
+        setPushToken(token);
+      } else {
+        setPushPermission(await currentPermission());
+      }
     } catch {
       // Non-fatal: the greeting stays generic until /me answers.
     }
@@ -325,6 +377,35 @@ function Shell() {
     }
   }, [justSignedUp, acknowledgeSignup]);
 
+
+  /**
+   * A token can rotate mid-session. Left unhandled, the phone goes quiet with
+   * the setting still reading as on.
+   */
+  useEffect(() => {
+    const subscription = Notifications.addPushTokenListener(() => {
+      if (notifyLevel === 'off') return;
+      void registerForPush(api).then(({ token }) => setPushToken(token));
+    });
+    return () => subscription.remove();
+  }, [notifyLevel]);
+
+  /**
+   * Ask for notifications after the first source connects, not at signup.
+   *
+   * Before there is a feed, this is asking somebody to consent to notifications
+   * about nothing. Straight after a connect they have just watched the product
+   * read their actual work, so the promise on the card is a claim they can
+   * evaluate. Mirrors how the name prompt is shown once and never nags.
+   */
+  useEffect(() => {
+    if (primedOnce.current) return;
+    if (connectedCount === 0) return;
+    if (pushPermission !== 'undetermined') return;
+    primedOnce.current = true;
+    setPrimingOpen(true);
+  }, [connectedCount, pushPermission]);
+
   // Returning to the app re-reads connections. Web OAuth has no deep-link back:
   // Composio lands the user on its own "taking you back" tab, and the connect
   // poll can miss the moment the account goes active. When the user switches
@@ -395,10 +476,82 @@ function Shell() {
   }, [load]);
 
   // Open the sheet to read (compose=false) or straight into the composer.
+  /**
+   * Write the level, optimistically.
+   *
+   * Optimistic because a settings toggle that waits on a round trip feels
+   * broken, and reverted on failure because a control that lies about what is
+   * stored is worse than a slow one.
+   */
+  const changeNotifyLevel = useCallback(
+    async (next: NotifyLevel) => {
+      const previous = notifyLevel;
+      setNotifyLevel(next);
+      try {
+        await api.setNotifyLevel(next);
+      } catch {
+        setNotifyLevel(previous);
+        return;
+      }
+
+      if (next === 'off') {
+        // Stop the server trying rather than sending into a void. If no token
+        // is in hand the level write already did the work, so this is skipped
+        // rather than chased.
+        if (pushToken) {
+          void api.unregisterDevice(pushToken).catch(() => {});
+          setPushToken(null);
+        }
+        return;
+      }
+
+      // Coming back on from off. Ask only if the OS has never been asked;
+      // otherwise this just re-registers with the existing grant.
+      const permission =
+        previous === 'off' ? await requestPermission() : pushPermission;
+      setPushPermission(permission);
+      const { token } = await registerForPush(api);
+      setPushToken(token);
+    },
+    [notifyLevel, pushPermission, pushToken],
+  );
+
   const openRow = useCallback((row: FeedRow, compose = false) => {
     setComposeOnOpen(compose);
     setSelected(row);
   }, []);
+
+  /**
+   * Tapping a notification opens that item, not the feed with it somewhere in
+   * it.
+   *
+   * Two entry points, because they are genuinely different situations. The
+   * listener covers a running app. A cold start has no listener to fire, so the
+   * tap has to be read back from the OS after the feed has loaded, which is why
+   * this waits on `rows` rather than running once on mount.
+   *
+   * A batch carries `item_ids` and deliberately opens nothing: there is no
+   * single right item to open, and guessing one would be worse than landing on
+   * the feed.
+   */
+  useEffect(() => {
+    const openFromResponse = (response: Notifications.NotificationResponse | null) => {
+      const data = response?.notification?.request?.content?.data as
+        | { item_id?: string }
+        | undefined;
+      if (!data?.item_id) return;
+      const row = rows.find((candidate) => candidate.id === data.item_id);
+      if (row) openRow(row);
+    };
+
+    // The tap that launched the app, if the app was not running.
+    void Notifications.getLastNotificationResponseAsync().then(openFromResponse);
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      openFromResponse,
+    );
+    return () => subscription.remove();
+  }, [rows, openRow]);
 
   const act = useCallback(
     async (row: FeedRow, action: string, body?: string) => {
@@ -639,9 +792,11 @@ function Shell() {
                 email={authEmail || DEV_USER_ID}
                 name={name}
                 notifyLevel={notifyLevel}
+                pushBlocked={notifyLevel !== 'off' && pushPermission === 'denied'}
+                onOpenSettings={() => void Linking.openSettings()}
                 connections={sources}
                 syncingSources={syncingSources}
-                onSetNotifyLevel={setNotifyLevel}
+                onSetNotifyLevel={(next) => void changeNotifyLevel(next)}
                 onConnect={connectSource}
                 onDisconnect={disconnectSource}
                 onEditName={() => setNameModalOpen(true)}
@@ -688,6 +843,21 @@ function Shell() {
           visible={snoozing !== null}
           onPick={applySnooze}
           onClose={() => setSnoozing(null)}
+        />
+        <NotificationPrompt
+          visible={primingOpen}
+          onTurnOn={() => {
+            setPrimingOpen(false);
+            void (async () => {
+              // The one place in the app allowed to spend the OS prompt.
+              const permission = await requestPermission();
+              setPushPermission(permission);
+              if (permission !== 'granted') return;
+              const { token } = await registerForPush(api);
+              setPushToken(token);
+            })();
+          }}
+          onDismiss={() => setPrimingOpen(false)}
         />
         <NamePrompt
           visible={nameModalOpen}

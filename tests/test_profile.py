@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from backend.repositories.credentials_repository import InMemoryCredentialsRepository
+from backend.services.notifications import NotifyLevel
 from backend.services.profile import DefaultProfileService, UserNotFound
 
 
@@ -58,3 +59,53 @@ def test_get_for_an_unknown_user_raises():
     service, _, _ = make()
     with pytest.raises(UserNotFound):
         service.get("00000000-0000-0000-0000-000000000000")
+
+
+# --- notify level ----------------------------------------------------------
+#
+# The You tab's "Notify me" control. It lived as a `useState` in the app until
+# now, which meant it reset on every launch and drove nothing; these pin the
+# other half of making it real.
+
+
+def test_notify_level_defaults_to_urgent():
+    """A new account is opted in at the narrowest setting. Off by default would
+    make the feature invisible; anything wider would buzz about things the user
+    never asked to be buzzed about."""
+    service, _, user_id = make()
+    assert service.get(user_id).notify_level == NotifyLevel.URGENT
+
+
+def test_set_notify_level_persists_and_is_returned():
+    service, repo, user_id = make()
+    profile = service.set_notify_level(user_id, NotifyLevel.URGENT_TODAY)
+    assert profile.notify_level == NotifyLevel.URGENT_TODAY
+    assert service.get(user_id).notify_level == NotifyLevel.URGENT_TODAY
+    assert repo.get_user_by_id(user_id).notify_level == "urgent_today"
+
+
+def test_setting_the_notify_level_leaves_the_name_alone():
+    """Both live on the users row and both are written through PATCH /me, so
+    the one thing worth pinning is that neither erases the other."""
+    service, _, user_id = make()
+    service.set_name(user_id, "Vicky")
+    service.set_notify_level(user_id, NotifyLevel.OFF)
+    assert service.get(user_id).name == "Vicky"
+    service.set_name(user_id, "Vicky P")
+    assert service.get(user_id).notify_level == NotifyLevel.OFF
+
+
+def test_an_unknown_notify_level_is_rejected():
+    """The column carries a check constraint, so a bad value would fail at the
+    database with a 500. Refusing it in the service turns that into a 422."""
+    service, _, user_id = make()
+    with pytest.raises(ValueError):
+        service.set_notify_level(user_id, "sometimes")
+
+
+def test_set_notify_level_for_an_unknown_user_raises():
+    service, _, _ = make()
+    with pytest.raises(UserNotFound):
+        service.set_notify_level(
+            "00000000-0000-0000-0000-000000000000", NotifyLevel.OFF
+        )

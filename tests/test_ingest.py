@@ -256,3 +256,74 @@ def test_an_expired_connection_is_recorded_rather_than_ignored(ingest):
     assert result.handled is True
     assert connections.statuses[(USER, "github")] == "expired"
     assert repo.list_by_user(USER) == []
+
+
+# --- the push hook ---------------------------------------------------------
+#
+# The same seam `publish` uses, and for the same reason: an item is only worth
+# announcing once it has a real tier. What the callback does with it is the push
+# service's business, so ingest takes a plain callable and never imports it.
+
+
+def test_a_ready_item_is_offered_to_the_push_hook():
+    pushed: list[tuple[str, str]] = []
+    service = WebhookIngestService(
+        feed=build_feed_service(repo=InMemoryFeedRepository(), github=FakeGitHubService()),
+        connections=FakeConnectionRepository(),
+        on_item_ready=lambda user_id, item: pushed.append((user_id, item.id)),
+    )
+    result = service.handle(
+        envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION)
+    )
+
+    assert result.handled
+    assert [user_id for user_id, _ in pushed] == [USER]
+    assert [item_id for _, item_id in pushed] == [result.item_id]
+
+
+def test_an_event_that_reaches_no_screen_is_never_offered_for_push():
+    """Nothing stored, nothing to announce. Buzzing about an item that was
+    dropped as noise would be the worst possible false positive."""
+    pushed: list[str] = []
+    service = WebhookIngestService(
+        feed=build_feed_service(repo=InMemoryFeedRepository(), github=FakeGitHubService()),
+        connections=FakeConnectionRepository(),
+        on_item_ready=lambda user_id, item: pushed.append(item.id),
+    )
+    service.handle(
+        envelope(
+            "GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION, user_id=None
+        )
+    )
+    assert pushed == []
+
+
+def test_a_push_hook_that_explodes_does_not_fail_the_webhook():
+    """The deterministic branch of _classify_soon has no try around it, and
+    Composio redelivers a failed webhook. An exception escaping here would turn
+    one bad push into an endless redelivery loop, so the hook is called
+    defensively even though the push service also promises not to raise."""
+
+    def boom(user_id, item):
+        raise RuntimeError("push is down")
+
+    service = WebhookIngestService(
+        feed=build_feed_service(repo=InMemoryFeedRepository(), github=FakeGitHubService()),
+        connections=FakeConnectionRepository(),
+        on_item_ready=boom,
+    )
+    result = service.handle(
+        envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION)
+    )
+    assert result.handled
+
+
+def test_the_push_hook_is_optional():
+    """Every existing caller constructs the service without it."""
+    service = WebhookIngestService(
+        feed=build_feed_service(repo=InMemoryFeedRepository(), github=FakeGitHubService()),
+        connections=FakeConnectionRepository(),
+    )
+    assert service.handle(
+        envelope("GITHUB_REPOSITORY_NOTIFICATION_RECEIVED_TRIGGER", NOTIFICATION)
+    ).handled

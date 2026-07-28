@@ -118,8 +118,18 @@ export interface LaterRow {
   occurred_at: string | null;
 }
 
-/** The user's editable profile: email is fixed, name is optional. */
+/**
+ * How loud notifications are, and the wire values the backend stores.
+ *
+ * `urgent_today` keeps its wire value even though every surface a person sees
+ * labels it "By EOD". Renaming a persisted enum because its label changed is a
+ * migration that buys nothing.
+ */
+export type NotifyLevel = 'urgent' | 'urgent_today' | 'all' | 'off';
+
+/** The user's editable profile: email is fixed, the rest is settings. */
 export interface Profile {
   email: string;
   name: string | null;
+  notify_level: NotifyLevel;
 }

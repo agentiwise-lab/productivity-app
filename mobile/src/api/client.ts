@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   FeedRow,
   MeetingOut,
+  NotifyLevel,
   Profile,
   RefreshResult,
   SourceDashboard,
@@ -259,6 +260,41 @@ export class ApiClient {
     return this.request<Profile>('/me', {
       method: 'PATCH',
       body: JSON.stringify({ name }),
+    });
+  }
+
+  /**
+   * How loud notifications should be.
+   *
+   * Sends only this field. The backend treats an absent key as "unchanged", so
+   * a settings write can never clear the display name as a side effect.
+   */
+  setNotifyLevel(level: NotifyLevel): Promise<Profile> {
+    return this.request<Profile>('/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ notify_level: level }),
+    });
+  }
+
+  /** Point this device at the signed-in account. Safe to call every launch. */
+  registerDevice(token: string, platform: 'ios' | 'android'): Promise<void> {
+    return this.request<void>('/devices', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    });
+  }
+
+  /**
+   * Stop sending here.
+   *
+   * A POST rather than a DELETE on the token, because an Expo token is
+   * `ExponentPushToken[...]` and square brackets are reserved characters that
+   * do not belong in a URL path. In a body nothing has to agree about encoding.
+   */
+  unregisterDevice(token: string): Promise<void> {
+    return this.request<void>('/devices/unregister', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     });
   }
 }

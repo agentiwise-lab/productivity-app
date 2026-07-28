@@ -23,14 +23,22 @@ NOW = datetime(2026, 7, 23, 12, 0, tzinfo=timezone.utc)
 
 
 class FakePush:
-    def __init__(self, fail: bool = False):
+    """The transport now hands back Expo's tickets, one per message and in the
+    same order, because that is the only place ``DeviceNotRegistered`` is ever
+    reported."""
+
+    def __init__(self, fail: bool = False, tickets: list[dict] | None = None):
         self.sent: list[dict] = []
         self.fail = fail
+        self._tickets = tickets
 
-    def send(self, messages: list[dict]) -> None:
+    def send(self, messages: list[dict]) -> list[dict]:
         if self.fail:
             raise RuntimeError("expo is down")
         self.sent.extend(messages)
+        if self._tickets is not None:
+            return self._tickets
+        return [{"status": "ok", "id": f"t{n}"} for n in range(len(messages))]
 
 
 def make_item(tier=Tier.URGENT, **overrides) -> FeedItem:
@@ -64,28 +72,28 @@ def build(level=NotifyLevel.URGENT, fail=False):
 
 def test_an_urgent_item_pushes():
     service, push, prefs, level = build()
-    service.notify("token-1", [make_item()], prefs, level)
+    service.notify(["token-1"], [make_item()], prefs, level)
     assert len(push.sent) == 1
 
 
 @pytest.mark.parametrize("tier", [Tier.TODAY, Tier.CAN_WAIT, Tier.NOISE])
 def test_nothing_below_urgent_pushes_at_the_default_level(tier):
     service, push, prefs, level = build()
-    service.notify("token-1", [make_item(tier=tier)], prefs, level)
+    service.notify(["token-1"], [make_item(tier=tier)], prefs, level)
     assert push.sent == []
 
 
 def test_the_wider_level_also_pushes_today():
     service, push, prefs, _ = build()
     service.notify(
-        "token-1", [make_item(tier=Tier.TODAY)], prefs, NotifyLevel.URGENT_TODAY
+        ["token-1"], [make_item(tier=Tier.TODAY)], prefs, NotifyLevel.URGENT_TODAY
     )
     assert len(push.sent) == 1
 
 
 def test_off_pushes_nothing_at_all():
     service, push, prefs, _ = build()
-    service.notify("token-1", [make_item()], prefs, NotifyLevel.OFF)
+    service.notify(["token-1"], [make_item()], prefs, NotifyLevel.OFF)
     assert push.sent == []
 
 
@@ -94,7 +102,7 @@ def test_a_snoozed_item_does_not_push():
     user about their own decision."""
     service, push, prefs, level = build()
     item = make_item(snoozed_until=NOW + timedelta(hours=2))
-    service.notify("token-1", [item], prefs, level)
+    service.notify(["token-1"], [item], prefs, level)
     assert push.sent == []
 
 
@@ -102,14 +110,14 @@ def test_an_item_from_a_muted_source_does_not_push():
     service, push, _, level = build()
     prefs = UserPreferences(user_id="me", muted_channels={"#noisy"})
     service.notify(
-        "token-1", [make_item(context_chip="#noisy")], prefs, level
+        ["token-1"], [make_item(context_chip="#noisy")], prefs, level
     )
     assert push.sent == []
 
 
 def test_an_already_handled_item_does_not_push():
     service, push, prefs, level = build()
-    service.notify("token-1", [make_item(handled_at=NOW)], prefs, level)
+    service.notify(["token-1"], [make_item(handled_at=NOW)], prefs, level)
     assert push.sent == []
 
 
@@ -121,8 +129,8 @@ def test_the_same_item_pushes_only_once_ever():
     the same alert every few minutes, which trains them to turn it off."""
     service, push, prefs, level = build()
     item = make_item()
-    service.notify("token-1", [item], prefs, level)
-    service.notify("token-1", [item], prefs, level)
+    service.notify(["token-1"], [item], prefs, level)
+    service.notify(["token-1"], [item], prefs, level)
     assert len(push.sent) == 1
 
 
@@ -131,22 +139,22 @@ def test_a_batch_of_urgent_items_becomes_one_notification():
     replace."""
     service, push, prefs, level = build()
     items = [make_item(id=f"i{n}", source_ref=f"slack:D1:{n}") for n in range(5)]
-    service.notify("token-1", items, prefs, level)
+    service.notify(["token-1"], items, prefs, level)
 
     assert len(push.sent) == 1
     assert "5" in push.sent[0]["title"]
 
 
-def test_no_token_means_no_send_and_no_error():
+def test_no_tokens_means_no_send_and_no_error():
     service, push, prefs, level = build()
-    service.notify(None, [make_item()], prefs, level)
+    service.notify([], [make_item()], prefs, level)
     assert push.sent == []
 
 
 def test_a_push_failure_never_reaches_the_caller():
     """A dead notification service must not break a feed refresh."""
     service, _, prefs, level = build(fail=True)
-    service.notify("token-1", [make_item()], prefs, level)  # must not raise
+    service.notify(["token-1"], [make_item()], prefs, level)  # must not raise
 
 
 # --- message shape ---------------------------------------------------------
@@ -181,7 +189,121 @@ def test_the_all_level_covers_everything_that_reached_the_feed():
         make_item(Tier.NOISE, id="d"),
     ]
 
-    service.notify("tok", items, prefs, NotifyLevel.ALL)
+    service.notify(["tok"], items, prefs, NotifyLevel.ALL)
 
     assert len(push.sent) == 1
     assert push.sent[0]["title"] == "3 things need you"
+
+
+# --- more than one device --------------------------------------------------
+
+
+def test_every_device_gets_the_notification():
+    """The regression a per-device loop would have caused. Marking an item seen
+    after the first device would filter it out for the second, so a user with a
+    phone and a tablet would be told on exactly one of them, chosen by dict
+    order."""
+    service, push, prefs, level = build()
+
+    service.notify(["phone", "tablet"], [make_item()], prefs, level)
+
+    assert [message["to"] for message in push.sent] == ["phone", "tablet"]
+
+
+def test_a_dead_token_is_reported_back_to_the_caller():
+    """Expo answers a ticket per message. ``DeviceNotRegistered`` means the app
+    was uninstalled or the permission revoked, and Expo's own guidance is to
+    stop sending to that token. The service does not own the token table, so it
+    names the dead ones and lets the caller delete them."""
+    tickets = [
+        {"status": "ok", "id": "t0"},
+        {"status": "error", "details": {"error": "DeviceNotRegistered"}},
+    ]
+    push = FakePush(tickets=tickets)
+    service = DefaultNotificationService(push=push, clock=lambda: NOW)
+
+    dead = service.notify(
+        ["good", "dead"], [make_item()], UserPreferences(user_id="me"), NotifyLevel.URGENT
+    )
+
+    assert dead == ["dead"]
+
+
+def test_a_ticket_error_that_is_not_a_dead_device_kills_no_token():
+    """A message-too-big or a rate limit is our problem, not the device's.
+    Deleting a token over it would silently unsubscribe a working phone."""
+    push = FakePush(tickets=[{"status": "error", "details": {"error": "MessageTooBig"}}])
+    service = DefaultNotificationService(push=push, clock=lambda: NOW)
+
+    dead = service.notify(
+        ["good"], [make_item()], UserPreferences(user_id="me"), NotifyLevel.URGENT
+    )
+
+    assert dead == []
+
+
+# --- the seen store --------------------------------------------------------
+
+
+def test_a_failed_send_does_not_consume_the_items_one_alert():
+    """The whole point of marking after the send. If a transient Expo outage
+    burned the alert, the item would never be announced again."""
+    push = FakePush(fail=True)
+    service = DefaultNotificationService(push=push, clock=lambda: NOW)
+    prefs = UserPreferences(user_id="me")
+    item = make_item()
+
+    service.notify(["tok"], [item], prefs, NotifyLevel.URGENT)  # fails
+    push.fail = False
+    service.notify(["tok"], [item], prefs, NotifyLevel.URGENT)  # must go out now
+
+    assert len(push.sent) == 1
+
+
+def test_the_seen_store_is_injectable_so_it_can_outlive_the_process():
+    """In production this is Redis, so a restart does not re-announce items the
+    user was already told about. The in-process default is only for tests and
+    for a deployment with no Redis."""
+
+    class FakeSeen:
+        def __init__(self, already: set[str]):
+            self.already = already
+            self.marked: list[str] = []
+
+        def seen(self, item_id: str) -> bool:
+            return item_id in self.already
+
+        def mark(self, item_ids: list[str]) -> None:
+            self.marked.extend(item_ids)
+
+    seen = FakeSeen(already={"i1"})
+    push = FakePush()
+    service = DefaultNotificationService(push=push, clock=lambda: NOW, seen=seen)
+
+    service.notify(["tok"], [make_item(id="i1")], UserPreferences(user_id="me"), NotifyLevel.URGENT)
+
+    assert push.sent == []
+
+
+def test_the_seen_store_is_told_only_about_items_that_actually_went_out():
+    class RecordingSeen:
+        def __init__(self):
+            self.marked: list[str] = []
+
+        def seen(self, item_id: str) -> bool:
+            return False
+
+        def mark(self, item_ids: list[str]) -> None:
+            self.marked.extend(item_ids)
+
+    seen = RecordingSeen()
+    service = DefaultNotificationService(push=FakePush(), clock=lambda: NOW, seen=seen)
+
+    service.notify(
+        ["tok"],
+        [make_item(id="urgent-one"), make_item(id="quiet-one", tier=Tier.NOISE)],
+        UserPreferences(user_id="me"),
+        NotifyLevel.URGENT,
+    )
+
+    assert seen.marked == ["urgent-one"]

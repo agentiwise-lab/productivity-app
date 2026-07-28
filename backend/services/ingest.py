@@ -206,12 +206,18 @@ class WebhookIngestService:
         classifier: Any | None = None,
         background: Callable[[Callable[[], Any]], Any] | None = None,
         publish: Callable[[str], None] | None = None,
+        on_item_ready: Callable[[str, Any], None] | None = None,
     ) -> None:
         self._feed = feed
         self._connections = connections
         # Signals open clients (via the SSE stream) that this user's feed changed,
         # so a trigger landing while the app is open appends without a poll.
         self._publish = publish or (lambda user_id: None)
+        # The same moment, for a phone rather than an open screen: this item is
+        # renderable and has a real tier. What happens next is the push
+        # service's business, so this is a plain callable and the push module is
+        # never imported here.
+        self._on_item_ready = on_item_ready or (lambda user_id, item: None)
         self._prefs_for = prefs_for or (lambda user_id: UserPreferences(user_id=user_id))
         # Threads the user has posted in. Plan 3.10 accepts the limitation:
         # threads joined before installing are invisible until someone mentions
@@ -279,18 +285,34 @@ class WebhookIngestService:
         screen appends it only when it has a real tier, never as a placeholder."""
         if self._classifier is None or not item.needs_llm or item.llm_tier is not None:
             self._publish(user_id)  # deterministic / already-judged: ready now
+            self._ready(user_id, item)
             return
         try:
             self._background(
                 lambda: (
                     self._classifier.classify_item(user_id, item),
                     self._publish(user_id),
+                    self._ready(user_id, item),
                 )
             )
         except Exception:
             # A classify that could not even be scheduled must not fail the
             # webhook: the item is still ingested and the next refresh sweeps it.
             log.warning("could not schedule classify for %s", item.id, exc_info=True)
+
+    def _ready(self, user_id: str, item) -> None:
+        """Offer a renderable item to the push hook, defensively.
+
+        The hook already promises not to raise, and this catches anyway. The
+        deterministic branch above has no ``try`` around it, so an escape would
+        propagate out of ``handle()`` and be reported as an ingest failure for an
+        item that was in fact stored. Composio redelivers a failed webhook, which
+        turns that into a redelivery loop over a notification.
+        """
+        try:
+            self._on_item_ready(user_id, item)
+        except Exception:
+            log.warning("push hook failed for %s", item.id, exc_info=True)
 
     def _handle_expired(self, envelope: dict[str, Any]) -> IngestResult:
         """A dead connection must be visible. Left unrecorded, that source
