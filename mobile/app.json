@@ -28,6 +28,12 @@
       "expo-font",
       "expo-secure-store",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "474647b4-9efe-43b0-b3a3-870d4708b7be"
+      }
+    },
+    "owner": "vicky002s-team"
   }
 }
